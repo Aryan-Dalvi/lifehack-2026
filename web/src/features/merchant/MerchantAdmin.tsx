@@ -1,6 +1,6 @@
-import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, Download, ExternalLink, FileSpreadsheet, Images, Link2, LoaderCircle, LockKeyhole, RefreshCw, Sparkles, Store, TriangleAlert } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, Download, ExternalLink, FileSpreadsheet, Images, Link2, LoaderCircle, LockKeyhole, LogOut, RefreshCw, Sparkles, Store, TriangleAlert } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { type ChangeEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { api, getMerchantKey, money, setMerchantKey } from "../../api";
 import { StagedImage } from "./StagedImage";
 import type { Product } from "../../types";
@@ -25,6 +25,13 @@ type ImageReport = {
     confidence?: number;
     reason?: string;
   }>;
+};
+
+type OnboardResult = {
+  merchant_id: string;
+  api_key: string;
+  hosted_url: string;
+  embed_snippet: string;
 };
 
 type MerchantConfig = {
@@ -113,15 +120,6 @@ type UploadResult = {
   }>;
 };
 
-const defaultMappings = {
-  sku: "SKU",
-  title: "Name",
-  price_cents: "Price",
-  ingredients: "Ingredients",
-  skin_types: "Skin types",
-  stock: "Stock",
-};
-
 export function MerchantAdmin() {
   const [config, setConfig] = useState<MerchantConfig | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -135,26 +133,72 @@ export function MerchantAdmin() {
   const [copied, setCopied] = useState<"snippet" | "url" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [merchantKey, setKey] = useState<string>(getMerchantKey() ?? "");
+  const [creating, setCreating] = useState(false);
+  const [newStore, setNewStore] = useState<OnboardResult | null>(null);
 
   useEffect(() => {
-    // Admin data belongs to one merchant and is read with that merchant's API key. Seeding
-    // writes it to var/merchant-key.txt; onboarding returns it once.
+    // The key identifies the store - the page never assumes which merchant it is serving.
+    // /merchant/me resolves the caller, then their catalog is read with their own id.
     if (!merchantKey) {
-      setError("Enter your merchant API key to load this store.");
+      setError(null);
       return;
     }
     setError(null);
-    Promise.all([
-      api<MerchantConfig>("/merchant/m_mysa/config"),
-      api<{ results: Product[] }>("/catalog/search?merchant_id=m_mysa&category=skincare&limit=5"),
-    ])
-      .then(([merchant, catalog]) => {
+    let cancelled = false;
+    api<MerchantConfig>("/merchant/me")
+      .then(async (merchant) => {
+        if (cancelled) return;
         setConfig(merchant);
-        setProducts(catalog.results);
         setPublished(merchant.status === "published");
+        const catalog = await api<{ results: Product[] }>(
+          `/catalog/search?merchant_id=${encodeURIComponent(merchant.merchant_id)}&category=skincare&limit=5`,
+        );
+        if (!cancelled) setProducts(catalog.results);
       })
-      .catch((requestError: Error) => setError(requestError.message));
+      .catch((requestError: Error) => {
+        if (cancelled) return;
+        // A key that resolves to nobody is a signed-out state, not a broken page.
+        setMerchantKey(null);
+        setKey("");
+        setError(requestError.message);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [merchantKey]);
+
+  const signOut = () => {
+    setMerchantKey(null);
+    setKey("");
+    setConfig(null);
+    setUpload(null);
+    setImageReport(null);
+    setProducts([]);
+    setNewStore(null);
+    setError(null);
+  };
+
+  const createStore = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("name") ?? "").trim();
+    if (!name) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const created = await api<OnboardResult>("/merchant/onboard", {
+        method: "POST",
+        body: JSON.stringify({ name, size: String(form.get("size") ?? "sme"), category: "skincare" }),
+      });
+      // The key is returned exactly once - only its digest is stored - so it is shown to
+      // the merchant before anything else happens, and kept for this browser.
+      setNewStore(created);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "The store could not be created.");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const uploadCatalog = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -263,6 +307,37 @@ export function MerchantAdmin() {
     window.setTimeout(() => setCopied(null), 1600);
   };
 
+  if (newStore) {
+    // The key is shown once, before the dashboard, because this response is its only copy.
+    return (
+      <main className="admin-loading admin-gate">
+        <div className="admin-key-form admin-new-store">
+          <h1>Your store is ready</h1>
+          <p>
+            Save this API key now. It is shown once - only its hash is stored, so it cannot be
+            shown again. It is how you sign back in to this store.
+          </p>
+          <code className="new-store-key">{newStore.api_key}</code>
+          <button type="button" onClick={() => void navigator.clipboard.writeText(newStore.api_key)}>
+            <Clipboard size={14} /> Copy key
+          </button>
+          <p className="new-store-id">Store id <code>{newStore.merchant_id}</code></p>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              setMerchantKey(newStore.api_key);
+              setKey(newStore.api_key);
+              setNewStore(null);
+            }}
+          >
+            I have saved it - open store setup <ArrowRight size={14} />
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   if (!config) {
     // Without a key there is nothing to show: this page reads and writes one merchant's
     // private configuration and catalog, and the API will not serve either unauthenticated.
@@ -270,37 +345,49 @@ export function MerchantAdmin() {
       <main className="admin-loading admin-gate">
         {merchantKey ? (
           <>
-            <LoaderCircle className="spin" /> Loading Mysa Skin…
+            <LoaderCircle className="spin" /> Opening your store…
           </>
         ) : (
-          <form
-            className="admin-key-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const value = new FormData(event.currentTarget).get("key");
-              const next = typeof value === "string" ? value.trim() : "";
-              if (!next) return;
-              setMerchantKey(next);
-              setKey(next);
-            }}
-          >
-            <h1>Merchant sign in</h1>
-            <p>
-              Paste your merchant API key. Local development writes it to
-              <code> var/merchant-key.txt</code> when the database is seeded.
-            </p>
-            <input name="key" type="password" placeholder="mk_…" autoComplete="off" required />
-            <button type="submit">Open store setup</button>
-          </form>
+          <div className="admin-gate-forms">
+            <form
+              className="admin-key-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const value = new FormData(event.currentTarget).get("key");
+                const next = typeof value === "string" ? value.trim() : "";
+                if (!next) return;
+                setMerchantKey(next);
+                setKey(next);
+              }}
+            >
+              <h1>Merchant sign in</h1>
+              <p>Paste your merchant API key. It identifies your store - there is nothing else to enter.</p>
+              <input name="key" type="password" placeholder="mk_…" autoComplete="off" required />
+              <button type="submit">Open store setup</button>
+            </form>
+
+            <form className="admin-key-form admin-signup" onSubmit={(event) => void createStore(event)}>
+              <h1>New here?</h1>
+              <p>Create a store and get your API key. Every merchant gets their own catalog, agent and storefront.</p>
+              <input name="name" type="text" placeholder="Your store name" maxLength={100} required />
+              <select name="size" defaultValue="sme">
+                <option value="sme">Small business</option>
+                <option value="enterprise">Large retailer</option>
+              </select>
+              <button type="submit" disabled={creating}>
+                {creating ? <><LoaderCircle className="spin" size={14} /> Creating…</> : <>Create my store</>}
+              </button>
+            </form>
+          </div>
         )}
         {error ? <p className="admin-key-error">{error}</p> : null}
       </main>
     );
   }
 
-  const mappings = upload?.mappings ?? defaultMappings;
+  const mappings = upload?.mappings ?? {};
   const diagnostics = upload?.diagnostics;
-  const productCount = upload?.ready ?? 6;
+  const productCount = upload?.ready ?? products.length;
   const issueCount = upload?.skipped ?? 0;
   const reviewComplete = !upload || upload.products.length === upload.approval.reviewed_row_count_required;
   const publishMode = upload?.skipped ? "upsert" : "replace";
@@ -316,6 +403,9 @@ export function MerchantAdmin() {
           <a href="#preview">Preview</a>
         </nav>
         <a className="storefront-link" href={config.hosted_url}><span>{config.name}</span><ExternalLink size={15} /></a>
+        <button type="button" className="sign-out" onClick={signOut} title={config.merchant_id}>
+          <LogOut size={14} /> Switch store
+        </button>
       </header>
 
       <main className="admin-layout">
@@ -361,9 +451,9 @@ export function MerchantAdmin() {
               </label>
               <div className="file-row">
                 <FileSpreadsheet size={19} />
-                <span>{upload?.source.filename ?? "mysa-products.xlsx"}<small>{upload ? `${upload.source.format.toUpperCase()} catalog` : "Seed catalog · ready to replace"}</small></span>
-                <div><Check size={15} /> {upload?.approval_required ? "Preview ready" : "Catalog available"}</div>
-                <label className="replace-file">Replace file<input type="file" accept=".csv,.xlsx,.json" onChange={(event) => void uploadCatalog(event)} /></label>
+                <span>{upload?.source.filename ?? (products.length ? "Your live catalog" : "No catalog yet")}<small>{upload ? `${upload.source.format.toUpperCase()} catalog` : products.length ? `${products.length} product${products.length === 1 ? "" : "s"} live · ready to replace` : "Upload a file to get started"}</small></span>
+                <div>{upload?.approval_required ? <><Check size={15} /> Preview ready</> : products.length ? <><Check size={15} /> Catalog available</> : <><CircleAlert size={15} /> Empty</>}</div>
+                <label className="replace-file">{products.length ? "Replace file" : "Choose file"}<input type="file" accept=".csv,.xlsx,.json" onChange={(event) => void uploadCatalog(event)} /></label>
               </div>
 
               <label className={`dropzone dropzone--images ${uploadingImages ? "is-uploading" : ""}`}>
@@ -399,6 +489,7 @@ export function MerchantAdmin() {
                 </div>
               ) : null}
 
+              {Object.keys(mappings).length ? (
               <div className="mapping-block">
                 <div><strong>Mapped columns</strong></div>
                 <ul>{Object.entries(mappings).map(([target, source]) => (
@@ -408,6 +499,7 @@ export function MerchantAdmin() {
                   <small>Not recognised, so skipped: {upload.mapping_report.ignored_columns.join(", ")}. Rename a column to match the template if it holds product detail.</small>
                 ) : null}
               </div>
+              ) : null}
 
               {diagnostics && (diagnostics.groups.length || diagnostics.notes.length) ? (
                 <div className="diagnostics-block">
@@ -436,7 +528,7 @@ export function MerchantAdmin() {
                 </header>
                 {upload?.errors.length ? (
                   <div className="review-table-scroll"><table><thead><tr><th>Row</th><th>Issue</th><th>Result</th></tr></thead><tbody>{upload.errors.map((issue) => <tr key={`${issue.row}-${issue.reason}`}><td>{issue.row}</td><td>{issue.reason}</td><td>Held from publish</td></tr>)}</tbody></table></div>
-                ) : <div className="all-clear"><Check size={16} /> Every row was cleaned, categorized and grounded in merchant data.</div>}
+                ) : upload ? <div className="all-clear"><Check size={16} /> Every row was cleaned, categorized and grounded in merchant data.</div> : <div className="all-clear all-clear--empty"><CircleAlert size={16} /> Upload a catalog to see it cleaned, categorized and checked.</div>}
                 {upload ? <small>Classifier: {upload.classifier.source.replaceAll("_", " ")} ({upload.classifier.model}) · changes stay in preview until you approve and publish.</small> : null}
                 {upload ? (
                   <div className="classification-preview">
@@ -492,8 +584,8 @@ export function MerchantAdmin() {
         <aside className="live-preview" id="preview">
           <header><span>Live preview ({config.name} agent)</span><strong><i /> Connected</strong></header>
           <div className="preview-window">
-            <div className="preview-top"><strong>Mysa Skin</strong><span>Your skincare, personalized.</span></div>
-            <div className="preview-message"><i>M</i><span>Hi! I’m your skincare assistant. What does your skin need today?</span></div>
+            <div className="preview-top"><strong>{config.name}</strong><span>Your skincare, personalized.</span></div>
+            <div className="preview-message"><i>{config.name.trim().charAt(0).toUpperCase()}</i><span>Hi! I’m your skincare assistant. What does your skin need today?</span></div>
             <div className="preview-chips"><button>Dryness</button><button>Sensitive skin</button><button>Build a routine</button></div>
             <p>Top catalog matches</p>
             <div className="preview-products">

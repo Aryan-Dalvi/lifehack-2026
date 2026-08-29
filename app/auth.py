@@ -157,6 +157,30 @@ def assert_merchant(merchant_id: str, api_key: str | None) -> None:
         )
 
 
+def require_merchant(api_key: str | None) -> str:
+    """Resolve which merchant an API key belongs to, or raise.
+
+    `assert_merchant` answers "may this key act as *that* merchant?", which needs the caller
+    to already know who they are. A merchant signing in knows only their key, so this answers
+    the other question: the key alone identifies the store. Without it the admin page has no
+    way to tell one merchant from another, which is why it used to hard-code a single one.
+
+    The digest is unique in practice, but a duplicate would make identity ambiguous, so a
+    non-unique key resolves to nobody rather than to an arbitrary row.
+    """
+    if not api_key:
+        raise api_error(
+            401, "MERCHANT_AUTH_REQUIRED", "Provide your merchant API key in X-Merchant-Key."
+        )
+    with connect() as connection:
+        rows = connection.execute(
+            "SELECT merchant_id FROM merchants WHERE api_key_hash=?", (token_digest(api_key),)
+        ).fetchall()
+    if len(rows) != 1:
+        raise api_error(401, "MERCHANT_AUTH_REQUIRED", "That merchant API key is not valid.")
+    return rows[0]["merchant_id"]
+
+
 def is_merchant(merchant_id: str, api_key: str | None) -> bool:
     """Soft variant of assert_merchant: answers the question instead of raising.
 

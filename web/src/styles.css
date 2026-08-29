@@ -3558,3 +3558,61 @@ img {
   background: var(--sage-50);
   color: var(--sage-700);
 }
+
+/* --- multi-merchant sign in, sign up and store switching ----------------------------- */
+
+.admin-gate-forms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  align-items: start;
+  width: min(760px, 92vw);
+}
+
+.admin-signup select {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: white;
+  font: inherit;
+  font-size: 11px;
+}
+
+.admin-new-store { width: min(560px, 92vw); }
+
+.new-store-key {
+  display: block;
+  padding: 11px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--paper);
+  font-family: "DM Mono", monospace;
+  font-size: 11px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.new-store-id { color: var(--muted); font-size: 10px; }
+.admin-new-store button.primary { background: var(--sage-700); color: white; border-color: var(--sage-700); }
+
+.admin-header .sign-out {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: white;
+  color: var(--muted);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-header .sign-out:hover { border-color: var(--sage-500); color: var(--sage-700); }
+
+.all-clear--empty { color: var(--muted); }
+.all-clear--empty svg { color: #c08a2a; }

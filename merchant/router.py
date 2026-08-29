@@ -17,6 +17,7 @@ from app.auth import (
     issue_consumer_token,
     new_secret,
     require_consumer,
+    require_merchant,
     reset_rate_limit,
     revoke_consumer_token,
     token_digest,
@@ -128,6 +129,19 @@ def merchant_config(merchant_id: str) -> dict[str, Any]:
     if not row:
         raise api_error(404, "NO_MERCHANT", "The merchant was not found.")
     return _merchant_payload(row)
+
+
+@merchant_router.get("/me")
+def merchant_me(
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
+    """Which store does this key open?
+
+    Declared before /{merchant_id}/config so "me" is never read as a merchant id. This is
+    what lets the admin page serve any merchant: it resolves the caller from their key
+    instead of being told which store to load.
+    """
+    return merchant_config(require_merchant(x_merchant_key))
 
 
 @merchant_router.get("/{merchant_id}/config")
@@ -304,7 +318,7 @@ def _product_payload(row) -> dict[str, Any]:
 
 def catalog_search(
     q: str = "",
-    merchant_id: str = "m_mysa",
+    merchant_id: str = "",
     category: str = "skincare",
     max_price_cents: int | None = None,
     attrs: str | None = None,
@@ -314,6 +328,8 @@ def catalog_search(
 ) -> dict[str, Any]:
     """Internal search. Kept free of request-layer types: the agent calls this directly, and
     a Header() default arrives as a Header object rather than None when it does."""
+    if not merchant_id:
+        raise api_error(400, "VALIDATION", "A merchant_id is required to search a catalog.")
     if category != "skincare":
         raise api_error(400, "VALIDATION", "The Phase 0 catalog supports skincare only.")
     limit = max(1, min(limit, 5))
@@ -428,7 +444,7 @@ def catalog_product(sku: str, merchant_id: str, *, include_unpublished: bool = F
 @catalog_router.get("/search")
 def catalog_search_route(
     q: str = "",
-    merchant_id: str = "m_mysa",
+    merchant_id: str = "",
     category: str = "skincare",
     max_price_cents: int | None = None,
     attrs: str | None = None,

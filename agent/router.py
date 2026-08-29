@@ -51,7 +51,7 @@ class SessionRequest(BaseModel):
     address resolved into their cart.
     """
 
-    merchant_id: str = "m_mysa"
+    merchant_id: str = Field(min_length=1, max_length=64)
     category: str = "skincare"
     budget_cents: int | None = Field(default=None, gt=0)
 

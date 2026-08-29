@@ -23,6 +23,7 @@ from app.main import app
 # Any of these appearing in a handler's source means the route establishes who is calling.
 GUARDS = (
     "assert_merchant",
+    "require_merchant",
     "assert_consumer",
     "require_consumer",
     "assert_session",
