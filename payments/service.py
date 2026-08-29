@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -12,6 +13,8 @@ from app.ids import new_id
 from app.settings import settings
 from payments import visa_client
 from payments.tap import canonical_json, sign_record, verify_record
+
+logger = logging.getLogger(__name__)
 
 
 class _AuthorizationOutcome:
@@ -59,12 +62,18 @@ def _run_authorization(
             card_last4=card_last4,
         )
     except visa_client.VisaConfigurationError as error:
+        logger.error("Visa adapter configuration is incomplete: %s", error)
         raise api_error(
-            502, "VISA_ADAPTER_UNAVAILABLE", f"The Visa sandbox adapter is not configured: {error}"
+            503,
+            "PAYMENT_NOT_READY",
+            "Visa sandbox payments are temporarily unavailable. No payment was submitted.",
         ) from error
     except visa_client.VisaAuthorizationError as error:
+        logger.error("Visa adapter did not return a safe authorization decision: %s", error)
         raise api_error(
-            502, "VISA_ADAPTER_UNAVAILABLE", f"The Visa sandbox did not return a usable response: {error}"
+            502,
+            "VISA_ADAPTER_UNAVAILABLE",
+            "Visa sandbox authorization is temporarily unavailable. No order was created.",
         ) from error
     return _AuthorizationOutcome(
         approved=result.approved,
@@ -518,6 +527,16 @@ def create_bank_challenge(
     currency: str,
     merchant_id: str,
 ) -> dict[str, Any]:
+    if settings.payment_adapter == "visa":
+        try:
+            visa_client.validate_configuration()
+        except visa_client.VisaConfigurationError as error:
+            logger.error("Visa payment preflight failed before bank challenge: %s", error)
+            raise api_error(
+                503,
+                "PAYMENT_NOT_READY",
+                "Visa sandbox payments are temporarily unavailable. Please try again later.",
+            ) from error
     challenge_id = new_id("chl")
     expires_at = _expires(5)
     with transaction(issuer=True) as connection:
@@ -753,12 +772,22 @@ def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str
 
     # The network decision happens outside any DB transaction — a real call is genuine I/O
     # and must never hold a sqlite lock while it runs.
-    authorization = _run_authorization(
-        amount_cents=cart["total_cents"],
-        currency=cart["currency"],
-        merchant_id=cart["merchant_id"],
-        card_last4="4821",
-    )
+    try:
+        authorization = _run_authorization(
+            amount_cents=cart["total_cents"],
+            currency=cart["currency"],
+            merchant_id=cart["merchant_id"],
+            card_last4="4821",
+        )
+    except Exception:
+        # No definitive authorization decision exists. Hand the one-time bank credential back so
+        # an operational fault cannot turn a valid shopper approval into BANK_TOKEN_REUSED.
+        with transaction(issuer=True) as issuer_db:
+            issuer_db.execute(
+                "UPDATE issuer_tokens SET status='issued' WHERE bank_token=? AND status='consumed'",
+                (payload["bank_token"],),
+            )
+        raise
     if not authorization.approved:
         # The bank token was already consumed above; a declined authorization gives it back
         # rather than burning a single-use credential on a charge that never happened.

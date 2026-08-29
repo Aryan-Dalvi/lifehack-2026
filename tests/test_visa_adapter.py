@@ -4,6 +4,7 @@ sandbox can never be mistaken for an approval — no test here talks to the real
 
 from __future__ import annotations
 
+import base64
 import dataclasses
 import json
 
@@ -55,6 +56,13 @@ def test_mle_field_round_trips_through_encrypt_and_decrypt(tmp_path):
     # A compact JWE: five dot-separated segments, and definitely not the plaintext PAN.
     assert token.count(".") == 4
     assert "4821" not in token
+    encoded_header = token.split(".", 1)[0]
+    encoded_header += "=" * (-len(encoded_header) % 4)
+    header = json.loads(base64.urlsafe_b64decode(encoded_header))
+    assert header["alg"] == "RSA-OAEP-256"
+    assert header["enc"] == "A128GCM"
+    assert header["kid"] == "test-kid"
+    assert isinstance(header["iat"], int)
 
     decrypted = visa_client.decrypt_mle_field(token, private_key_path=private_pem)
     assert decrypted == payload
@@ -107,16 +115,35 @@ def test_missing_configuration_raises_configuration_error_not_a_decline(tmp_path
         )
 
 
+def test_configuration_preflight_checks_the_server_encryption_certificate(tmp_path, monkeypatch):
+    private_pem, public_pem = _write_rsa_keypair(tmp_path)
+    _configure(monkeypatch, tmp_path, private_pem, public_pem, visa_mle_encrypt_cert_path=None)
+
+    with pytest.raises(visa_client.VisaConfigurationError, match="VISA_MLE_ENCRYPT_CERT_PATH"):
+        visa_client.validate_configuration()
+
+
 def test_approved_response_is_parsed(tmp_path, monkeypatch):
     private_pem, public_pem = _write_rsa_keypair(tmp_path)
     _configure(monkeypatch, tmp_path, private_pem, public_pem)
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
+        assert request.headers["keyid"] == "test-kid"
+        assert request.headers["ex-correlation-id"]
         assert body["msgIdentfctn"]["clientId"] == "1VISAGCT000001"
         assert body["Body"]["Tx"]["instructedAmt"]["curCode"] == "SGD"
         return httpx.Response(
-            200, json={"Body": {"Tx": {"apprvlCode": "AB1234", "rspnCode": "00"}}}
+            200,
+            json={
+                "Body": {
+                    "Tx": {
+                        "apprvlCode": "AB1234",
+                        "actionCd": "00",
+                        "tranReslt": "Approved",
+                    }
+                }
+            },
         )
 
     monkeypatch.setattr(
@@ -140,7 +167,7 @@ def test_declined_response_never_reports_approved(tmp_path, monkeypatch):
 
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(
-            401, json={"Errors": {"Error": [{"errorDesc": "Card declined"}]}}
+            402, json={"Errors": {"Error": [{"errorDesc": "Card declined"}]}}
         )
 
     monkeypatch.setattr(
@@ -156,6 +183,50 @@ def test_declined_response_never_reports_approved(tmp_path, monkeypatch):
     )
     assert result.approved is False
     assert result.decline_reason == "Card declined"
+
+
+def test_http_200_with_a_decline_decision_never_reports_approved(tmp_path, monkeypatch):
+    private_pem, public_pem = _write_rsa_keypair(tmp_path)
+    _configure(monkeypatch, tmp_path, private_pem, public_pem)
+
+    monkeypatch.setattr(
+        visa_client,
+        "_build_mtls_client",
+        lambda: httpx.Client(
+            transport=httpx.MockTransport(
+                lambda _request: httpx.Response(
+                    200,
+                    json={"Body": {"Tx": {"actionCd": "05", "tranReslt": "Declined"}}},
+                )
+            ),
+            base_url="https://sandbox.api.visa.com",
+        ),
+    )
+
+    result = visa_client.authorize(
+        amount_cents=3400, currency="SGD", merchant_id="m_mysa", card_last4="4821"
+    )
+    assert result.approved is False
+    assert result.response_code == "05"
+
+
+def test_http_200_without_decision_fields_is_not_an_approval(tmp_path, monkeypatch):
+    private_pem, public_pem = _write_rsa_keypair(tmp_path)
+    _configure(monkeypatch, tmp_path, private_pem, public_pem)
+
+    monkeypatch.setattr(
+        visa_client,
+        "_build_mtls_client",
+        lambda: httpx.Client(
+            transport=httpx.MockTransport(lambda _request: httpx.Response(200, json={})),
+            base_url="https://sandbox.api.visa.com",
+        ),
+    )
+
+    with pytest.raises(visa_client.VisaAuthorizationError):
+        visa_client.authorize(
+            amount_cents=3400, currency="SGD", merchant_id="m_mysa", card_last4="4821"
+        )
 
 
 def test_unexpected_status_raises_rather_than_approves(tmp_path, monkeypatch):

@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,7 +30,9 @@ from typing import Any
 
 import httpx
 from joserfc import jwe
+from joserfc.jwe import JWERegistry
 from joserfc.jwk import RSAKey
+from joserfc.registry import HeaderParameter
 
 from app.settings import settings
 
@@ -37,11 +40,15 @@ logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT_SECONDS = 15.0
 
-# RFC 7516 algorithms Visa's MLE spec calls for: RSA-OAEP-256 wraps a one-time content
-# encryption key, A128CBC-HS256 encrypts the payload with it. joserfc requires both to be
+# RFC 7516 algorithms Visa's current MLE guide calls for: RSA-OAEP-256 wraps a one-time
+# content-encryption key and A128GCM encrypts the payload with it. joserfc requires both to be
 # explicitly allow-listed — neither is in its default "recommended" set.
-_JWE_ALGORITHMS = {"alg": "RSA-OAEP-256", "enc": "A128CBC-HS256"}
-_JWE_ALLOWED_ALGORITHMS = ["RSA-OAEP-256", "A128CBC-HS256"]
+_JWE_ALGORITHMS = {"alg": "RSA-OAEP-256", "enc": "A128GCM"}
+_JWE_ALLOWED_ALGORITHMS = ["RSA-OAEP-256", "A128GCM"]
+_JWE_REGISTRY = JWERegistry(
+    header_registry={"iat": HeaderParameter("Visa issued-at timestamp", "int")},
+    algorithms=_JWE_ALLOWED_ALGORITHMS,
+)
 
 # Fields Visa's MLE spec treats as sensitive and requires encrypted rather than sent as
 # plaintext JSON. Never log these, encrypted or not.
@@ -89,16 +96,23 @@ def _load_rsa_key(path: Path) -> RSAKey:
 def encrypt_mle_field(value: dict[str, Any], *, encrypt_cert_path: Path, key_id: str) -> str:
     """Encrypt one sensitive field for Visa, as a compact JWE, using Visa's public key."""
     key = _load_rsa_key(encrypt_cert_path)
-    protected = {**_JWE_ALGORITHMS, "kid": key_id}
+    protected = {**_JWE_ALGORITHMS, "kid": key_id, "iat": int(time.time() * 1000)}
     return jwe.encrypt_compact(
-        protected, json.dumps(value).encode(), key, algorithms=_JWE_ALLOWED_ALGORITHMS
+        protected,
+        json.dumps(value).encode(),
+        key,
+        registry=_JWE_REGISTRY,
     )
 
 
 def decrypt_mle_field(token: str, *, private_key_path: Path) -> dict[str, Any]:
     """Decrypt one Visa-encrypted response field using our own private key."""
     key = _load_rsa_key(private_key_path)
-    decrypted = jwe.decrypt_compact(token, key, algorithms=_JWE_ALLOWED_ALGORITHMS)
+    decrypted = jwe.decrypt_compact(
+        token,
+        key,
+        registry=_JWE_REGISTRY,
+    )
     return json.loads(decrypted.plaintext)
 
 
@@ -159,6 +173,45 @@ def _build_mtls_client() -> httpx.Client:
     )
 
 
+def validate_configuration() -> None:
+    """Fail before checkout if the selected Visa adapter cannot make a sandbox request.
+
+    This deliberately performs no network I/O and returns no secret values. It verifies every
+    required path/value up front and parses the two MLE RSA keys, so a shopper is never asked for
+    an OTP only to discover a missing or malformed local credential afterwards.
+    """
+    encrypt_cert = _require_file(
+        settings.visa_mle_encrypt_cert_path, "VISA_MLE_ENCRYPT_CERT_PATH"
+    )
+    decrypt_key = _require_file(settings.visa_mle_private_key_path, "VISA_MLE_PRIVATE_KEY_PATH")
+    _load_rsa_key(encrypt_cert)
+    _load_rsa_key(decrypt_key)
+    _require_value(settings.visa_mle_key_id, "VISA_MLE_KEY_ID")
+    _require_file(settings.visa_ssl_cert_path, "VISA_SSL_CERT_PATH")
+    _require_file(settings.visa_ssl_private_key_path, "VISA_SSL_PRIVATE_KEY_PATH")
+    _require_file(settings.visa_ca_bundle_path, "VISA_CA_BUNDLE_PATH")
+    _require_value(settings.visa_api_username, "VISA_API_USERNAME")
+    _require_value(settings.visa_api_password, "VISA_API_PASSWORD")
+    _require_value(settings.visa_client_id, "VISA_CLIENT_ID")
+
+
+def _find_first(value: Any, key: str) -> Any | None:
+    """Find a named value in Visa's nested response without assuming an unverified envelope."""
+    if isinstance(value, dict):
+        if key in value:
+            return value[key]
+        for inner in value.values():
+            found = _find_first(inner, key)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _find_first(item, key)
+            if found is not None:
+                return found
+    return None
+
+
 def _build_body(
     *,
     amount_cents: int,
@@ -196,6 +249,7 @@ def authorize(
     anything that is not a clean Visa-issued approve/decline — the caller must treat both
     as "cannot authorize right now", never as an approval."""
     correlation_id = str(uuid.uuid4())
+    validate_configuration()
     encrypt_cert = _require_file(settings.visa_mle_encrypt_cert_path, "VISA_MLE_ENCRYPT_CERT_PATH")
     mle_key_id = _require_value(settings.visa_mle_key_id, "VISA_MLE_KEY_ID")
     decrypt_key = _require_file(settings.visa_mle_private_key_path, "VISA_MLE_PRIVATE_KEY_PATH")
@@ -220,7 +274,11 @@ def authorize(
 
     with _build_mtls_client() as client:
         try:
-            response = client.post(settings.visa_endpoint_path, json=body)
+            response = client.post(
+                settings.visa_endpoint_path,
+                json=body,
+                headers={"keyId": mle_key_id, "ex-correlation-id": correlation_id},
+            )
         except httpx.HTTPError as error:
             raise VisaAuthorizationError(f"Visa sandbox request failed: {error}") from error
 
@@ -232,18 +290,32 @@ def authorize(
         _redact(parsed),
     )
 
+    action_code = _find_first(parsed, "actionCd")
+    transaction_result = _find_first(parsed, "tranReslt")
+    approval_code = _find_first(parsed, "apprvlCode")
+
     if response.status_code == 200:
+        if action_code is None or transaction_result is None:
+            raise VisaAuthorizationError(
+                "Visa returned HTTP 200 without actionCd and tranReslt decision fields."
+            )
+        approved = str(action_code) == "00" and str(transaction_result).casefold() == "approved"
         return VisaAuthorizationResult(
-            approved=True,
-            decline_reason=None,
-            auth_code=parsed.get("Body", {}).get("Tx", {}).get("apprvlCode"),
-            response_code=parsed.get("Body", {}).get("Tx", {}).get("rspnCode"),
+            approved=approved,
+            decline_reason=(
+                None
+                if approved
+                else f"Visa returned {transaction_result} (action code {action_code})."
+            ),
+            auth_code=str(approval_code) if approval_code is not None and approved else None,
+            response_code=str(action_code),
             raw_status=response.status_code,
         )
-    if response.status_code in (400, 401, 403, 422):
+    if response.status_code == 402:
         reason = (
             parsed.get("Errors", {}).get("Error", [{}])[0].get("errorDesc")
-            or f"HTTP {response.status_code}"
+            or (str(transaction_result) if transaction_result is not None else None)
+            or "Visa or the issuer declined the authorization."
         )
         return VisaAuthorizationResult(
             approved=False,
@@ -251,6 +323,10 @@ def authorize(
             auth_code=None,
             response_code=str(response.status_code),
             raw_status=response.status_code,
+        )
+    if response.status_code in (400, 401, 403, 404, 422):
+        raise VisaAuthorizationError(
+            f"Visa rejected the authorization request or credentials: HTTP {response.status_code}"
         )
     raise VisaAuthorizationError(
         f"Unexpected Visa sandbox response: HTTP {response.status_code}"

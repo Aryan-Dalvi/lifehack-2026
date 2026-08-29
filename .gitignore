@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+visa/
 
 # deps / builds
 node_modules/
@@ -26,3 +27,4 @@ test-results/
 .idea/
 .vscode/
 scratch/
+~$*.xlsx

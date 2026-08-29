@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pytest
@@ -7,7 +8,10 @@ from fastapi.testclient import TestClient
 
 from agent.guardian import validate_recommendation
 from app.db import connect, init_databases
+from app.errors import api_error
 from app.main import app
+from payments import service as payment_service
+from payments import visa_client
 from payments.tap import canonical_json, sign_tap_request
 from seed.reset import DEMO_CONSUMER_EMAIL, MERCHANT_KEY_FILE, seed
 from tests.conftest import SessionAwareClient
@@ -168,6 +172,65 @@ def test_discover_compare_consent_bank_tap_pay_and_idempotency(client: TestClien
 
     with connect() as connection:
         assert connection.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 1
+
+
+def test_visa_configuration_is_checked_before_the_bank_challenge(client, monkeypatch) -> None:
+    session_id = create_session(client)
+    checkout = build_consented_cart(client, session_id)
+    monkeypatch.setattr(
+        payment_service,
+        "settings",
+        dataclasses.replace(payment_service.settings, payment_adapter="visa"),
+    )
+    monkeypatch.setattr(
+        visa_client,
+        "settings",
+        dataclasses.replace(visa_client.settings, visa_mle_encrypt_cert_path=None),
+    )
+
+    response = client.post(
+        "/bank/challenge",
+        json={
+            "consumer_id": "usr_demo",
+            "cart_hash": checkout["consent"]["cart_hash"],
+            "amount_cents": checkout["consent"]["amount_cents"],
+            "currency": checkout["consent"]["currency"],
+            "merchant_id": checkout["consent"]["merchant_id"],
+            "session_id": session_id,
+        },
+    )
+
+    assert response.status_code == 503
+    error = response.json()["detail"]["error"]
+    assert error["code"] == "PAYMENT_NOT_READY"
+    assert "VISA_MLE" not in error["message"]
+
+
+def test_operational_authorization_fault_releases_the_bank_token(client, monkeypatch) -> None:
+    session_id = create_session(client)
+    checkout = build_consented_cart(client, session_id)
+    bank_token = issue_bank_token(client, session_id, checkout["consent"])
+
+    def fail_authorization(**_kwargs):
+        raise api_error(502, "VISA_ADAPTER_UNAVAILABLE", "Temporary payment failure.")
+
+    monkeypatch.setattr(payment_service, "_run_authorization", fail_authorization)
+    response = client.post(
+        "/agent/pay",
+        json={
+            "session_id": session_id,
+            "cart_id": checkout["consent"]["cart_id"],
+            "payment_mandate_id": checkout["consent"]["payment_mandate_id"],
+            "token_id": checkout["consent"]["token_id"],
+            "bank_token": bank_token,
+        },
+        headers={"Idempotency-Key": "operational-fault"},
+    )
+
+    assert response.status_code == 502
+    token_status = client.get(f"/bank/token/{bank_token}")
+    assert token_status.status_code == 200
+    assert token_status.json()["status"] == "issued"
 
 
 def test_new_consumer_can_add_a_shipping_address_and_then_checkout(client: TestClient) -> None:
