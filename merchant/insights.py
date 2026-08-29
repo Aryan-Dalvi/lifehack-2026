@@ -57,6 +57,11 @@ def _day(value: str | None) -> str:
     return (value or "")[:10]
 
 
+def _short_date(value: Any) -> str:
+    """Format a compact date without platform-specific ``strftime`` flags."""
+    return f"{value.strftime('%b')} {value.day}"
+
+
 def _pct(part: float, whole: float) -> float | None:
     """A percentage, or None when there is no denominator - never a zero standing in for 'unknown'."""
     if not whole:
@@ -202,7 +207,7 @@ def _revenue_series(
     points = [
         {
             "date": date.isoformat(),
-            "label": date.strftime("%b %-d") if hasattr(date, "strftime") else date.isoformat(),
+            "label": _short_date(date) if hasattr(date, "strftime") else date.isoformat(),
             "actual_cents": totals[date.isoformat()],
             "projected_cents": None,
             "is_forecast": False,
@@ -215,7 +220,7 @@ def _revenue_series(
         points.append(
             {
                 "date": date.isoformat(),
-                "label": date.strftime("%b %-d"),
+                "label": _short_date(date),
                 "actual_cents": None,
                 "projected_cents": run_rate,
                 "is_forecast": True,
@@ -419,7 +424,7 @@ def _customer_rows(
                 "value_cents": entry["spend_cents"] or entry["open_cart_cents"],
                 "value_kind": "spent" if entry["spend_cents"] else "in cart",
                 "last_activity_label": (
-                    seen.strftime("%b %-d") if seen else "—"
+                    _short_date(seen) if seen else "—"
                 ),
             }
         )
