@@ -1,13 +1,16 @@
-import { ArrowRight, CircleDollarSign, LoaderCircle, Send, Settings2, ShieldCheck, ShoppingBag, Sparkles, X } from "lucide-react";
+import { ArrowRight, CircleDollarSign, LayoutGrid, LoaderCircle, Send, ShieldCheck, ShoppingBag, Sparkles, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, api, money } from "../../api";
+import { ApiError, api, money, setSessionToken } from "../../api";
 import type { CartPreview, Comparison, Consent, Product, Receipt, Routine, TrustEvent, TurnEvent } from "../../types";
-import { type BasketLine, CartDrawer } from "./CartDrawer";
+import { type Account, AccountMenu } from "./AccountMenu";
+import type { BasketLine } from "./CartDrawer";
+import { CartSidebar } from "./CartSidebar";
 import { BankSheet, ConsentSheet, ReceiptCard } from "./CheckoutSheets";
 import { ComparisonDrawer } from "./ComparisonDrawer";
 import { ProductCard } from "./ProductCard";
+import { ProductsModal } from "./ProductsModal";
 import { RoutinePlan } from "./RoutinePlan";
-import { type JourneyStage, TrustRail } from "./TrustRail";
+import type { JourneyStage } from "./TrustRail";
 
 type ChatMessage = { id: string; role: "assistant" | "shopper"; text: string };
 type Decline = {
@@ -38,7 +41,7 @@ export function ShopperApp() {
   const [comparison, setComparison] = useState<Comparison | null>(null);
   const [routine, setRoutine] = useState<Routine | null>(null);
   const [basket, setBasket] = useState<BasketLine[]>([]);
-  const [cartOpen, setCartOpen] = useState(false);
+  const [productsModalOpen, setProductsModalOpen] = useState(false);
   const [cart, setCart] = useState<CartPreview | null>(null);
   const [consent, setConsent] = useState<Consent | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -53,8 +56,15 @@ export function ShopperApp() {
   const [budgetCents, setBudgetCents] = useState<number | null>(null);
   const [bankChallengeId, setBankChallengeId] = useState<string | null>(null);
   const [bankOpen, setBankOpen] = useState(false);
+  const [account, setAccount] = useState<Account | null>(null);
+  const [anonymous, setAnonymous] = useState(true);
   const [bankError, setBankError] = useState<string | null>(null);
   const idempotencyKey = useRef(crypto.randomUUID());
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, products, routine, decline, comparison, receipt, busy]);
 
   const loadTrust = useCallback(async (activeSessionId: string) => {
     const payload = await api<{ events: TrustEvent[] }>(`/trust/events/snapshot?session_id=${encodeURIComponent(activeSessionId)}`);
@@ -63,20 +73,30 @@ export function ShopperApp() {
 
   useEffect(() => {
     let active = true;
-    api<{ session_id: string; greeting: string }>("/agent/session", {
-      method: "POST",
-      body: JSON.stringify({ merchant_id: merchantId, category: "skincare", consumer_id: "usr_demo", budget_cents: null }),
-    })
+    // The session is re-opened whenever sign-in state changes, so it binds to the shopper
+    // who is actually signed in. Identity is never sent in the body - the server reads it
+    // from the consumer token, or treats the session as anonymous.
+    setSessionToken(null);
+    api<{ session_id: string; session_token: string; greeting: string; anonymous: boolean }>(
+      "/agent/session",
+      {
+        method: "POST",
+        body: JSON.stringify({ merchant_id: merchantId, category: "skincare", budget_cents: null }),
+      },
+    )
       .then((payload) => {
         if (!active) return;
+        // Must be set before any other call: every session-scoped endpoint requires it.
+        setSessionToken(payload.session_token);
         setSessionId(payload.session_id);
+        setAnonymous(payload.anonymous);
         return loadTrust(payload.session_id);
       })
       .catch((requestError: Error) => active && setError(requestError.message));
     return () => {
       active = false;
     };
-  }, [loadTrust, merchantId]);
+  }, [loadTrust, merchantId, account]);
 
   const applyEvents = (events: TurnEvent[], suppressToken = false) => {
     // A turn either produces a routine or it does not; never carry a stale plan forward.
@@ -173,7 +193,6 @@ export function ShopperApp() {
       }
       return [...current, { product, quantity: 1 }];
     });
-    setCartOpen(true);
   };
 
   const incrementBasketLine = (sku: string) => {
@@ -217,7 +236,6 @@ export function ShopperApp() {
       } else {
         setCart(response.data as CartPreview);
         setStage("preview");
-        setCartOpen(false);
       }
       await loadTrust(sessionId);
     } catch (requestError) {
@@ -293,7 +311,7 @@ export function ShopperApp() {
       const challenge = await api<{ challenge_id: string }>("/bank/challenge", {
         method: "POST",
         body: JSON.stringify({
-          consumer_id: "usr_demo",
+          consumer_id: account?.consumer_id ?? "usr_demo",
           cart_hash: confirmed.cart_hash,
           amount_cents: confirmed.amount_cents,
           currency: confirmed.currency,
@@ -362,51 +380,64 @@ export function ShopperApp() {
   return (
     <div className={`shopper-shell ${embedded ? "shopper-shell--embedded" : ""}`}>
       <header className="shopper-header">
-        <a className="brand" href="/storefront?merchant=m_mysa"><span>Mysa Skin</span><small>Powered by Sway</small></a>
-        {!embedded ? <a className="merchant-link" href="/admin"><Settings2 size={16} /> Merchant setup</a> : null}
+        <a className="brand" href="/storefront?merchant=m_mysa">
+          <span>Mysa Skin</span>
+          <small>Powered by Sway</small>
+        </a>
+        <div className="shopper-header-actions">
+          <div className="limit-control">
+            <button
+              type="button"
+              className="limit-button"
+              onClick={() => setLimitOpen((value) => !value)}
+            >
+              <CircleDollarSign size={15} />
+              <span>{budgetCents === null ? "Set spending limit" : `${money(budgetCents)} limit active`}</span>
+            </button>
+            {limitOpen ? (
+              <form className="limit-form" onSubmit={saveLimit}>
+                <label htmlFor="spending-limit">Maximum for this shopping session</label>
+                <div>
+                  <span>S$</span>
+                  <input
+                    id="spending-limit"
+                    type="number"
+                    min="1"
+                    max="500"
+                    step="1"
+                    value={limitDraft}
+                    onChange={(event) => setLimitDraft(event.target.value)}
+                    placeholder="100"
+                    autoFocus
+                  />
+                </div>
+                <div className="limit-form-actions">
+                  <button type="submit" className="small-primary" disabled={busy}>
+                    Apply
+                  </button>
+                  {budgetCents !== null ? (
+                    <button type="button" className="text-link" onClick={() => void clearLimit()}>
+                      Clear
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => setLimitOpen(false)}
+                    aria-label="Close spending limit"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </form>
+            ) : null}
+          </div>
+          <AccountMenu account={account} onChange={setAccount} />
+        </div>
       </header>
+
       <main className="shopper-layout">
         <section className="commerce-canvas">
-          <div className="top-controls">
-            {basket.length > 0 ? (
-              <div className="cart-control">
-                <button type="button" className="limit-button cart-toggle" onClick={() => setCartOpen((value) => !value)}>
-                  <ShoppingBag size={17} />
-                  Cart · {basket.reduce((sum, line) => sum + line.quantity, 0)}
-                </button>
-                {cartOpen ? (
-                  <CartDrawer
-                    lines={basket}
-                    busy={busy}
-                    onIncrement={incrementBasketLine}
-                    onDecrement={decrementBasketLine}
-                    onRemove={removeBasketLine}
-                    onCheckout={() => void startCheckout()}
-                    onClose={() => setCartOpen(false)}
-                  />
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="limit-control">
-              <button type="button" className="limit-button" onClick={() => setLimitOpen((value) => !value)}>
-                <CircleDollarSign size={17} />
-                {budgetCents === null ? "Set a spending limit" : `${money(budgetCents)} limit active`}
-              </button>
-              {limitOpen ? (
-                <form className="limit-form" onSubmit={saveLimit}>
-                  <label htmlFor="spending-limit">Maximum for this shopping session</label>
-                  <div><span>S$</span><input id="spending-limit" type="number" min="1" max="500" step="1" value={limitDraft} onChange={(event) => setLimitDraft(event.target.value)} placeholder="100" autoFocus /></div>
-                  <div className="limit-form-actions">
-                    <button type="submit" className="small-primary" disabled={busy}>Apply</button>
-                    {budgetCents !== null ? <button type="button" className="text-link" onClick={() => void clearLimit()}>Clear</button> : null}
-                    <button type="button" className="icon-button" onClick={() => setLimitOpen(false)} aria-label="Close spending limit"><X size={18} /></button>
-                  </div>
-                </form>
-              ) : null}
-            </div>
-          </div>
-
           <div className="chat-scroll">
             <div className="chat-column">
               {messages.length <= 1 ? (
@@ -422,7 +453,11 @@ export function ShopperApp() {
                     <div>{message.text}</div>
                   </div>
                 ))}
-                {busy && !cart && !bankOpen ? <div className="thinking"><LoaderCircle size={16} className="spin" /> Checking what is needed…</div> : null}
+                {busy && !cart && !bankOpen ? (
+                  <div className="thinking">
+                    <LoaderCircle size={15} className="spin" /> Checking what is needed…
+                  </div>
+                ) : null}
               </div>
 
               {error ? <div className="inline-error" role="alert">{error}</div> : null}
@@ -449,11 +484,25 @@ export function ShopperApp() {
 
               {products.length > 0 ? (
                 <section className="results-section" aria-labelledby="results-title">
-                  <header>
-                    <div><p>Catalog matches</p><h2 id="results-title">Grounded options for you</h2></div>
-                    {selectedSkus.length > 0 ? <span>{selectedSkus.length} of 3 selected</span> : null}
+                  <header className="results-header">
+                    <div>
+                      <p>Catalog matches</p>
+                      <h2 id="results-title">Grounded options for you</h2>
+                    </div>
+                    <div className="results-header-actions">
+                      {selectedSkus.length > 0 ? <span>{selectedSkus.length} of 3 selected</span> : null}
+                      <button
+                        type="button"
+                        className="view-all-button"
+                        onClick={() => setProductsModalOpen(true)}
+                      >
+                        <LayoutGrid size={14} />
+                        <span>View all ({products.length})</span>
+                      </button>
+                    </div>
                   </header>
-                  <div className="product-rail">
+
+                  <div className="product-rail product-rail--single-line">
                     {products.map((product) => (
                       <ProductCard
                         key={product.sku}
@@ -466,9 +515,10 @@ export function ShopperApp() {
                       />
                     ))}
                   </div>
+
                   {selectedSkus.length >= 2 ? (
                     <button type="button" className="compare-action" onClick={() => void compareProducts()} disabled={busy}>
-                      <Sparkles size={17} /> Compare {selectedSkus.length} products <ArrowRight size={17} />
+                      <Sparkles size={16} /> Compare {selectedSkus.length} products <ArrowRight size={16} />
                     </button>
                   ) : null}
                 </section>
@@ -476,6 +526,8 @@ export function ShopperApp() {
 
               {comparison ? <ComparisonDrawer comparison={comparison} onClose={() => setComparison(null)} onChoose={addToBasket} /> : null}
               {receipt ? <ReceiptCard receipt={receipt} /> : null}
+
+              <div ref={messagesEndRef} />
             </div>
           </div>
 
@@ -490,14 +542,47 @@ export function ShopperApp() {
                   placeholder="Ask about products or routines"
                   disabled={!sessionId || busy}
                 />
-                <button type="submit" aria-label="Send message" disabled={!input.trim() || !sessionId || busy}><Send size={18} /></button>
+                <button type="submit" aria-label="Send message" disabled={!input.trim() || !sessionId || busy}>
+                  <Send size={16} />
+                </button>
               </form>
             </div>
           </div>
         </section>
-        <TrustRail stage={stage} budgetCents={budgetCents} events={trustEvents} />
+
+        <CartSidebar
+          lines={basket}
+          busy={busy}
+          budgetCents={budgetCents}
+          decline={decline}
+          stage={stage}
+          trustEvents={trustEvents}
+          onIncrement={incrementBasketLine}
+          onDecrement={decrementBasketLine}
+          onRemove={removeBasketLine}
+          onCheckout={() => void startCheckout()}
+          onOpenLimit={() => setLimitOpen(true)}
+        />
       </main>
 
+      {productsModalOpen && products.length > 0 ? (
+        <ProductsModal
+          products={products}
+          selectedSkus={selectedSkus}
+          basketSkus={basket.map((line) => ({ sku: line.product.sku, quantity: line.quantity }))}
+          busy={busy}
+          onClose={() => setProductsModalOpen(false)}
+          onToggleCompare={toggleCompare}
+          onChoose={addToBasket}
+          onCompare={() => void compareProducts()}
+        />
+      ) : null}
+
+      {cart && anonymous ? (
+        <p className="guest-checkout-hint">
+          You are checking out as a guest. Sign in to use your saved shipping address.
+        </p>
+      ) : null}
       {cart ? <ConsentSheet cart={cart} busy={busy} onCancel={() => { setCart(null); setStage(products.length ? "products" : "start"); }} onConfirm={() => void confirmCart()} /> : null}
       {bankOpen && consent ? <BankSheet amountCents={consent.amount_cents} busy={busy} error={bankError} onBack={() => setBankOpen(false)} onVerify={(code) => void verifyBank(code)} /> : null}
       <div className="security-footer"><ShieldCheck size={14} /> Exact consent · bank verification · TAP signature · simulated authorization</div>

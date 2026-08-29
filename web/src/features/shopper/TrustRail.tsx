@@ -15,6 +15,7 @@ type Props = {
   stage: JourneyStage;
   budgetCents: number | null;
   events: TrustEvent[];
+  isCollapsibleContent?: boolean;
 };
 
 const stepIndex: Record<JourneyStage, number> = {
@@ -28,7 +29,7 @@ const stepIndex: Record<JourneyStage, number> = {
   declined: 2,
 };
 
-export function TrustRail({ stage, budgetCents, events }: Props) {
+export function TrustRail({ stage, budgetCents, events, isCollapsibleContent = false }: Props) {
   const index = stepIndex[stage];
   const steps = [
     ["Catalog verified", "Product facts come from Mysa Skin."],
@@ -42,11 +43,13 @@ export function TrustRail({ stage, budgetCents, events }: Props) {
   const latestFailure = [...events].reverse().find((event) => event.status === "fail");
 
   return (
-    <aside className="trust-rail" aria-label="Purchase protection">
-      <div className="trust-title">
-        <ShieldCheck size={21} />
-        <h2>Purchase protection</h2>
-      </div>
+    <div className={`trust-rail ${isCollapsibleContent ? "trust-rail--collapsible" : ""}`} aria-label="Purchase protection">
+      {!isCollapsibleContent ? (
+        <div className="trust-title">
+          <ShieldCheck size={21} />
+          <h2>Purchase protection</h2>
+        </div>
+      ) : null}
       <ol>
         {steps.map(([label, detail], position) => {
           const failed = stage === "declined" && position === 2;
@@ -80,7 +83,7 @@ export function TrustRail({ stage, budgetCents, events }: Props) {
           ))}
         </ul>
       </details>
-    </aside>
+    </div>
   );
 }
 
