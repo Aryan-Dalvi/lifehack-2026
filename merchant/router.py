@@ -1,19 +1,21 @@
 from __future__ import annotations
 
-import csv
-import io
 import json
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, Request
-from openpyxl import load_workbook
+from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
 from app.db import connect, json_load, transaction, utc_now
 from app.errors import api_error
 from app.ids import new_id
 from app.settings import settings
+from merchant.catalog_pipeline import (
+    approve_catalog_upload,
+    catalog_upload_preview,
+    parse_catalog,
+    stage_and_clean_catalog,
+)
 
 merchant_router = APIRouter(prefix="/merchant", tags=["merchant"])
 catalog_router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -35,6 +37,12 @@ class ConfigUpdate(BaseModel):
     persona: str | None = None
     policies: dict[str, Any] | None = None
     status: str | None = None
+
+
+class ApproveCatalogRequest(BaseModel):
+    approval_token: str = Field(min_length=64, max_length=64)
+    reviewed_row_count: int = Field(ge=1, le=10_000)
+    mode: Literal["replace", "upsert"] = "replace"
 
 
 def _snippet(merchant_id: str) -> str:
@@ -126,126 +134,7 @@ def merchant_snippet(merchant_id: str) -> dict[str, str]:
     }
 
 
-def _rows_from_csv(content: bytes) -> list[dict[str, Any]]:
-    try:
-        decoded = content.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise api_error(400, "BAD_CATALOG", "The CSV must use UTF-8 encoding.") from exc
-    sample = decoded[:4096]
-    try:
-        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
-    except csv.Error:
-        dialect = csv.excel
-    return list(csv.DictReader(io.StringIO(decoded), dialect=dialect))
-
-
-def _rows_from_xlsx(content: bytes) -> list[dict[str, Any]]:
-    try:
-        workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-        worksheet = workbook.active
-        values = list(worksheet.iter_rows(values_only=True))
-    except Exception as exc:
-        raise api_error(400, "BAD_CATALOG", "The XLSX file could not be read.") from exc
-    if not values:
-        return []
-    headers = [str(value or "").strip() for value in values[0]]
-    return [dict(zip(headers, row, strict=False)) for row in values[1:] if any(row)]
-
-
-def _pick(row: dict[str, Any], *names: str) -> Any:
-    normalized = {str(key).strip().lower().replace(" ", "_"): value for key, value in row.items()}
-    for name in names:
-        if name in normalized and normalized[name] not in {None, ""}:
-            return normalized[name]
-    return None
-
-
-def _list_value(value: Any) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return [str(item).strip().lower() for item in value if str(item).strip()]
-    return [item.strip().lower() for item in str(value).replace("|", ",").split(",") if item.strip()]
-
-
-def _boolean(value: Any) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    if value is None or value == "":
-        return None
-    normalized = str(value).strip().lower()
-    if normalized in {"yes", "true", "1", "y"}:
-        return True
-    if normalized in {"no", "false", "0", "n"}:
-        return False
-    return None
-
-
-def _price_cents(row: dict[str, Any]) -> int:
-    cents = _pick(row, "price_cents")
-    if cents is not None:
-        return int(cents)
-    price = _pick(row, "price", "price_sgd", "unit_price")
-    if price is None:
-        raise ValueError("price is required")
-    normalized = str(price).replace("S$", "").replace("$", "").replace(",", "").strip()
-    try:
-        return int((Decimal(normalized) * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))
-    except (InvalidOperation, ValueError) as exc:
-        raise ValueError("price must be numeric") from exc
-
-
-def _normalize_product(row: dict[str, Any], merchant: dict[str, Any]) -> dict[str, Any]:
-    sku = str(_pick(row, "sku", "item_code", "product_id") or "").strip()
-    title = str(_pick(row, "title", "name", "product_name") or "").strip()
-    if not sku:
-        raise ValueError("sku is required")
-    if not title:
-        raise ValueError("name is required")
-    price_cents = _price_cents(row)
-    if price_cents < 0:
-        raise ValueError("price cannot be negative")
-    stock = int(_pick(row, "stock", "inventory", "quantity") or 0)
-    if stock < 0:
-        raise ValueError("stock cannot be negative")
-    ingredients = _list_value(_pick(row, "ingredients", "ingredient_list"))
-    if not ingredients:
-        raise ValueError("ingredients is required for skincare")
-    attributes = {
-        "routine_step": str(_pick(row, "routine_step", "product_type") or "treatment").lower(),
-        "skin_types": _list_value(_pick(row, "skin_types", "skin_type")),
-        "concerns": _list_value(_pick(row, "concerns", "skin_concerns")),
-        "ingredients": ingredients,
-        "excludes": _list_value(_pick(row, "excludes", "free_from")),
-        "fragrance_free": _boolean(_pick(row, "fragrance_free")),
-        "texture": str(_pick(row, "texture") or "").strip().lower(),
-        "size_ml": int(_pick(row, "size_ml", "size") or 0),
-    }
-    rating_avg = _pick(row, "rating_avg", "rating")
-    rating_count = _pick(row, "rating_count", "reviews")
-    if rating_avg is not None:
-        rating_avg = round(float(rating_avg), 1)
-        if not 0 <= rating_avg <= 5:
-            rating_avg = None
-            rating_count = None
-    return {
-        "sku": sku,
-        "merchant_id": merchant["merchant_id"],
-        "title": title,
-        "description": str(_pick(row, "description", "details") or "").strip(),
-        "price_cents": price_cents,
-        "currency": merchant["currency"],
-        "image_url": str(_pick(row, "image_url", "image", "photo") or "").strip() or None,
-        "category": "skincare",
-        "attributes": attributes,
-        "stock": stock,
-        "rating_avg": rating_avg,
-        "rating_count": int(rating_count) if rating_count is not None else None,
-        "rating_source": "merchant_feed" if rating_avg is not None else "none",
-    }
-
-
-async def _catalog_rows(request: Request) -> tuple[list[dict[str, Any]], dict[str, str]]:
+async def _catalog_source(request: Request):
     content_type = request.headers.get("content-type", "")
     if "multipart/form-data" in content_type:
         form = await request.form()
@@ -253,92 +142,50 @@ async def _catalog_rows(request: Request) -> tuple[list[dict[str, Any]], dict[st
         if upload is None or not hasattr(upload, "read"):
             raise api_error(400, "BAD_CATALOG", "Choose a CSV, XLSX or JSON catalog file.")
         content = await upload.read()
-        if len(content) > 5 * 1024 * 1024:
-            raise api_error(413, "TOO_LARGE", "Catalog files are limited to 5 MB.")
         filename = getattr(upload, "filename", "catalog.csv") or "catalog.csv"
-        extension = filename.lower().rsplit(".", 1)[-1]
-        if extension == "csv":
-            rows = _rows_from_csv(content)
-        elif extension == "xlsx":
-            rows = _rows_from_xlsx(content)
-        elif extension == "json":
-            parsed = json.loads(content)
-            rows = parsed.get("products", parsed) if isinstance(parsed, dict) else parsed
-        else:
-            raise api_error(400, "BAD_CATALOG", "Only CSV, XLSX and JSON catalogs are supported.")
-        return rows, {"filename": filename, "format": extension}
+        requested_sheet = form.get("sheet_name")
+        return parse_catalog(
+            content,
+            filename,
+            sheet_name=str(requested_sheet) if requested_sheet else None,
+        )
 
     if "application/json" in content_type:
-        parsed = await request.json()
-        rows = parsed.get("products", []) if isinstance(parsed, dict) else parsed
-        return rows, {"filename": "catalog.json", "format": "json"}
+        return parse_catalog(await request.body(), "catalog.json")
     raise api_error(400, "BAD_CATALOG", "Use multipart file upload or application/json.")
 
 
 @merchant_router.post("/{merchant_id}/catalog")
+@merchant_router.post("/{merchant_id}/catalog/uploads")
 async def ingest_catalog(merchant_id: str, request: Request) -> dict[str, Any]:
     merchant = merchant_config(merchant_id)
-    rows, source = await _catalog_rows(request)
-    if not isinstance(rows, list) or not rows:
-        raise api_error(400, "BAD_CATALOG", "The catalog contains no product rows.")
-    normalized: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for row_number, row in enumerate(rows, start=2):
-        try:
-            product = _normalize_product(row, merchant)
-            if product["sku"] in seen:
-                raise ValueError(f"duplicate sku {product['sku']}; kept first")
-            seen.add(product["sku"])
-            normalized.append(product)
-        except (TypeError, ValueError, InvalidOperation) as exc:
-            errors.append({"row": row_number, "reason": str(exc)})
+    parsed = await _catalog_source(request)
+    return await stage_and_clean_catalog(merchant=merchant, parsed=parsed)
 
-    now = utc_now()
-    with transaction() as connection:
-        for product in normalized:
-            connection.execute(
-                "INSERT INTO products(sku,merchant_id,title,description,price_cents,currency,image_url,"
-                "category,attributes_json,stock,rating_avg,rating_count,rating_source,created_at,updated_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(sku) DO UPDATE SET "
-                "title=excluded.title,description=excluded.description,price_cents=excluded.price_cents,"
-                "image_url=excluded.image_url,attributes_json=excluded.attributes_json,stock=excluded.stock,"
-                "rating_avg=excluded.rating_avg,rating_count=excluded.rating_count,"
-                "rating_source=excluded.rating_source,updated_at=excluded.updated_at",
-                (
-                    product["sku"],
-                    product["merchant_id"],
-                    product["title"],
-                    product["description"],
-                    product["price_cents"],
-                    product["currency"],
-                    product["image_url"],
-                    product["category"],
-                    json.dumps(product["attributes"]),
-                    product["stock"],
-                    product["rating_avg"],
-                    product["rating_count"],
-                    product["rating_source"],
-                    now,
-                    now,
-                ),
-            )
-    mappings = {
-        "sku": "SKU",
-        "title": "Name",
-        "price_cents": "Price",
-        "ingredients": "Ingredients",
-        "skin_types": "Skin types",
-        "stock": "Stock",
-    }
-    return {
-        "ingested": len(normalized),
-        "skipped": len(errors),
-        "errors": errors,
-        "source": source,
-        "mappings": mappings,
-        "partial_success": bool(normalized and errors),
-    }
+
+@merchant_router.get("/{merchant_id}/catalog/uploads/{upload_id}")
+def catalog_upload(
+    merchant_id: str,
+    upload_id: str,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=200),
+) -> dict[str, Any]:
+    merchant_config(merchant_id)
+    return catalog_upload_preview(merchant_id, upload_id, offset=offset, limit=limit)
+
+
+@merchant_router.post("/{merchant_id}/catalog/uploads/{upload_id}/approve")
+def approve_catalog(
+    merchant_id: str, upload_id: str, body: ApproveCatalogRequest
+) -> dict[str, Any]:
+    merchant_config(merchant_id)
+    return approve_catalog_upload(
+        merchant_id=merchant_id,
+        upload_id=upload_id,
+        approval_token=body.approval_token,
+        reviewed_row_count=body.reviewed_row_count,
+        mode=body.mode,
+    )
 
 
 def _product_payload(row) -> dict[str, Any]:
@@ -496,4 +343,3 @@ def set_default_address(consumer_id: str, address_id: str) -> dict[str, str]:
             "UPDATE addresses SET is_default=1 WHERE address_id=?", (address_id,)
         )
     return {"default_address_id": address_id}
-

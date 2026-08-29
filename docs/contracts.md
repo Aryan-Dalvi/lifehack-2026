@@ -191,7 +191,9 @@ never floats, never a bare number.
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
 | POST | `/merchant/onboard` | `{name, size, category, currency}` | `{merchant_id, api_key, embed_snippet}` | 400 `VALIDATION` |
-| POST | `/merchant/{id}/catalog` | multipart CSV **or** `{products:[Product]}` | `{ingested:int, skipped:int, errors:[{row,reason}]}` | 400 `BAD_CATALOG`, 404 `NO_MERCHANT`, 413 `TOO_LARGE` |
+| POST | `/merchant/{id}/catalog/uploads` (`/catalog` alias) | multipart `.xlsx`/CSV (`file`, optional `sheet_name`) **or** versioned JSON | staged review preview with `upload_id`, mappings, row statuses, taxonomy, pagination, and mode-bound approval plans; live catalog unchanged | 400 `BAD_CATALOG`, 404 `NO_MERCHANT`, 413 `TOO_LARGE` |
+| GET | `/merchant/{id}/catalog/uploads/{upload_id}` | query: `offset=0, limit=100` | paginated staged preview and `replace`/`upsert` approval plans | 400 `BAD_PAGINATION`, 404 `NO_CATALOG_UPLOAD`, 409 |
+| POST | `/merchant/{id}/catalog/uploads/{upload_id}/approve` | `{approval_token, reviewed_row_count, mode:"replace"|"upsert"}` | `{status:"published", mode, published, removed, skipped, idempotent_replay}` | 400, 404, 409 stale/incomplete/unsafe plan |
 | GET | `/merchant/{id}/config` | — | `{merchant_id,name,size,category,currency,persona,policies}` | 404 |
 | PUT | `/merchant/{id}/config` | partial config | updated config | 400, 404 |
 | GET | `/merchant/{id}/snippet` | — | `{snippet:"<script src=…></script>"}` | 404 |

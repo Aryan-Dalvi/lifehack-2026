@@ -451,7 +451,8 @@ def test_catalog_upload_keeps_valid_rows_and_reports_invalid_ones(client: TestCl
     )
     assert response.status_code == 200, response.text
     result = response.json()
-    assert result["ingested"] == 1
+    assert result["ready"] == 1
+    assert result["ingested"] == 0
     assert result["skipped"] == 1
     assert result["partial_success"] is True
     assert result["errors"][0]["row"] == 3
