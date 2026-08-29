@@ -118,7 +118,10 @@ export function ReceiptCard({ receipt }: ReceiptProps) {
       <div className="receipt-main">
         <p>Order confirmed</p>
         <h2>{money(receipt.total_cents, receipt.currency)} paid to {receipt.merchant}</h2>
-        <span>{receipt.items[0]?.title} · Visa •••• {receipt.last4}</span>
+        <span>
+          {receipt.items[0]?.title}
+          {receipt.items.length > 1 ? ` + ${receipt.items.length - 1} more` : ""} · Visa •••• {receipt.last4}
+        </span>
       </div>
       <dl>
         <div><dt>Issuer</dt><dd>{receipt.issuer}</dd></div>

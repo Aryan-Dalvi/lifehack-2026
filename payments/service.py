@@ -219,9 +219,20 @@ def _default_address(connection, consumer_id: str):
     ).fetchone()
 
 
-def create_cart(session_id: str, sku: str, quantity: int = 1) -> dict[str, Any]:
-    if quantity < 1 or quantity > 10:
-        raise api_error(400, "VALIDATION", "Quantity must be between 1 and 10.")
+def create_cart(session_id: str, requested_items: list[dict[str, Any]]) -> dict[str, Any]:
+    if not requested_items:
+        raise api_error(400, "VALIDATION", "Choose at least one product before checkout.")
+
+    merged: dict[str, int] = {}
+    order: list[str] = []
+    for entry in requested_items:
+        sku = entry["sku"]
+        quantity = int(entry.get("quantity", 1))
+        if quantity < 1 or quantity > 10:
+            raise api_error(400, "VALIDATION", "Quantity must be between 1 and 10.")
+        if sku not in merged:
+            order.append(sku)
+        merged[sku] = merged.get(sku, 0) + quantity
 
     with transaction() as connection:
         session = connection.execute(
@@ -229,14 +240,19 @@ def create_cart(session_id: str, sku: str, quantity: int = 1) -> dict[str, Any]:
         ).fetchone()
         if not session:
             raise api_error(404, "NO_SESSION", "The shopping session was not found.")
-        product = connection.execute(
-            "SELECT * FROM products WHERE sku=? AND merchant_id=? AND category='skincare'",
-            (sku, session["merchant_id"]),
-        ).fetchone()
-        if not product:
-            raise api_error(404, "OUT_OF_SCOPE_PRODUCT", "That product is outside this session.")
-        if product["stock"] < quantity:
-            raise api_error(409, "OUT_OF_STOCK", "The requested quantity is not available.")
+
+        products = {}
+        for sku in order:
+            product = connection.execute(
+                "SELECT * FROM products WHERE sku=? AND merchant_id=? AND category='skincare'",
+                (sku, session["merchant_id"]),
+            ).fetchone()
+            if not product:
+                raise api_error(404, "OUT_OF_SCOPE_PRODUCT", "That product is outside this session.")
+            if product["stock"] < merged[sku]:
+                raise api_error(409, "OUT_OF_STOCK", "The requested quantity is not available.")
+            products[sku] = product
+
         intent = connection.execute(
             "SELECT * FROM mandates WHERE mandate_id=? AND active=1",
             (session["active_intent_id"],),
@@ -244,7 +260,8 @@ def create_cart(session_id: str, sku: str, quantity: int = 1) -> dict[str, Any]:
         if not intent or _is_expired(intent["expires_at"]):
             raise api_error(409, "MANDATE_EXPIRED", "The session permission has expired.")
         intent_payload = json_load(intent["payload_json"], {})
-        total_cents = int(product["price_cents"]) * quantity
+        total_cents = sum(int(products[sku]["price_cents"]) * merged[sku] for sku in order)
+        currency = products[order[0]]["currency"]
         cap = intent_payload.get("max_amount_cents")
         if cap is not None and total_cents > cap:
             over_by = total_cents - cap
@@ -278,16 +295,17 @@ def create_cart(session_id: str, sku: str, quantity: int = 1) -> dict[str, Any]:
         shipping_fingerprint = hashlib.sha256(canonical_json(address_value)).hexdigest()
         items = [
             {
-                "sku": product["sku"],
-                "title": product["title"],
-                "quantity": quantity,
-                "unit_price_cents": int(product["price_cents"]),
+                "sku": products[sku]["sku"],
+                "title": products[sku]["title"],
+                "quantity": merged[sku],
+                "unit_price_cents": int(products[sku]["price_cents"]),
             }
+            for sku in order
         ]
         cart_value = {
             "items": items,
             "total_cents": total_cents,
-            "currency": product["currency"],
+            "currency": currency,
             "merchant_id": session["merchant_id"],
             "shipping_address_id": address["address_id"],
             "shipping_address_fingerprint": shipping_fingerprint,
@@ -315,7 +333,7 @@ def create_cart(session_id: str, sku: str, quantity: int = 1) -> dict[str, Any]:
                 session["merchant_id"],
                 json.dumps(items),
                 total_cents,
-                product["currency"],
+                currency,
                 address["address_id"],
                 shipping_fingerprint,
                 cart_hash,
@@ -350,7 +368,7 @@ def create_cart(session_id: str, sku: str, quantity: int = 1) -> dict[str, Any]:
         "cart_hash": cart_hash,
         "items": items,
         "total_cents": total_cents,
-        "currency": product["currency"],
+        "currency": currency,
         "merchant": "Mysa Skin",
         "shipping_address": address_value,
         "last4": "4821",

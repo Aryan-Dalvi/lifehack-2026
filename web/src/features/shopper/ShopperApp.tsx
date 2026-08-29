@@ -1,10 +1,12 @@
-import { ArrowRight, CircleDollarSign, LoaderCircle, Send, Settings2, ShieldCheck, Sparkles, X } from "lucide-react";
+import { ArrowRight, CircleDollarSign, LoaderCircle, Send, Settings2, ShieldCheck, ShoppingBag, Sparkles, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, money } from "../../api";
-import type { CartPreview, Comparison, Consent, Product, Receipt, TrustEvent, TurnEvent } from "../../types";
+import type { CartPreview, Comparison, Consent, Product, Receipt, Routine, TrustEvent, TurnEvent } from "../../types";
+import { type BasketLine, CartDrawer } from "./CartDrawer";
 import { BankSheet, ConsentSheet, ReceiptCard } from "./CheckoutSheets";
 import { ComparisonDrawer } from "./ComparisonDrawer";
 import { ProductCard } from "./ProductCard";
+import { RoutinePlan } from "./RoutinePlan";
 import { type JourneyStage, TrustRail } from "./TrustRail";
 
 type ChatMessage = { id: string; role: "assistant" | "shopper"; text: string };
@@ -14,13 +16,6 @@ type Decline = {
   total_cents?: number;
   cap_cents?: number;
 };
-
-const quickReplies = [
-  { label: "Dryness", message: "I’m shopping for dryness and would like gentle products." },
-  { label: "Sensitive skin", message: "I have sensitive skin and prefer fragrance-free products." },
-  { label: "Acne-prone", message: "I’m acne-prone and want help with congestion." },
-  { label: "Not sure", message: "I’m not sure what I need." },
-];
 
 const initialMessage: ChatMessage = {
   id: "welcome",
@@ -41,6 +36,9 @@ export function ShopperApp() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedSkus, setSelectedSkus] = useState<string[]>([]);
   const [comparison, setComparison] = useState<Comparison | null>(null);
+  const [routine, setRoutine] = useState<Routine | null>(null);
+  const [basket, setBasket] = useState<BasketLine[]>([]);
+  const [cartOpen, setCartOpen] = useState(false);
   const [cart, setCart] = useState<CartPreview | null>(null);
   const [consent, setConsent] = useState<Consent | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -48,7 +46,6 @@ export function ShopperApp() {
   const [stage, setStage] = useState<JourneyStage>("start");
   const [trustEvents, setTrustEvents] = useState<TrustEvent[]>([]);
   const [input, setInput] = useState("");
-  const [quickSelection, setQuickSelection] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [limitOpen, setLimitOpen] = useState(false);
@@ -82,7 +79,12 @@ export function ShopperApp() {
   }, [loadTrust, merchantId]);
 
   const applyEvents = (events: TurnEvent[], suppressToken = false) => {
+    // A turn either produces a routine or it does not; never carry a stale plan forward.
+    let nextRoutine: Routine | null = null;
     for (const event of events) {
+      if (event.type === "routine") {
+        nextRoutine = event.data as unknown as Routine;
+      }
       if (!suppressToken && event.type === "token" && typeof event.data.text === "string") {
         setMessages((current) => [...current, newMessage("assistant", event.data.text as string)]);
       }
@@ -97,6 +99,7 @@ export function ShopperApp() {
         setStage("products");
       }
     }
+    setRoutine(nextRoutine);
   };
 
   const sendText = async (
@@ -156,15 +159,56 @@ export function ShopperApp() {
     }
   };
 
-  const chooseProduct = async (sku: string) => {
-    if (!sessionId || busy) return;
+  const findProduct = (sku: string): Product | undefined =>
+    products.find((product) => product.sku === sku) ?? comparison?.products.find((product) => product.sku === sku);
+
+  const addToBasket = (sku: string) => {
+    const product = findProduct(sku);
+    if (!product) return;
+    setBasket((current) => {
+      const existing = current.find((line) => line.product.sku === sku);
+      if (existing) {
+        if (existing.quantity >= product.stock) return current;
+        return current.map((line) => (line.product.sku === sku ? { ...line, quantity: line.quantity + 1 } : line));
+      }
+      return [...current, { product, quantity: 1 }];
+    });
+    setCartOpen(true);
+  };
+
+  const incrementBasketLine = (sku: string) => {
+    setBasket((current) =>
+      current.map((line) => (line.product.sku === sku && line.quantity < line.product.stock ? { ...line, quantity: line.quantity + 1 } : line)),
+    );
+  };
+
+  const decrementBasketLine = (sku: string) => {
+    setBasket((current) =>
+      current.flatMap((line) => {
+        if (line.product.sku !== sku) return [line];
+        if (line.quantity <= 1) return [];
+        return [{ ...line, quantity: line.quantity - 1 }];
+      }),
+    );
+  };
+
+  const removeBasketLine = (sku: string) => {
+    setBasket((current) => current.filter((line) => line.product.sku !== sku));
+  };
+
+  const startCheckout = async () => {
+    if (!sessionId || busy || basket.length === 0) return;
     setBusy(true);
     setError(null);
     setDecline(null);
     try {
       const response = await api<{ type: "cart"; data: CartPreview | (Decline & { status: "declined" }) }>("/agent/action", {
         method: "POST",
-        body: JSON.stringify({ session_id: sessionId, action: "select", sku, quantity: 1 }),
+        body: JSON.stringify({
+          session_id: sessionId,
+          action: "select",
+          items: basket.map((line) => ({ sku: line.product.sku, quantity: line.quantity })),
+        }),
       });
       if (response.data.status === "declined") {
         setDecline(response.data);
@@ -173,6 +217,7 @@ export function ShopperApp() {
       } else {
         setCart(response.data as CartPreview);
         setStage("preview");
+        setCartOpen(false);
       }
       await loadTrust(sessionId);
     } catch (requestError) {
@@ -297,6 +342,7 @@ export function ShopperApp() {
         setStage("declined");
       } else {
         setReceipt(payment.receipt);
+        setBasket([]);
         setMessages((current) => [...current, newMessage("assistant", "Your order is confirmed. The receipt and verification evidence are shown below.")]);
         setStage("paid");
       }
@@ -321,103 +367,133 @@ export function ShopperApp() {
       </header>
       <main className="shopper-layout">
         <section className="commerce-canvas">
-          <div className="conversation-intro">
-            <h1>What does your skin need today?</h1>
-            <p>Skincare guidance grounded in the merchant’s current catalog.</p>
-          </div>
-
-          <div className="conversation" aria-live="polite">
-            {messages.map((message) => (
-              <div key={message.id} className={`message message--${message.role}`}>
-                {message.role === "assistant" ? <span className="assistant-mark" aria-hidden="true">S</span> : null}
-                <div>{message.text}</div>
-              </div>
-            ))}
-            {busy && !cart && !bankOpen ? <div className="thinking"><LoaderCircle size={16} className="spin" /> Checking what is needed…</div> : null}
-          </div>
-
-          <div className="quick-replies" aria-label="Quick replies">
-            {quickReplies.map((reply) => (
-                <button
-                  type="button"
-                  key={reply.label}
-                  className={quickSelection === reply.label ? "active" : ""}
-                  aria-pressed={quickSelection === reply.label}
-                  onClick={() => {
-                    setQuickSelection(reply.label);
-                    void sendText(reply.message, { showShopperMessage: false, suppressToken: true });
-                  }}
-                  disabled={!sessionId || busy}
-                >
-                  {reply.label}<ArrowRight size={14} />
+          <div className="top-controls">
+            {basket.length > 0 ? (
+              <div className="cart-control">
+                <button type="button" className="limit-button cart-toggle" onClick={() => setCartOpen((value) => !value)}>
+                  <ShoppingBag size={17} />
+                  Cart · {basket.reduce((sum, line) => sum + line.quantity, 0)}
                 </button>
-            ))}
-          </div>
-
-          <form className="composer" onSubmit={submitMessage}>
-            <label htmlFor="shopper-message" className="sr-only">Ask about skincare products</label>
-            <input
-              id="shopper-message"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask about products or routines"
-              disabled={!sessionId || busy}
-            />
-            <button type="submit" aria-label="Send message" disabled={!input.trim() || !sessionId || busy}><Send size={18} /></button>
-          </form>
-
-          <div className="control-row">
-            <button type="button" className="limit-button" onClick={() => setLimitOpen((value) => !value)}>
-              <CircleDollarSign size={17} />
-              {budgetCents === null ? "Set a spending limit" : `${money(budgetCents)} limit active`}
-            </button>
-            <span>Optional · add, change or clear it any time</span>
-          </div>
-          {limitOpen ? (
-            <form className="limit-form" onSubmit={saveLimit}>
-              <label htmlFor="spending-limit">Maximum for this shopping session</label>
-              <div><span>S$</span><input id="spending-limit" type="number" min="1" max="500" step="1" value={limitDraft} onChange={(event) => setLimitDraft(event.target.value)} placeholder="100" autoFocus /></div>
-              <button type="submit" className="small-primary" disabled={busy}>Apply limit</button>
-              {budgetCents !== null ? <button type="button" className="text-link" onClick={() => void clearLimit()}>Clear limit</button> : null}
-              <button type="button" className="icon-button" onClick={() => setLimitOpen(false)} aria-label="Close spending limit"><X size={18} /></button>
-            </form>
-          ) : null}
-
-          {error ? <div className="inline-error" role="alert">{error}</div> : null}
-          {decline ? (
-            <section className="decline-panel" role="alert">
-              <div><X size={18} /></div>
-              <div>
-                <p>Not authorized</p>
-                <h2>{decline.reason}</h2>
-                <code>{decline.decline_code}</code>
-                <span>The shopper was not asked, the bank was not contacted, and no order was created.</span>
+                {cartOpen ? (
+                  <CartDrawer
+                    lines={basket}
+                    busy={busy}
+                    onIncrement={incrementBasketLine}
+                    onDecrement={decrementBasketLine}
+                    onRemove={removeBasketLine}
+                    onCheckout={() => void startCheckout()}
+                    onClose={() => setCartOpen(false)}
+                  />
+                ) : null}
               </div>
-              <button type="button" onClick={() => setLimitOpen(true)}>Change limit</button>
-            </section>
-          ) : null}
+            ) : null}
 
-          {products.length > 0 ? (
-            <section className="results-section" aria-labelledby="results-title">
-              <header>
-                <div><p>Catalog matches</p><h2 id="results-title">Grounded options for you</h2></div>
-                {selectedSkus.length > 0 ? <span>{selectedSkus.length} of 3 selected</span> : null}
-              </header>
-              <div className="product-rail">
-                {products.map((product) => (
-                  <ProductCard key={product.sku} product={product} selected={selectedSkus.includes(product.sku)} disabled={selectedSkus.length >= 3} onToggleCompare={toggleCompare} onChoose={(sku) => void chooseProduct(sku)} />
-                ))}
-              </div>
-              {selectedSkus.length >= 2 ? (
-                <button type="button" className="compare-action" onClick={() => void compareProducts()} disabled={busy}>
-                  <Sparkles size={17} /> Compare {selectedSkus.length} products <ArrowRight size={17} />
-                </button>
+            <div className="limit-control">
+              <button type="button" className="limit-button" onClick={() => setLimitOpen((value) => !value)}>
+                <CircleDollarSign size={17} />
+                {budgetCents === null ? "Set a spending limit" : `${money(budgetCents)} limit active`}
+              </button>
+              {limitOpen ? (
+                <form className="limit-form" onSubmit={saveLimit}>
+                  <label htmlFor="spending-limit">Maximum for this shopping session</label>
+                  <div><span>S$</span><input id="spending-limit" type="number" min="1" max="500" step="1" value={limitDraft} onChange={(event) => setLimitDraft(event.target.value)} placeholder="100" autoFocus /></div>
+                  <div className="limit-form-actions">
+                    <button type="submit" className="small-primary" disabled={busy}>Apply</button>
+                    {budgetCents !== null ? <button type="button" className="text-link" onClick={() => void clearLimit()}>Clear</button> : null}
+                    <button type="button" className="icon-button" onClick={() => setLimitOpen(false)} aria-label="Close spending limit"><X size={18} /></button>
+                  </div>
+                </form>
               ) : null}
-            </section>
-          ) : null}
+            </div>
+          </div>
 
-          {comparison ? <ComparisonDrawer comparison={comparison} onClose={() => setComparison(null)} onChoose={(sku) => void chooseProduct(sku)} /> : null}
-          {receipt ? <ReceiptCard receipt={receipt} /> : null}
+          <div className="chat-scroll">
+            <div className="chat-column">
+              {messages.length <= 1 ? (
+                <div className="conversation-intro">
+                  <h1>What does your skin need today?</h1>
+                </div>
+              ) : null}
+
+              <div className="conversation" aria-live="polite">
+                {messages.map((message) => (
+                  <div key={message.id} className={`message message--${message.role}`}>
+                    {message.role === "assistant" ? <span className="assistant-mark" aria-hidden="true">S</span> : null}
+                    <div>{message.text}</div>
+                  </div>
+                ))}
+                {busy && !cart && !bankOpen ? <div className="thinking"><LoaderCircle size={16} className="spin" /> Checking what is needed…</div> : null}
+              </div>
+
+              {error ? <div className="inline-error" role="alert">{error}</div> : null}
+              {decline ? (
+                <section className="decline-panel" role="alert">
+                  <div><X size={18} /></div>
+                  <div>
+                    <p>Not authorized</p>
+                    <h2>{decline.reason}</h2>
+                    <code>{decline.decline_code}</code>
+                    <span>The shopper was not asked, the bank was not contacted, and no order was created.</span>
+                  </div>
+                  <button type="button" onClick={() => setLimitOpen(true)}>Change limit</button>
+                </section>
+              ) : null}
+
+              {routine ? (
+                <RoutinePlan
+                  routine={routine}
+                  onChoose={addToBasket}
+                  quantityFor={(sku) => basket.find((line) => line.product.sku === sku)?.quantity ?? 0}
+                />
+              ) : null}
+
+              {products.length > 0 ? (
+                <section className="results-section" aria-labelledby="results-title">
+                  <header>
+                    <div><p>Catalog matches</p><h2 id="results-title">Grounded options for you</h2></div>
+                    {selectedSkus.length > 0 ? <span>{selectedSkus.length} of 3 selected</span> : null}
+                  </header>
+                  <div className="product-rail">
+                    {products.map((product) => (
+                      <ProductCard
+                        key={product.sku}
+                        product={product}
+                        selected={selectedSkus.includes(product.sku)}
+                        disabled={selectedSkus.length >= 3}
+                        quantityInCart={basket.find((line) => line.product.sku === product.sku)?.quantity ?? 0}
+                        onToggleCompare={toggleCompare}
+                        onChoose={addToBasket}
+                      />
+                    ))}
+                  </div>
+                  {selectedSkus.length >= 2 ? (
+                    <button type="button" className="compare-action" onClick={() => void compareProducts()} disabled={busy}>
+                      <Sparkles size={17} /> Compare {selectedSkus.length} products <ArrowRight size={17} />
+                    </button>
+                  ) : null}
+                </section>
+              ) : null}
+
+              {comparison ? <ComparisonDrawer comparison={comparison} onClose={() => setComparison(null)} onChoose={addToBasket} /> : null}
+              {receipt ? <ReceiptCard receipt={receipt} /> : null}
+            </div>
+          </div>
+
+          <div className="chat-footer">
+            <div className="chat-column">
+              <form className="composer" onSubmit={submitMessage}>
+                <label htmlFor="shopper-message" className="sr-only">Ask about skincare products</label>
+                <input
+                  id="shopper-message"
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  placeholder="Ask about products or routines"
+                  disabled={!sessionId || busy}
+                />
+                <button type="submit" aria-label="Send message" disabled={!input.trim() || !sessionId || busy}><Send size={18} /></button>
+              </form>
+            </div>
+          </div>
         </section>
         <TrustRail stage={stage} budgetCents={budgetCents} events={trustEvents} />
       </main>
