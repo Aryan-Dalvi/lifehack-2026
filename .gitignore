@@ -7,10 +7,18 @@
 node_modules/
 dist/
 build/
-__pycache__/
-*.pyc
 .venv/
 venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+var/
+web/.vite/
+*.tsbuildinfo
+playwright-report/
+test-results/
 
 # os / editor
 .DS_Store

@@ -1,0 +1,28 @@
+{
+  "id": "skincare-v1",
+  "category": "skincare",
+  "greeting": "Tell me what your skin needs today. I’ll ask only what is needed, then show products grounded in Mysa Skin’s catalog.",
+  "clarification": {
+    "browse": ["concern_or_routine_step"],
+    "recommend": ["concern_or_routine_step", "skin_type_when_relevant"],
+    "buy": ["visible_sku", "quantity"]
+  },
+  "salient_dims": ["skin_types", "fragrance_free", "texture", "ingredients"],
+  "comparison_dimensions": [
+    {"key": "price_cents", "label": "Price"},
+    {"key": "rating", "label": "Rating"},
+    {"key": "fragrance_free", "label": "Fragrance free"},
+    {"key": "texture", "label": "Texture"},
+    {"key": "skin_types", "label": "Skin types"},
+    {"key": "ingredients", "label": "Key ingredients"},
+    {"key": "size_ml", "label": "Size"}
+  ],
+  "guardrails": [
+    "Do not diagnose a medical condition.",
+    "Do not claim that a cosmetic product treats or cures disease.",
+    "Treat declared allergies and ingredient exclusions as hard constraints.",
+    "Use only catalog fields for product, price, ingredient, stock and rating claims.",
+    "Ask a focused clarification question when required information is missing."
+  ]
+}
+

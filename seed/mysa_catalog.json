@@ -1,0 +1,79 @@
+{
+  "merchant": {
+    "merchant_id": "m_mysa",
+    "name": "Mysa Skin",
+    "size": "sme",
+    "category": "skincare",
+    "currency": "SGD",
+    "accent_color": "#6f8066",
+    "status": "published"
+  },
+  "products": [
+    {
+      "sku": "MYSA-CLN-101",
+      "title": "Gentle Cloud Cleanser",
+      "description": "A soft cream cleanser for a comfortable, non-stripping cleanse.",
+      "price_cents": 3400,
+      "image_url": "/products/gentle-cloud.png",
+      "stock": 28,
+      "rating_avg": 4.8,
+      "rating_count": 128,
+      "attributes": {"routine_step":"cleanser","skin_types":["dry","normal","sensitive"],"concerns":["dryness","barrier support"],"ingredients":["glycerin","panthenol","oat extract"],"excludes":["fragrance","sulfates"],"fragrance_free":true,"texture":"creamy foam","size_ml":150}
+    },
+    {
+      "sku": "MYSA-CLN-205",
+      "title": "Barrier Milk Wash",
+      "description": "Milky low-foam wash with ceramides for dry and sensitive skin.",
+      "price_cents": 3600,
+      "image_url": "/products/barrier-milk.png",
+      "stock": 19,
+      "rating_avg": 4.7,
+      "rating_count": 96,
+      "attributes": {"routine_step":"cleanser","skin_types":["dry","sensitive"],"concerns":["dryness","barrier support","redness"],"ingredients":["ceramides","squalane","beta-glucan"],"excludes":["fragrance","essential oils"],"fragrance_free":true,"texture":"milky lotion","size_ml":120}
+    },
+    {
+      "sku": "MYSA-CLN-310",
+      "title": "Calm Gel Cleanser",
+      "description": "A lightweight gel cleanser for combination and easily congested skin.",
+      "price_cents": 3200,
+      "image_url": "/products/calm-gel.png",
+      "stock": 34,
+      "rating_avg": 4.6,
+      "rating_count": 84,
+      "attributes": {"routine_step":"cleanser","skin_types":["oily","combination","sensitive"],"concerns":["oiliness","congestion","redness"],"ingredients":["green tea","betaine","allantoin"],"excludes":["fragrance"],"fragrance_free":true,"texture":"light gel","size_ml":150}
+    },
+    {
+      "sku": "MYSA-MST-120",
+      "title": "Bright Barrier Moisturiser",
+      "description": "Daily ceramide moisturiser that supports a comfortable skin barrier.",
+      "price_cents": 3800,
+      "image_url": "/products/bright-barrier.png",
+      "stock": 17,
+      "rating_avg": 4.9,
+      "rating_count": 211,
+      "attributes": {"routine_step":"moisturiser","skin_types":["dry","normal","sensitive"],"concerns":["dryness","barrier support","dullness"],"ingredients":["ceramides","niacinamide","squalane"],"excludes":["fragrance"],"fragrance_free":true,"texture":"silky cream","size_ml":50}
+    },
+    {
+      "sku": "MYSA-SRM-010",
+      "title": "Niacinamide Serum 10%",
+      "description": "A focused serum for the appearance of uneven tone and excess oil.",
+      "price_cents": 3600,
+      "image_url": "/products/niacinamide-serum.png",
+      "stock": 41,
+      "rating_avg": 4.5,
+      "rating_count": 305,
+      "attributes": {"routine_step":"serum","skin_types":["oily","combination","normal"],"concerns":["oiliness","uneven tone","pores"],"ingredients":["niacinamide","zinc pca","betaine"],"excludes":["fragrance"],"fragrance_free":true,"texture":"water serum","size_ml":30}
+    },
+    {
+      "sku": "MYSA-SPF-050",
+      "title": "Daily Veil SPF 50",
+      "description": "Lightweight broad-spectrum sunscreen with a natural finish.",
+      "price_cents": 4200,
+      "image_url": "/products/daily-veil-spf.png",
+      "stock": 22,
+      "rating_avg": 4.4,
+      "rating_count": 173,
+      "attributes": {"routine_step":"sunscreen","skin_types":["dry","normal","combination"],"concerns":["sun protection","dullness"],"ingredients":["uv filters","vitamin e","glycerin"],"excludes":["essential oils"],"fragrance_free":false,"texture":"light lotion","size_ml":50}
+    }
+  ]
+}

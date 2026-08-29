@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mysa Skin · Widget integration demo</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; color: #263027; background: #f5f2eb; font-family: Arial, sans-serif; }
+      header { padding: 24px 7vw; border-bottom: 1px solid #d7d9d2; background: rgba(255,255,255,.8); }
+      main { width: min(980px, 86vw); padding: 10vh 0; }
+      h1 { max-width: 700px; margin: 0; font: 400 clamp(48px, 8vw, 92px)/.96 Georgia, serif; letter-spacing: -.05em; }
+      p { max-width: 560px; color: #69706a; font-size: 18px; line-height: 1.6; }
+      small { color: #69706a; }
+    </style>
+  </head>
+  <body>
+    <header><strong>Mysa Skin</strong> <small>· sample merchant website</small></header>
+    <main>
+      <h1>Quiet care for everyday skin.</h1>
+      <p>This page represents an existing merchant website. The Sway launcher is installed with one script and opens the same commerce backend in a sandboxed iframe.</p>
+    </main>
+    <script src="/widget.js" data-merchant="m_mysa" data-position="bottom-right"></script>
+  </body>
+</html>

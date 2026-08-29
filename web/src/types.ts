@@ -1,0 +1,108 @@
+export type ProductAttributes = {
+  routine_step?: string;
+  skin_types?: string[];
+  concerns?: string[];
+  ingredients?: string[];
+  excludes?: string[];
+  fragrance_free?: boolean | null;
+  texture?: string;
+  size_ml?: number;
+};
+
+export type Product = {
+  sku: string;
+  merchant_id: string;
+  merchant_name: string;
+  merchant_size: "sme" | "enterprise";
+  title: string;
+  description: string;
+  price_cents: number;
+  currency: string;
+  image_url: string | null;
+  category: "skincare";
+  attributes: ProductAttributes;
+  stock: number;
+  rating_avg: number | null;
+  rating_count: number | null;
+  rating_source: string;
+};
+
+export type TurnEvent = {
+  type: string;
+  data: Record<string, unknown>;
+};
+
+export type Address = {
+  address_id: string;
+  recipient: string;
+  lines: string[];
+  postal_code: string;
+  country: string;
+};
+
+export type CartPreview = {
+  status: "preview";
+  cart_id: string;
+  cart_mandate_id: string;
+  cart_hash: string;
+  items: Array<{
+    sku: string;
+    title: string;
+    quantity: number;
+    unit_price_cents: number;
+  }>;
+  total_cents: number;
+  currency: string;
+  merchant: string;
+  shipping_address: Address;
+  last4: string;
+  expires_at: string;
+  simulated: boolean;
+};
+
+export type Consent = {
+  status: "confirmed";
+  cart_id: string;
+  cart_hash: string;
+  amount_cents: number;
+  currency: string;
+  merchant_id: string;
+  payment_mandate_id: string;
+  token_id: string;
+  message: string;
+};
+
+export type Receipt = {
+  transaction_id: string;
+  order_id: string;
+  merchant: string;
+  items: CartPreview["items"];
+  total_cents: number;
+  currency: string;
+  last4: string;
+  auth_code: string;
+  issuer: string;
+  eci: string;
+  at: string;
+  simulated: boolean;
+};
+
+export type TrustEvent = {
+  seq: number;
+  stage: string;
+  label: string;
+  status: "ok" | "warn" | "fail";
+  detail: Record<string, unknown>;
+};
+
+export type Comparison = {
+  products: Product[];
+  dimensions: Array<{
+    key: string;
+    label: string;
+    cells: Array<{ sku: string; value: unknown }>;
+  }>;
+  source: "catalog_database";
+  llm_calls: 0;
+};
+
