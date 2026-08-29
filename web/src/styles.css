@@ -2208,6 +2208,51 @@ img {
   font-size: 11px;
 }
 
+.address-prompt .address-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 18px;
+}
+
+.address-prompt .address-form label {
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.address-prompt .address-form input {
+  height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.address-prompt .address-form input:focus {
+  outline: 3px solid rgba(49, 95, 134, 0.14);
+  border-color: var(--sage-500);
+}
+
+.address-prompt .address-form button {
+  margin-top: 18px;
+  min-height: 44px;
+  border-radius: 8px;
+}
+
+.address-signin-hint {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 18px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--sage-50);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .bank-button {
   width: 100%;
   min-height: 45px;

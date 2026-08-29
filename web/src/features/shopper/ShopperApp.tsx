@@ -3,6 +3,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { ApiError, api, money, setSessionToken } from "../../api";
 import type { CartPreview, Comparison, Consent, Product, Receipt, Routine, TrustEvent, TurnEvent } from "../../types";
 import { type Account, AccountMenu } from "./AccountMenu";
+import { AddressPrompt } from "./AddressPrompt";
 import type { BasketLine } from "./CartDrawer";
 import { CartSidebar } from "./CartSidebar";
 import { BankSheet, ConsentSheet, ReceiptCard } from "./CheckoutSheets";
@@ -59,6 +60,9 @@ export function ShopperApp() {
   const [account, setAccount] = useState<Account | null>(null);
   const [anonymous, setAnonymous] = useState(true);
   const [bankError, setBankError] = useState<string | null>(null);
+  const [addressPromptOpen, setAddressPromptOpen] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [addressBusy, setAddressBusy] = useState(false);
   const idempotencyKey = useRef(crypto.randomUUID());
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -251,9 +255,33 @@ export function ShopperApp() {
       }
       await loadTrust(sessionId);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "The transaction preview could not be created.");
+      if (requestError instanceof ApiError && requestError.code === "ADDRESS_REQUIRED") {
+        setAddressPromptOpen(true);
+      } else {
+        setError(requestError instanceof Error ? requestError.message : "The transaction preview could not be created.");
+      }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const submitAddress = async (address: { recipient: string; lines: string[]; postal_code: string; country: string }) => {
+    if (!account) return;
+    setAddressBusy(true);
+    setAddressError(null);
+    try {
+      await api(`/consumer/${account.consumer_id}/addresses`, {
+        method: "POST",
+        body: JSON.stringify(address),
+      });
+      setAddressPromptOpen(false);
+      await startCheckout();
+    } catch (requestError) {
+      setAddressError(
+        requestError instanceof ApiError ? requestError.message : "The address could not be saved.",
+      );
+    } finally {
+      setAddressBusy(false);
     }
   };
 
@@ -597,6 +625,15 @@ export function ShopperApp() {
       ) : null}
       {cart ? <ConsentSheet cart={cart} busy={busy} onCancel={() => { setCart(null); setStage(products.length ? "products" : "start"); }} onConfirm={() => void confirmCart()} /> : null}
       {bankOpen && consent ? <BankSheet amountCents={consent.amount_cents} busy={busy} error={bankError} onBack={() => setBankOpen(false)} onVerify={(code) => void verifyBank(code)} /> : null}
+      {addressPromptOpen ? (
+        <AddressPrompt
+          account={account}
+          busy={addressBusy}
+          error={addressError}
+          onSubmit={(address) => void submitAddress(address)}
+          onClose={() => setAddressPromptOpen(false)}
+        />
+      ) : null}
       <div className="security-footer"><ShieldCheck size={14} /> Exact consent · bank verification · TAP signature · simulated authorization</div>
     </div>
   );

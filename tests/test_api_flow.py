@@ -170,6 +170,73 @@ def test_discover_compare_consent_bank_tap_pay_and_idempotency(client: TestClien
         assert connection.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 1
 
 
+def test_new_consumer_can_add_a_shipping_address_and_then_checkout(client: TestClient) -> None:
+    """A freshly registered consumer has zero addresses, and until this endpoint existed
+    there was no way to add one — checkout's ADDRESS_REQUIRED could never be satisfied for
+    anyone but the pre-seeded demo shopper."""
+    register = client.post(
+        "/consumer/register",
+        json={"email": "newshopper@example.com", "password": "correct horse battery staple"},
+    )
+    assert register.status_code == 200, register.text
+    consumer_id = register.json()["consumer_id"]
+    client.consumer_token = register.json()["token"]
+
+    session_id = create_session(client)
+    blocked = client.post(
+        "/agent/action",
+        json={"session_id": session_id, "action": "select", "sku": "MYSA-CLN-101", "quantity": 1},
+    )
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["detail"]["error"]["code"] == "ADDRESS_REQUIRED"
+
+    added = client.post(
+        f"/consumer/{consumer_id}/addresses",
+        json={
+            "recipient": "New Shopper",
+            "lines": ["1 Example Ave", "#01-01"],
+            "postal_code": "123456",
+            "country": "SG",
+        },
+    )
+    assert added.status_code == 200, added.text
+    assert added.json()["is_default"] is True
+
+    now_works = client.post(
+        "/agent/action",
+        json={"session_id": session_id, "action": "select", "sku": "MYSA-CLN-101", "quantity": 1},
+    )
+    assert now_works.status_code == 200, now_works.text
+    assert now_works.json()["data"]["shipping_address"]["recipient"] == "New Shopper"
+
+
+def test_adding_an_address_requires_the_owning_consumer(client: TestClient) -> None:
+    register = client.post(
+        "/consumer/register",
+        json={"email": "other-shopper@example.com", "password": "correct horse battery staple"},
+    )
+    consumer_id = register.json()["consumer_id"]
+    other_token = register.json()["token"]
+    saved_token = client.consumer_token
+    client.consumer_token = other_token
+    try:
+        forbidden = client.post(
+            f"/consumer/{'usr_demo_impersonated'}/addresses",
+            json={"recipient": "X", "lines": ["1 St"], "postal_code": "123456", "country": "SG"},
+        )
+        assert forbidden.status_code in (403, 401)
+    finally:
+        client.consumer_token = saved_token
+    # Sanity: the legitimate owner path still works, proving the 403 above was real auth,
+    # not a broken endpoint.
+    own = client.post(
+        f"/consumer/{consumer_id}/addresses",
+        json={"recipient": "X", "lines": ["1 St"], "postal_code": "123456", "country": "SG"},
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+    assert own.status_code == 200, own.text
+
+
 def test_choosing_a_second_product_adds_to_the_same_cart(client: TestClient) -> None:
     session_id = create_session(client)
 

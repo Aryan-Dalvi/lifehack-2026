@@ -535,6 +535,13 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
+class AddressCreate(BaseModel):
+    recipient: str = Field(min_length=1, max_length=200)
+    lines: list[str] = Field(min_length=1, max_length=4)
+    postal_code: str = Field(min_length=1, max_length=20)
+    country: str = Field(default="SG", min_length=2, max_length=2)
+
+
 @consumer_router.post("/register")
 def register(body: RegisterRequest, request: Request) -> dict[str, Any]:
     email = body.email.strip().lower()
@@ -636,6 +643,42 @@ def addresses(
         "default_address_id": next(
             (value["address_id"] for value in values if value["is_default"]), None
         ),
+    }
+
+
+@consumer_router.post("/{consumer_id}/addresses")
+def add_address(
+    consumer_id: str,
+    body: AddressCreate,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """The only way a shopper gets a shipping address on file. Without this, a newly
+    registered account (anyone but the pre-seeded demo shopper) has no address at all and
+    checkout's ADDRESS_REQUIRED can never be satisfied — there was no endpoint to fix it."""
+    assert_consumer(consumer_id, authorization)
+    address_id = new_id("adr")
+    with transaction() as connection:
+        # The address a shopper just added is the one checkout will use next.
+        connection.execute("UPDATE addresses SET is_default=0 WHERE consumer_id=?", (consumer_id,))
+        connection.execute(
+            "INSERT INTO addresses(address_id,consumer_id,recipient,lines_json,postal_code,"
+            "country,is_default) VALUES (?,?,?,?,?,?,1)",
+            (
+                address_id,
+                consumer_id,
+                body.recipient.strip(),
+                json.dumps([line.strip() for line in body.lines if line.strip()]),
+                body.postal_code.strip(),
+                body.country.strip().upper(),
+            ),
+        )
+    return {
+        "address_id": address_id,
+        "recipient": body.recipient.strip(),
+        "lines": body.lines,
+        "postal_code": body.postal_code,
+        "country": body.country.strip().upper(),
+        "is_default": True,
     }
 
 
