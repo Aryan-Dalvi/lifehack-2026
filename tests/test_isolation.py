@@ -332,3 +332,80 @@ def test_a_session_already_signed_in_cannot_be_re_bound(client) -> None:
         },
     )
     assert stolen.status_code == 403
+
+
+# --------------------------------------------------------------------------- payment paths
+
+
+def test_consent_cannot_be_recorded_for_someone_elses_session(client) -> None:
+    """/pay/consent reached record_consent() with no session token at all.
+
+    It is an undeclared duplicate of /agent/confirm with no caller, and it skipped both the
+    session check and the human-confirmation check, so knowing a session_id and cart_id was
+    enough to record a shopper's consent for them.
+    """
+    victim = client.post("/agent/session", json={"merchant_id": "m_mysa"}).json()
+    attacker = client.post("/agent/session", json={"merchant_id": "m_mysa"}).json()
+
+    assert (
+        client.post(
+            "/pay/consent",
+            json={"session_id": victim["session_id"], "cart_id": "cart_anything"},
+            headers={"X-Session-Token": ""},
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/pay/consent",
+            json={"session_id": victim["session_id"], "cart_id": "cart_anything"},
+            headers={"X-Session-Token": attacker["session_token"]},
+        ).status_code
+        == 403
+    )
+
+
+def test_trust_log_cannot_be_written_through_the_bank_simulator(client) -> None:
+    """The bank routes take a session_id purely to write into that session's trust log.
+
+    Unguarded, that let anyone append entries to another shopper's audit trail - the record
+    the demo asks judges to read as evidence.
+    """
+    victim = client.post("/agent/session", json={"merchant_id": "m_mysa"}).json()
+    attacker = client.post("/agent/session", json={"merchant_id": "m_mysa"}).json()
+    challenge = {
+        "consumer_id": "usr_demo",
+        "cart_hash": "sha256:whatever",
+        "amount_cents": 100,
+        "currency": "SGD",
+        "merchant_id": "m_mysa",
+        "session_id": victim["session_id"],
+    }
+
+    assert (
+        client.post("/bank/challenge", json=challenge, headers={"X-Session-Token": ""}).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/bank/challenge",
+            json=challenge,
+            headers={"X-Session-Token": attacker["session_token"]},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            "/bank/verify",
+            json={"challenge_id": "chl_x", "code": "492118", "session_id": victim["session_id"]},
+            headers={"X-Session-Token": attacker["session_token"]},
+        ).status_code
+        == 403
+    )
+
+    # The victim's trust log is untouched by any of that.
+    log = client.get(
+        f"/trust/events/snapshot?session_id={victim['session_id']}",
+        headers={"X-Session-Token": victim["session_token"]},
+    ).json()
+    assert not [e for e in log["events"] if e["stage"] == "issuer"]

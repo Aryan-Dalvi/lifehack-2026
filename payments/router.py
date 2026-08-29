@@ -46,7 +46,15 @@ class ConsentRequest(BaseModel):
 
 
 @bank_router.post("/challenge")
-def bank_challenge(body: BankChallengeRequest) -> dict[str, Any]:
+def bank_challenge(
+    body: BankChallengeRequest,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    # session_id here only names a trust log to write into. Without this check anyone could
+    # append entries to another shopper's audit trail - the record the demo asks judges to
+    # trust - so naming a session requires holding it.
+    if body.session_id:
+        assert_session(body.session_id, x_session_token)
     response = create_bank_challenge(**body.model_dump(exclude={"session_id"}))
     if body.session_id:
         record_trust(
@@ -59,7 +67,12 @@ def bank_challenge(body: BankChallengeRequest) -> dict[str, Any]:
 
 
 @bank_router.post("/verify")
-def bank_verify(body: BankVerifyRequest) -> dict[str, Any]:
+def bank_verify(
+    body: BankVerifyRequest,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    if body.session_id:
+        assert_session(body.session_id, x_session_token)
     response = verify_bank_challenge(body.challenge_id, body.code)
     if body.session_id and response["status"] == "approved":
         record_trust(
@@ -84,7 +97,18 @@ def bank_token_status(bank_token: str) -> dict[str, Any]:
 
 
 @pay_router.post("/consent")
-def consent(body: ConsentRequest) -> dict[str, Any]:
+def consent(
+    body: ConsentRequest,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    """Undeclared duplicate of /agent/confirm - kept working, no longer unguarded.
+
+    This reached the same record_consent() with no session token and without the
+    human-confirmation check, so anyone who learned a session_id and cart_id could record
+    consent for that shopper. It has no callers in the app, the frontend or the contract;
+    it should probably be deleted, which is Y4's call to make.
+    """
+    assert_session(body.session_id, x_session_token)
     return record_consent(body.session_id, body.cart_id)
 
 

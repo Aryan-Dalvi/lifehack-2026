@@ -323,3 +323,52 @@ checkout and the browser logs that rejected request. Everything else must still 
 The claim endpoint appeared to fail at first. The cause was a stale server — `uvicorn` had been
 started without `--reload` before the endpoint existed, and returned `404` for it. Worth
 remembering: a background API here does not pick up code changes.
+
+---
+
+## 2026-08-29 21:20 (T+10:20) — Full route authorization audit
+
+**Target:** every route the app exposes, after merging the staged-catalog work.
+**Trigger:** the previous pass flagged "new merchant endpoints default to open" as a standing
+risk. This pass checks whether that risk had already bitten elsewhere. It had.
+
+### The earlier audit was wrong, and quietly so
+
+The merchant audit in the isolation pass was a regex scan of one file. Replacing it with a walk
+of the live route table found **40 routes, 17 ungated** — the earlier method never looked at
+`agent/`, `payments/`, `bank/` or `catalog/` at all.
+
+A second trap: this FastAPI version wraps `include_router()` results, so routes hang off
+`original_router`, not the wrapper. The first version of the walker reported **6 routes and
+looked like a clean pass**. Anything built on `app.routes` alone silently checks almost nothing.
+
+### Two real holes found
+
+| Route | Was | Now |
+|---|---|---|
+| `POST /pay/consent` | reached `record_consent()` with **no session token** and none of the human-confirmation check `/agent/confirm` enforces — knowing a `session_id` and `cart_id` was enough to record a shopper's consent for them | session token required |
+| `POST /bank/challenge`, `POST /bank/verify` | took a caller-supplied `session_id` purely to write into that session's trust log — anyone could append entries to another shopper's audit trail, the record the demo asks judges to read as evidence | naming a session requires holding it |
+
+`/pay/consent` is undeclared in `contracts.md`, has no caller in the app, the frontend or the
+tests, and duplicates `/agent/confirm` minus a safety check. It is gated rather than deleted
+because `payments/` is Y4's module.
+
+`POST /pay/authorize` looked ungated but is not: it is guarded by TAP signature verification
+rather than by one of the three credentials, so the audit now counts that as a guard.
+
+### The structural fix
+
+`tests/test_route_authorization.py` walks every route and fails if one has no guard and is not
+on an explicit `PUBLIC_ROUTES` list with a written reason. Three narrower assertions back it:
+every `/merchant/{merchant_id}` route must use `assert_merchant`, every route naming a
+`{session_id}` must use `assert_session`, and the public list may not name a dead route.
+
+**Verified the test can fail.** A deliberately ungated `GET /merchant/{id}/secrets` was added
+temporarily; two assertions fired and named it exactly. Reverted after.
+
+### Suite
+
+`55 passed` (was 49: +4 route-authorization, +2 behavioural regressions for the consent and
+trust-log holes). `5/5` Playwright — the bank gating does not break checkout. ruff clean.
+
+**Ungated routes now: 14, all on the public list with a stated reason.**

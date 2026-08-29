@@ -78,7 +78,8 @@ session and throw the basket away.
 
 ## Verified
 
-`tests/test_isolation.py` (18 cases) covers each boundary above, plus a live suite of 24 cases
+`tests/test_isolation.py` (20 cases) and `tests/test_route_authorization.py` (4) cover each
+boundary above, plus a live suite of 24 cases
 run against a running server. Both were red before these changes and are green after:
 
 | Was | Now |
@@ -91,6 +92,37 @@ run against a running server. Both were red before these changes and are green a
 | Any caller could open a session as any buyer | identity comes from the token; body is ignored |
 | Any caller could read any session's trust log | session token required, not transferable |
 | Signing in mid-visit discarded the shopper's basket | the session is claimed, the basket survives |
+| `POST /pay/consent` recorded consent for any session, unguarded | session token required |
+| The bank routes wrote trust events into any session's audit trail | naming a session requires holding it |
+| A new unguarded route shipped silently | `tests/test_route_authorization.py` fails the build |
+
+## Enforcement — why this should not drift again
+
+New endpoints default to open. That is not a hypothetical: the staged-catalog preview and
+approve endpoints arrived unauthenticated in a merge, and `POST /pay/consent` sat unguarded
+right next to the gated `/agent/confirm`, reaching the same `record_consent()` without a
+session token or the human-confirmation check. Both were caught by reading, which does not
+scale.
+
+`tests/test_route_authorization.py` walks every route the app exposes and fails the build if
+one has no credential check and is not on an explicit `PUBLIC_ROUTES` list with a written
+reason. Three further assertions narrow it: every `/merchant/{merchant_id}` route must use
+`assert_merchant`, every route naming a `{session_id}` must use `assert_session`, and the
+public list may not name a route that no longer exists. Adding an unguarded endpoint now
+fails CI rather than shipping quietly.
+
+One subtlety the walker has to handle: this FastAPI version wraps `include_router()` results,
+so the routes hang off `original_router` rather than the wrapper. Walking `app.routes` alone
+reports 6 routes instead of 40 and looks like it passed.
+
+### Currently public, deliberately
+
+`/` · `/health` · `/docs` · `/redoc` · `/openapi.json` · `POST /agent/session` (mints the
+session token) · `POST /consumer/register` · `POST /consumer/login` · `POST /merchant/onboard`
+(all three create the credential) · `GET /catalog/search` and `GET /catalog/product/{sku}`
+(public storefront, `merchant_id` required and scoping) · `GET /bank/token/{bank_token}`
+(issuer simulator; the token is itself the secret). `POST /pay/authorize` is not on this list —
+it is guarded by TAP signature verification rather than by one of the three credentials.
 
 ## Still open
 
@@ -103,5 +135,8 @@ run against a running server. Both were red before these changes and are green a
 - **CORS is wide** (`allow_origin_regex=r"https?://.*"`) for demo convenience. Credentials are
   sent in headers rather than cookies, so this is not a CSRF hole, but it should be narrowed
   before anything real.
-- **The issuer/bank simulator is unauthenticated**, by design — it stands in for an external
-  ACS, not for a tenant of this system.
+- **The issuer/bank simulator is otherwise unauthenticated**, by design — it stands in for an
+  external ACS, not for a tenant of this system. Only its trust-log writes are now gated.
+- **`POST /pay/consent` should probably be deleted.** It is undeclared in `contracts.md`, has no
+  caller, and duplicates `/agent/confirm` minus the human-confirmation check. It is now gated
+  rather than removed because `payments/` is Y4's module — their call.
