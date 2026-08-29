@@ -112,6 +112,37 @@ test("a published merchant lands on the CRM dashboard at /admin", async ({ page 
   await expect(page.getByRole("heading", { name: "Manage customers" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Customers", exact: true })).toBeVisible();
 
+  // Earnings is a fixed metric, while the one remaining select covers its whole visual
+  // control (including the chevron) and the plot does not manufacture a scrollbar.
+  await expect(page.getByText("Earnings", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Earnings" })).toHaveCount(0);
+  const periodSelect = page.getByLabel("Reporting period");
+  const periodControl = page.locator(".crm-period-select");
+  const [selectBox, controlBox] = await Promise.all([
+    periodSelect.boundingBox(),
+    periodControl.boundingBox(),
+  ]);
+  expect(selectBox).not.toBeNull();
+  expect(controlBox).not.toBeNull();
+  expect(Math.abs((selectBox?.width ?? 0) - (controlBox?.width ?? 0))).toBeLessThanOrEqual(1);
+  expect(Math.abs((selectBox?.height ?? 0) - (controlBox?.height ?? 0))).toBeLessThanOrEqual(1);
+  const chartWidth = await page.locator(".crm-chart-plot").evaluate((plot) => ({
+    client: plot.clientWidth,
+    scroll: plot.scrollWidth,
+  }));
+  expect(chartWidth.scroll).toBeLessThanOrEqual(chartWidth.client);
+
+  // Catalog editing is a separate always-editable table; the prior purchase history remains.
+  await page.getByRole("button", { name: "Products", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Catalog management" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Product purchase history" })).toBeVisible();
+  await expect(page.locator(".crm-product-input--title").first()).toBeEditable();
+  await page.getByRole("button", { name: "Add product" }).click();
+  await expect(page.getByRole("heading", { name: "Add a product" })).toBeVisible();
+  await expect(page.getByLabel("SKU", { exact: true })).toBeEditable();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Overview", exact: true }).click();
+
   // Ask it to summarise something, and the answer must arrive with its own figures.
   await page.getByRole("button", { name: "Revenue summary" }).click();
   await expect(page.getByRole("heading", { name: "Revenue and forecast" })).toBeVisible();
