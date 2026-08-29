@@ -25,10 +25,11 @@ test("a merchant uploads a logo and their storefront wears it", async ({ page })
   const storeName = `Aurora Logo ${Date.now().toString().slice(-5)}`;
   await page.getByPlaceholder("Your store name").fill(storeName);
   await page.getByRole("button", { name: "Create my store" }).click();
-  await expect(page.getByRole("heading", { name: "Your store is ready" })).toBeVisible({ timeout: 30_000 });
-  const merchantId = (await page.locator(".new-store-id code").innerText()).trim();
-  await page.getByRole("button", { name: /I have saved it/ }).click();
   await expect(page.locator(".storefront-link span")).toHaveText(storeName, { timeout: 30_000 });
+  const hosted = await page.locator(".storefront-link").getAttribute("href");
+  const merchantId = new URL(hosted ?? "", page.url()).searchParams.get("merchant") ?? "";
+  expect(merchantId).toMatch(/^m_/);
+  await page.getByRole("button", { name: /I have saved it/ }).click();
 
   // Step 1 of onboarding is where a merchant sets their brand, so the logo lives there.
   const control = page.locator(".logo-control");

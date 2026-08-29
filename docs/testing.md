@@ -509,3 +509,65 @@ refused (now as `OUT_OF_SCOPE_PRODUCT`, which is what it always was).
   A test that fails on a correct answer costs more than it catches.
 - The bolding assertion judges the rule, not the model's wording: whatever the agent says, a
   product it names must be bold and must have its card attached. Phrasing changes between runs.
+
+---
+
+## 2026-08-30 (T+~18) — The merchant front door
+
+**Target:** `/admin/setup` signed out — the first screen a merchant, teammate or judge sees.
+It asked for an API key, first and only, which is the one thing a first-time visitor
+certainly does not have.
+**Run by:** Aryan / Claude Code window. Same local stack as the pass above (`:8001` + `:5174`),
+Playwright against the running app.
+
+**Result: green.** 181 pytest (+4), 18 Playwright specs (+4), Ruff clean, `tsc -b` clean,
+`vite build` clean.
+
+### Why a key exists at all, and what changed
+
+The key is the tenancy boundary, not a login form nobody got round to replacing. One
+deployment serves every merchant; `X-Merchant-Key` is how a request says which store it is
+for, and every query is scoped to the store it resolves to. That property is worth keeping
+exactly as it is. What was wrong was making the merchant carry it.
+
+| Path in | Before | Now |
+|---|---|---|
+| A store this browser has opened | paste the key again | one click; the browser remembers store, name and key, and **Forget** removes one |
+| The demo store | find `var/merchant-key.txt` on the machine | **Open the demo store** — one click, nothing typed |
+| A new store | create → a full-screen "save this key" wall → then the dashboard | create → **signed in on the spot**, key carried into the page as a banner you dismiss when you have saved it |
+| A key you already hold | the front door | folded away behind "I have a store key" |
+
+The key is still shown exactly once — only its hash is stored — so the banner persists across
+a reload until it is dismissed. Losing a store to a closed tab would be a worse bug than the
+wall it replaces.
+
+### The demo-login endpoint, stated plainly
+
+`GET /merchant/demo-store` hands the seeded store's API key to anyone who asks. That is a
+deliberate trade for a demo whose whole pitch is 90 seconds, and it is fenced three ways:
+
+- it serves **only** `settings.demo_merchant_id`, never a merchant named by the caller;
+- the key is read from `var/merchant-key.txt`, which exists only where the seed has run, and
+  is checked against the store's stored hash before it is handed out — a stale file after a
+  re-seed returns `available: false` rather than a key that opens nothing;
+- `DEMO_LOGIN_ENABLED=0` turns it off, and the button then is not drawn.
+
+**Set `DEMO_LOGIN_ENABLED=0` before any deployment where the demo store holds anything real.**
+Four tests cover exactly these cases, and the route is in `PUBLIC_ROUTES` with that reasoning
+written next to it.
+
+### A bug this found
+
+An API key that resolved to nobody returned you to the gate with **no message at all**. The
+key-watching effect cleared the error on its early return, and signing out is what triggers
+that return — so `setError(message)` and `setError(null)` landed in the same tick, and a
+mistyped key looked exactly like a button that did nothing. The effect no longer clears it;
+the error is cleared when the merchant tries something new. Covered by
+`a key that resolves to nobody is a signed-out state, not a broken page`.
+
+### Note
+
+Merchant keys now live in `localStorage` under `sway.merchantStores`, one entry per store,
+where a single key already lived. Anyone with the device and browser profile can open those
+stores — which the gate says out loud in "Why a key, and where it is kept" rather than leaving
+it to be discovered.

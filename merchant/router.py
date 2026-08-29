@@ -28,6 +28,9 @@ from app.db import connect, json_load, transaction, utc_now
 from app.errors import api_error
 from app.ids import new_id
 from app.settings import settings
+
+# Written by `python -m seed.reset`. Absent on any host that has not been seeded.
+DEMO_KEY_FILE = settings.database_path.parent / "merchant-key.txt"
 from merchant.catalog_images import IMAGE_SIGNATURES, MAX_ARCHIVE_BYTES
 from merchant.catalog_pipeline import (
     approve_catalog_upload,
@@ -98,6 +101,48 @@ def _merchant_payload(row) -> dict[str, Any]:
         "status": row["status"],
         "hosted_url": f"{settings.web_base_url}/storefront?merchant={row['merchant_id']}",
         "embed_snippet": _snippet(row["merchant_id"]),
+    }
+
+
+@merchant_router.get("/demo-store")
+def demo_store() -> dict[str, Any]:
+    """The seeded demo store's credentials, for the admin page's one-click demo sign-in.
+
+    Every other merchant route asks who is calling. This one answers that question for one
+    specific store, on purpose: a judge with 90 seconds should not have to find a key in a
+    file before they can see the product. The trade is written down rather than hidden —
+
+    - it serves **only** ``settings.demo_merchant_id``, never a merchant named by the caller;
+    - the key comes from ``var/merchant-key.txt``, which only exists where the seed has been
+      run, so a deployment that was never seeded has nothing to give away;
+    - ``DEMO_LOGIN_ENABLED=0`` turns it off outright.
+
+    `available: false` is a normal answer, not an error: the admin page simply does not offer
+    the demo button.
+    """
+    unavailable = {"available": False, "merchant_id": None, "name": None, "api_key": None}
+    if not settings.demo_login_enabled:
+        return unavailable
+    try:
+        api_key = DEMO_KEY_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return unavailable
+    if not api_key:
+        return unavailable
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT merchant_id,name,api_key_hash FROM merchants WHERE merchant_id=?",
+            (settings.demo_merchant_id,),
+        ).fetchone()
+    # A stale key file against a re-seeded database would sign the visitor in to nothing, so
+    # the key on file is checked against the store it claims to open before it is handed out.
+    if not row or row["api_key_hash"] != token_digest(api_key):
+        return unavailable
+    return {
+        "available": True,
+        "merchant_id": row["merchant_id"],
+        "name": row["name"],
+        "api_key": api_key,
     }
 
 

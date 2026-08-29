@@ -7,6 +7,7 @@ own key, and drive their own store - without the app assuming which merchant it 
 
 from __future__ import annotations
 
+import dataclasses
 import io
 
 import pytest
@@ -15,6 +16,7 @@ from openpyxl import Workbook
 
 from app.db import init_databases
 from app.main import app
+from merchant import router as merchant_router
 from seed.reset import MERCHANT_KEY_FILE, seed
 
 
@@ -176,3 +178,58 @@ def test_the_api_key_is_returned_once_and_never_again(client: TestClient) -> Non
     config = keyed(aurora["api_key"]).get("/merchant/me").json()
     assert "api_key" not in config
     assert aurora["api_key"] not in str(config)
+
+
+# --- one-click demo sign-in ---------------------------------------------------------------
+
+
+def test_the_demo_store_can_be_opened_without_finding_a_key(client: TestClient) -> None:
+    """The admin page's front door. It hands out one key, for one store, on purpose."""
+    offered = client.get("/merchant/demo-store")
+    assert offered.status_code == 200, offered.text
+    payload = offered.json()
+    assert payload["available"] is True
+    assert payload["merchant_id"] == "m_mysa"
+    assert payload["name"] == "Mysa Skin"
+
+    # The key it hands out actually opens that store, and only that store.
+    opened = keyed(payload["api_key"]).get("/merchant/me")
+    assert opened.status_code == 200
+    assert opened.json()["merchant_id"] == "m_mysa"
+
+
+def test_the_demo_key_is_not_served_when_demo_login_is_off(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One environment variable takes the convenience away for a real deployment."""
+    monkeypatch.setattr(
+        merchant_router, "settings", dataclasses.replace(merchant_router.settings, demo_login_enabled=False)
+    )
+    payload = client.get("/merchant/demo-store").json()
+    assert payload == {"available": False, "merchant_id": None, "name": None, "api_key": None}
+
+
+def test_the_demo_route_never_serves_another_merchants_key(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """It is pinned to the seeded store: pointing it at a merchant whose key is not the one
+    on file yields nothing rather than that merchant's credentials."""
+    other = onboard(client, "Aurora Skin")
+    monkeypatch.setattr(
+        merchant_router,
+        "settings",
+        dataclasses.replace(merchant_router.settings, demo_merchant_id=other["merchant_id"]),
+    )
+    payload = client.get("/merchant/demo-store").json()
+    assert payload["available"] is False
+    assert payload["api_key"] is None
+
+
+def test_a_missing_key_file_is_an_unavailable_demo_not_an_error(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """A host that was never seeded has nothing to give away, and says so calmly."""
+    monkeypatch.setattr(merchant_router, "DEMO_KEY_FILE", tmp_path / "absent.txt")
+    response = client.get("/merchant/demo-store")
+    assert response.status_code == 200
+    assert response.json()["available"] is False

@@ -1,7 +1,8 @@
 import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, Download, ExternalLink, FileSpreadsheet, Image as ImageIcon, Images, Link2, LoaderCircle, LockKeyhole, LogOut, RefreshCw, Sparkles, Store, TriangleAlert, Upload } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
-import { api, getMerchantKey, money, setMerchantKey } from "../../api";
+import { api, getMerchantKey, money, rememberStore, setMerchantKey } from "../../api";
+import { MerchantGate } from "./MerchantGate";
 import { MERCHANT_ACCENT_PRESETS, isValidAccent, merchantThemeStyle, normalizeAccent } from "../../theme";
 import { StagedImage } from "./StagedImage";
 import type { Product } from "../../types";
@@ -122,6 +123,38 @@ type UploadResult = {
   }>;
 };
 
+const UNSAVED_KEY_STORAGE = "sway.unsavedMerchantKey";
+
+type UnsavedKey = { merchant_id: string; api_key: string };
+
+/**
+ * A newly created store's key, held until the merchant confirms they have saved it.
+ *
+ * Only the hash is stored server-side, so this really is the only copy. Keeping it across a
+ * reload is the difference between "I closed the tab" and "I lost my store".
+ */
+function readUnsavedKey(): UnsavedKey | null {
+  try {
+    const raw = window.localStorage.getItem(UNSAVED_KEY_STORAGE);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<UnsavedKey>;
+    return typeof parsed?.merchant_id === "string" && typeof parsed?.api_key === "string"
+      ? { merchant_id: parsed.merchant_id, api_key: parsed.api_key }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeUnsavedKey(value: UnsavedKey | null): void {
+  try {
+    if (value) window.localStorage.setItem(UNSAVED_KEY_STORAGE, JSON.stringify(value));
+    else window.localStorage.removeItem(UNSAVED_KEY_STORAGE);
+  } catch {
+    /* private browsing: the banner still shows for this visit, it just will not survive a reload */
+  }
+}
+
 export function MerchantAdmin({ onNavigate }: { onNavigate?: (path: string) => void }) {
   const [config, setConfig] = useState<MerchantConfig | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -133,26 +166,35 @@ export function MerchantAdmin({ onNavigate }: { onNavigate?: (path: string) => v
   const [loadingReview, setLoadingReview] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
-  const [copied, setCopied] = useState<"snippet" | "url" | null>(null);
+  const [copied, setCopied] = useState<"snippet" | "url" | "key" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [merchantKey, setKey] = useState<string>(getMerchantKey() ?? "");
   const [creating, setCreating] = useState(false);
-  const [newStore, setNewStore] = useState<OnboardResult | null>(null);
+  // A key is shown exactly once, so a new store's key is pinned to the top of the page it
+  // lands on and kept across reloads until the merchant says they have it. It used to be a
+  // full-screen wall between creating a store and seeing it, which is a strange thing to
+  // put in a 90-second onboarding.
+  const [unsavedKey, setUnsavedKey] = useState<{ merchant_id: string; api_key: string } | null>(
+    () => readUnsavedKey(),
+  );
 
   useEffect(() => {
     // The key identifies the store - the page never assumes which merchant it is serving.
     // /merchant/me resolves the caller, then their catalog is read with their own id.
-    if (!merchantKey) {
-      setError(null);
-      return;
-    }
-    setError(null);
+    // Deliberately does not clear the error: signing out *is* how a rejected key gets here,
+    // and this effect re-runs as part of that. Clearing here wiped "that key opened nothing"
+    // in the same tick it was set, so a bad key looked like nothing had happened at all.
+    // The error is cleared when the merchant tries something new instead.
+    if (!merchantKey) return;
     let cancelled = false;
     api<MerchantConfig>("/merchant/me")
       .then(async (merchant) => {
         if (cancelled) return;
         setConfig(merchant);
         setPublished(merchant.status === "published");
+        // Only a key the server has just accepted is worth remembering, and only now do we
+        // know the store's real name to label it with.
+        rememberStore({ merchant_id: merchant.merchant_id, name: merchant.name, key: merchantKey });
         const catalog = await api<{ results: Product[] }>(
           `/catalog/search?merchant_id=${encodeURIComponent(merchant.merchant_id)}&category=skincare&limit=5`,
         );
@@ -177,25 +219,31 @@ export function MerchantAdmin({ onNavigate }: { onNavigate?: (path: string) => v
     setUpload(null);
     setImageReport(null);
     setProducts([]);
-    setNewStore(null);
     setError(null);
   };
 
-  const createStore = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const name = String(form.get("name") ?? "").trim();
-    if (!name) return;
+  const openStore = (store: { merchant_id?: string; name?: string; key: string }) => {
+    setError(null);
+    setMerchantKey(store.key);
+    setKey(store.key);
+  };
+
+  const createStore = async (name: string, size: "sme" | "enterprise") => {
     setCreating(true);
     setError(null);
     try {
       const created = await api<OnboardResult>("/merchant/onboard", {
         method: "POST",
-        body: JSON.stringify({ name, size: String(form.get("size") ?? "sme"), category: "skincare" }),
+        body: JSON.stringify({ name, size, category: "skincare" }),
       });
-      // The key is returned exactly once - only its digest is stored - so it is shown to
-      // the merchant before anything else happens, and kept for this browser.
-      setNewStore(created);
+      // The key is returned exactly once - only its digest is stored. Rather than stop the
+      // merchant at a screen to copy it, sign them straight in and carry the key with them
+      // as a banner they dismiss when they have saved it.
+      rememberStore({ merchant_id: created.merchant_id, name, key: created.api_key });
+      writeUnsavedKey({ merchant_id: created.merchant_id, api_key: created.api_key });
+      setUnsavedKey({ merchant_id: created.merchant_id, api_key: created.api_key });
+      setMerchantKey(created.api_key);
+      setKey(created.api_key);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "The store could not be created.");
     } finally {
@@ -342,87 +390,31 @@ export function MerchantAdmin({ onNavigate }: { onNavigate?: (path: string) => v
     }
   };
 
-  const copy = async (kind: "snippet" | "url", value: string) => {
+  const copy = async (kind: "snippet" | "url" | "key", value: string) => {
     await navigator.clipboard.writeText(value);
     setCopied(kind);
     window.setTimeout(() => setCopied(null), 1600);
   };
 
-  if (newStore) {
-    // The key is shown once, before the dashboard, because this response is its only copy.
-    return (
-      <main className="admin-loading admin-gate">
-        <div className="admin-key-form admin-new-store">
-          <h1>Your store is ready</h1>
-          <p>
-            Save this API key now. It is shown once - only its hash is stored, so it cannot be
-            shown again. It is how you sign back in to this store.
-          </p>
-          <code className="new-store-key">{newStore.api_key}</code>
-          <button type="button" onClick={() => void navigator.clipboard.writeText(newStore.api_key)}>
-            <Clipboard size={14} /> Copy key
-          </button>
-          <p className="new-store-id">Store id <code>{newStore.merchant_id}</code></p>
-          <button
-            type="button"
-            className="primary"
-            onClick={() => {
-              setMerchantKey(newStore.api_key);
-              setKey(newStore.api_key);
-              setNewStore(null);
-            }}
-          >
-            I have saved it - open store setup <ArrowRight size={14} />
-          </button>
-        </div>
-      </main>
-    );
-  }
-
   if (!config) {
     // Without a key there is nothing to show: this page reads and writes one merchant's
     // private configuration and catalog, and the API will not serve either unauthenticated.
+    if (merchantKey) {
+      return (
+        <main className="admin-loading gate-loading">
+          <LoaderCircle className="spin" size={22} />
+          <p>Opening your store…</p>
+        </main>
+      );
+    }
     return (
-      <main className="admin-loading admin-gate">
-        {merchantKey ? (
-          <>
-            <LoaderCircle className="spin" /> Opening your store…
-          </>
-        ) : (
-          <div className="admin-gate-forms">
-            <form
-              className="admin-key-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const value = new FormData(event.currentTarget).get("key");
-                const next = typeof value === "string" ? value.trim() : "";
-                if (!next) return;
-                setMerchantKey(next);
-                setKey(next);
-              }}
-            >
-              <h1>Merchant sign in</h1>
-              <p>Paste your merchant API key. It identifies your store - there is nothing else to enter.</p>
-              <input name="key" type="password" placeholder="mk_…" autoComplete="off" required />
-              <button type="submit">Open store setup</button>
-            </form>
-
-            <form className="admin-key-form admin-signup" onSubmit={(event) => void createStore(event)}>
-              <h1>New here?</h1>
-              <p>Create a store and get your API key. Every merchant gets their own catalog, agent and storefront.</p>
-              <input name="name" type="text" placeholder="Your store name" maxLength={100} required />
-              <select name="size" defaultValue="sme">
-                <option value="sme">Small business</option>
-                <option value="enterprise">Large retailer</option>
-              </select>
-              <button type="submit" disabled={creating}>
-                {creating ? <><LoaderCircle className="spin" size={14} /> Creating…</> : <>Create my store</>}
-              </button>
-            </form>
-          </div>
-        )}
-        {error ? <p className="admin-key-error">{error}</p> : null}
-      </main>
+      <MerchantGate
+        busy={creating}
+        creating={creating}
+        error={error}
+        onOpen={openStore}
+        onCreate={(name, size) => void createStore(name, size)}
+      />
     );
   }
 
@@ -451,6 +443,32 @@ export function MerchantAdmin({ onNavigate }: { onNavigate?: (path: string) => v
           <LogOut size={14} /> Switch store
         </button>
       </header>
+
+      {unsavedKey && unsavedKey.merchant_id === config.merchant_id ? (
+        <aside className="key-banner" role="note">
+          <div className="key-banner-copy">
+            <p>Save your store key</p>
+            <span>
+              You are signed in already — this is the only time the key is shown. It is how you
+              sign back in from another browser or machine.
+            </span>
+          </div>
+          <code>{unsavedKey.api_key}</code>
+          <button type="button" className="key-banner-copy-button" onClick={() => void copy("key", unsavedKey.api_key)}>
+            <Clipboard size={14} /> {copied === "key" ? "Copied" : "Copy"}
+          </button>
+          <button
+            type="button"
+            className="key-banner-done"
+            onClick={() => {
+              writeUnsavedKey(null);
+              setUnsavedKey(null);
+            }}
+          >
+            I have saved it
+          </button>
+        </aside>
+      ) : null}
 
       <main className="admin-layout">
         <section className="setup-column" id="setup">

@@ -27,6 +27,7 @@ export class ApiError extends Error {
  */
 const CONSUMER_TOKEN_KEY = "sway.consumerToken";
 const MERCHANT_KEY_KEY = "sway.merchantKey";
+const MERCHANT_STORES_KEY = "sway.merchantStores";
 
 function readStored(key: string): string | null {
   try {
@@ -71,6 +72,60 @@ export function setMerchantKey(key: string | null): void {
 
 export function getMerchantKey(): string | null {
   return credentials.merchantKey;
+}
+
+/**
+ * Stores this browser has opened before, most recent first.
+ *
+ * A merchant key is the only credential this product has, and it is shown exactly once. Every
+ * merchant who signed up therefore had to keep a key in a text file and paste it back in to
+ * return — which is a password prompt wearing a worse hat. Remembering the stores opened on
+ * this machine turns coming back into one click.
+ *
+ * The keys live in this browser's localStorage, the same place the active key already lived,
+ * and they never leave it. "Forget" removes one; signing out of a store does not, because
+ * switching stores is the thing this list exists to make easy.
+ */
+export type RememberedStore = {
+  merchant_id: string;
+  name: string;
+  key: string;
+  last_opened: string;
+};
+
+export function rememberedStores(): RememberedStore[] {
+  try {
+    const raw = window.localStorage.getItem(MERCHANT_STORES_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((entry): entry is RememberedStore => {
+        const store = entry as Partial<RememberedStore>;
+        return typeof store?.merchant_id === "string" && typeof store?.key === "string";
+      })
+      .sort((a, b) => (a.last_opened < b.last_opened ? 1 : -1));
+  } catch {
+    // Corrupt or blocked storage is an empty list, never a broken sign-in page.
+    return [];
+  }
+}
+
+function writeStores(stores: RememberedStore[]): void {
+  try {
+    window.localStorage.setItem(MERCHANT_STORES_KEY, JSON.stringify(stores.slice(0, 8)));
+  } catch {
+    /* private browsing - the current session still works, it just will not be remembered */
+  }
+}
+
+export function rememberStore(store: { merchant_id: string; name: string; key: string }): void {
+  const others = rememberedStores().filter((entry) => entry.merchant_id !== store.merchant_id);
+  writeStores([{ ...store, last_opened: new Date().toISOString() }, ...others]);
+}
+
+export function forgetStore(merchantId: string): void {
+  writeStores(rememberedStores().filter((entry) => entry.merchant_id !== merchantId));
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {

@@ -42,6 +42,12 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
     ("POST", "/consumer/register"): "creating the credential",
     ("POST", "/consumer/login"): "exchanging a password for the credential",
     ("POST", "/merchant/onboard"): "creating the merchant and its key",
+    (
+        "GET",
+        "/merchant/demo-store",
+    ): "deliberate: hands out the seeded demo store's key for one-click sign-in. Serves only "
+    "settings.demo_merchant_id, only where the seed wrote var/merchant-key.txt, and only "
+    "while DEMO_LOGIN_ENABLED is on",
     ("GET", "/catalog/search"): "public storefront; merchant_id is required and scopes it",
     ("GET", "/catalog/template"): "a blank workbook; the shape of a catalog, no merchant data",
     ("GET", "/catalog/product/{sku}"): "public storefront; merchant_id is required and scopes it",

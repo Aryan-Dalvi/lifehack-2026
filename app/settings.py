@@ -54,6 +54,16 @@ class Settings:
     web_base_url: str = os.getenv("WEB_BASE_URL", "http://localhost:5173")
     merchant_hard_ceiling_cents: int = int(os.getenv("MERCHANT_HARD_CEILING_CENTS", "50000"))
 
+    # One-click demo sign-in for the seeded store. When on, GET /merchant/demo-store hands
+    # out the seeded merchant's API key to anyone who asks, so that a judge (or a teammate,
+    # or a phone) can open the admin page without finding a key first.
+    #
+    # That is a deliberate trade, and it is only ever the seeded demo store: the key is read
+    # from var/merchant-key.txt, which exists only where `python -m seed.reset` has run. Set
+    # DEMO_LOGIN_ENABLED=0 for any deployment where the demo store holds anything real.
+    demo_login_enabled: bool = os.getenv("DEMO_LOGIN_ENABLED", "1") != "0"
+    demo_merchant_id: str = os.getenv("DEMO_MERCHANT_ID", "m_mysa")
+
     # Receipt email. With no SMTP host configured the mailer writes to a local outbox
     # instead of sending, so a demo machine with no mail server still shows the shopper
     # exactly what would have landed in their inbox.
