@@ -7,12 +7,18 @@ from fastapi import APIRouter, Header, Query, Request
 from pydantic import BaseModel, Field
 
 from app.auth import (
+    SIGNUP_ATTEMPT_LIMIT,
     assert_consumer,
     assert_merchant,
+    assert_usable_password,
+    check_rate_limit,
     hash_password,
+    is_merchant,
     issue_consumer_token,
     new_secret,
     require_consumer,
+    reset_rate_limit,
+    revoke_consumer_token,
     token_digest,
     verify_password,
 )
@@ -262,7 +268,6 @@ def _product_payload(row) -> dict[str, Any]:
     }
 
 
-@catalog_router.get("/search")
 def catalog_search(
     q: str = "",
     merchant_id: str = "m_mysa",
@@ -270,7 +275,11 @@ def catalog_search(
     max_price_cents: int | None = None,
     attrs: str | None = None,
     limit: int = 5,
+    *,
+    include_unpublished: bool = False,
 ) -> dict[str, Any]:
+    """Internal search. Kept free of request-layer types: the agent calls this directly, and
+    a Header() default arrives as a Header object rather than None when it does."""
     if category != "skincare":
         raise api_error(400, "VALIDATION", "The Phase 0 catalog supports skincare only.")
     limit = max(1, min(limit, 5))
@@ -278,12 +287,16 @@ def catalog_search(
         attr_filters = json.loads(attrs) if attrs else {}
     except json.JSONDecodeError as exc:
         raise api_error(400, "VALIDATION", "Attribute filters must be valid JSON.") from exc
+    # A merchant who has not published is not open for business: their catalog and prices
+    # are not public. They can still see their own, with their key.
+    own_store = include_unpublished
     with connect() as connection:
         rows = connection.execute(
             "SELECT p.*,m.name AS merchant_name,m.size AS merchant_size FROM products p "
             "JOIN merchants m ON m.merchant_id=p.merchant_id "
-            "WHERE p.merchant_id=? AND p.category='skincare' AND p.stock>0",
-            (merchant_id,),
+            "WHERE p.merchant_id=? AND p.category='skincare' AND p.stock>0 "
+            "AND (m.status='published' OR ?=1)",
+            (merchant_id, 1 if own_store else 0),
         ).fetchall()
     query_tokens = {token for token in q.lower().replace("-", " ").split() if len(token) > 2}
     candidates: list[tuple[int, dict[str, Any]]] = []
@@ -342,7 +355,7 @@ def catalog_search(
     }
 
 
-def catalog_product(sku: str, merchant_id: str) -> dict[str, Any]:
+def catalog_product(sku: str, merchant_id: str, *, include_unpublished: bool = False) -> dict[str, Any]:
     """Read one product, always scoped to a merchant.
 
     merchant_id is a required argument, not an option: while this lookup was unscoped, a
@@ -353,18 +366,45 @@ def catalog_product(sku: str, merchant_id: str) -> dict[str, Any]:
         row = connection.execute(
             "SELECT p.*,m.name AS merchant_name,m.size AS merchant_size FROM products p "
             "JOIN merchants m ON m.merchant_id=p.merchant_id "
-            "WHERE p.sku=? AND p.merchant_id=?",
-            (sku, merchant_id),
+            "WHERE p.sku=? AND p.merchant_id=? AND (m.status='published' OR ?=1)",
+            (sku, merchant_id, 1 if include_unpublished else 0),
         ).fetchone()
     if not row:
         raise api_error(404, "NO_PRODUCT", "The product was not found.")
     return _product_payload(row)
 
 
+@catalog_router.get("/search")
+def catalog_search_route(
+    q: str = "",
+    merchant_id: str = "m_mysa",
+    category: str = "skincare",
+    max_price_cents: int | None = None,
+    attrs: str | None = None,
+    limit: int = 5,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
+    return catalog_search(
+        q=q,
+        merchant_id=merchant_id,
+        category=category,
+        max_price_cents=max_price_cents,
+        attrs=attrs,
+        limit=limit,
+        include_unpublished=is_merchant(merchant_id, x_merchant_key),
+    )
+
+
 @catalog_router.get("/product/{sku}")
-def catalog_product_route(sku: str, merchant_id: str) -> dict[str, Any]:
+def catalog_product_route(
+    sku: str,
+    merchant_id: str,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
     """merchant_id is a required query parameter — there is no unscoped product read."""
-    return catalog_product(sku, merchant_id)
+    return catalog_product(
+        sku, merchant_id, include_unpublished=is_merchant(merchant_id, x_merchant_key)
+    )
 
 
 class RegisterRequest(BaseModel):
@@ -379,8 +419,14 @@ class LoginRequest(BaseModel):
 
 
 @consumer_router.post("/register")
-def register(body: RegisterRequest) -> dict[str, Any]:
+def register(body: RegisterRequest, request: Request) -> dict[str, Any]:
     email = body.email.strip().lower()
+    # Registration answers "does this email have an account?", which is worth throttling even
+    # though the answer has to stay truthful for the person typing it.
+    check_rate_limit(
+        f"register:{request.client.host if request.client else '-'}", SIGNUP_ATTEMPT_LIMIT
+    )
+    assert_usable_password(body.password)
     consumer_id = new_id("usr")
     with transaction() as connection:
         taken = connection.execute(
@@ -399,8 +445,14 @@ def register(body: RegisterRequest) -> dict[str, Any]:
 
 
 @consumer_router.post("/login")
-def login(body: LoginRequest) -> dict[str, Any]:
+def login(body: LoginRequest, request: Request) -> dict[str, Any]:
     email = body.email.strip().lower()
+    # Throttle per account and per client, so one attacker cannot grind a password and cannot
+    # lock a victim out by grinding it for them from elsewhere.
+    client_host = request.client.host if request.client else "-"
+    buckets = (f"login:{email}", f"login-ip:{client_host}")
+    check_rate_limit(buckets[0])
+    check_rate_limit(buckets[1], SIGNUP_ATTEMPT_LIMIT)
     with transaction() as connection:
         row = connection.execute(
             "SELECT consumer_id,password_hash,display_name FROM consumers WHERE email=?", (email,)
@@ -410,15 +462,18 @@ def login(body: LoginRequest) -> dict[str, Any]:
         if not row or not verify_password(body.password, row["password_hash"]):
             raise api_error(401, "BAD_CREDENTIALS", "That email and password do not match.")
         token = issue_consumer_token(connection, row["consumer_id"])
+    for bucket in buckets:
+        reset_rate_limit(bucket)
     return {"consumer_id": row["consumer_id"], "email": email,
             "display_name": row["display_name"], "token": token}
 
 
 @consumer_router.post("/logout")
 def logout(authorization: str | None = Header(default=None)) -> dict[str, str]:
-    consumer_id = require_consumer(authorization)
+    require_consumer(authorization)
     with transaction() as connection:
-        connection.execute("DELETE FROM consumer_tokens WHERE consumer_id=?", (consumer_id,))
+        # Only this device. Signing out on a laptop should not sign you out on a phone.
+        revoke_consumer_token(connection, authorization)
     return {"status": "signed_out"}
 
 

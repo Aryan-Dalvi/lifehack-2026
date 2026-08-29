@@ -372,3 +372,61 @@ temporarily; two assertions fired and named it exactly. Reverted after.
 trust-log holes). `5/5` Playwright — the bank gating does not break checkout. ruff clean.
 
 **Ungated routes now: 14, all on the public list with a stated reason.**
+
+---
+
+## 2026-08-29 21:55 (T+10:55) — Second security sweep: objects, credentials, exposure
+
+**Target:** the classes the route audit cannot see — object ownership (a valid credential used
+against someone else's id), credential handling, and data that is readable without being secret.
+
+**Result: 64 pytest, 5/5 Playwright, 24/24 live isolation, journey OK.**
+
+### Object ownership: clean
+
+Traced every id-taking service function. `catalog_upload_preview` and `approve_catalog_upload`
+both scope `WHERE upload_id=? AND merchant_id=?`. `record_consent` scopes the cart by session.
+The payment chain is tightly bound: cart by session, mandate's `session_id`, `parent_id`,
+`token_id` and `cart_hash` all cross-checked, token bound to the session's consumer and the
+cart's merchant, bank token matched on cart hash and merchant, signature verified. No IDOR found.
+
+### One serious exposure
+
+**An unpublished merchant's catalog was fully public.** A merchant could onboard, upload their
+catalog, and — before publishing anything — have their products, descriptions and prices served
+to anyone who named their `merchant_id`.
+
+| | |
+|---|---|
+| **Repro** | onboard a merchant (status `draft`), add stock, `GET /catalog/search?merchant_id=<id>` |
+| **Was** | `200` with the unreleased SKU and its price |
+| **Now** | published merchants only; the owner still sees their own with their key; another merchant's key does not unlock it |
+
+### Credential handling
+
+| Finding | Was | Now |
+|---|---|---|
+| Password guessing | 12 failed logins in 1.3s, all accepted | throttled per account and per client; a correct login clears the counter |
+| Session lifetime | no expiry at all | 12 hours, enforced on every session-scoped call |
+| Sign-out | revoked every token for that consumer | revokes only the token presented |
+| Weak passwords | `password` accepted | common and repetitive passwords refused |
+
+Registration still answers whether an email has an account. Hiding that needs an email path we
+do not have, and lying to someone typing their own address is worse than the leak, so it is
+throttled instead. Stated as a trade in `docs/security.md`, not left silent.
+
+### A bug this sweep introduced, and caught
+
+Adding an `X-Merchant-Key` header parameter to `catalog_search` broke five tests with
+`'Header' object has no attribute 'encode'`. The agent calls `catalog_search()` directly as a
+Python function, and a FastAPI `Header()` default arrives as a `Header` object rather than
+`None` when it does. Split into an internal function taking a plain `include_unpublished` flag
+plus a thin route that resolves the header — the same shape `catalog_product` already used.
+Worth knowing before adding request-layer parameters to anything the agent calls in-process.
+
+### Also tuned
+
+The first throttle was one global limit keyed by IP, which would have accumulated across the
+test suite and could have turned away judges sharing a conference network. Split: tight on
+password guessing per account, loose on sign-ups per client. `tests/conftest.py` clears the
+buckets between tests, since the limiter is process-global and the suite shares a process.

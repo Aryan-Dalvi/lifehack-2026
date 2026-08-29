@@ -69,6 +69,21 @@ shoppers are as isolated from each other as two signed-in ones. Checkout is wher
 starts to matter: a cart needs a shipping address, and an anonymous session has none, so it
 returns `409 ADDRESS_REQUIRED` rather than silently using someone else's.
 
+**An unpublished merchant is not open for business.** `GET /catalog/search` and
+`GET /catalog/product/{sku}` only return rows belonging to a merchant whose `status` is
+`published`. A merchant who has onboarded and uploaded stock but not launched keeps their
+catalog and prices private — they can still see their own with their key, and another
+merchant's key does not unlock it. The internal `catalog_search()` takes a plain
+`include_unpublished` flag rather than a header, because the agent calls it directly and a
+FastAPI `Header()` default arrives as a `Header` object, not `None`, when it does.
+
+**Credentials are throttled and expire.** Password guessing is limited per account and per
+client; a correct login clears the counter, so a typo never accumulates toward a lockout.
+Sign-up is limited per client too, but far more loosely — several people signing up from one
+network is ordinary. Sessions expire after 12 hours. Signing out revokes only the token
+presented, so logging out on a laptop does not log you out on a phone. Trivially common and
+single-character-repeat passwords are refused.
+
 **Signing in mid-visit claims the session in progress.** `PUT /agent/session/{id}/identity`
 attaches an account to a session that was started as a guest, so a basket built while browsing
 survives reaching the till. It requires **both** credentials — the session token proves you
@@ -78,8 +93,8 @@ session and throw the basket away.
 
 ## Verified
 
-`tests/test_isolation.py` (20 cases) and `tests/test_route_authorization.py` (4) cover each
-boundary above, plus a live suite of 24 cases
+`tests/test_isolation.py` (20), `tests/test_route_authorization.py` (4) and
+`tests/test_auth_hardening.py` (9) cover each boundary above, plus a live suite of 24 cases
 run against a running server. Both were red before these changes and are green after:
 
 | Was | Now |
@@ -95,6 +110,10 @@ run against a running server. Both were red before these changes and are green a
 | `POST /pay/consent` recorded consent for any session, unguarded | session token required |
 | The bank routes wrote trust events into any session's audit trail | naming a session requires holding it |
 | A new unguarded route shipped silently | `tests/test_route_authorization.py` fails the build |
+| An unpublished merchant's catalog and prices were public | published-only, owner sees their own |
+| Passwords could be ground down with no limit | throttled per account and per client |
+| Sessions never expired | 12-hour lifetime, enforced on every session call |
+| Signing out ended every device's session | only the presented token is revoked |
 
 ## Enforcement — why this should not drift again
 
@@ -126,10 +145,13 @@ it is guarded by TAP signature verification rather than by one of the three cred
 
 ## Still open
 
-- **No rate limiting.** Login and register accept unlimited attempts. scrypt makes each guess
-  expensive, but a lockout or throttle is the real answer.
-- **Consumer tokens do not rotate** and live 7 days. Sign-out revokes every token for that
-  consumer, which is blunt but safe.
+- **The throttle is in-process**, so it is per-worker. It stops a script hammering one account;
+  a shared limiter (Redis or the edge) is what a real deployment needs.
+- **Registration still reveals whether an email has an account** (`409 EMAIL_TAKEN`). Hiding
+  that needs the "we have sent you a link" pattern and an email path we do not have, and
+  lying to someone typing their own address is worse than the leak. Throttled instead —
+  a deliberate trade, not an oversight.
+- **Consumer tokens do not rotate** and live 7 days.
 - **The merchant key is a single long-lived secret** with no rotation endpoint. Rotation means
   re-onboarding today.
 - **CORS is wide** (`allow_origin_regex=r"https?://.*"`) for demo convenience. Credentials are

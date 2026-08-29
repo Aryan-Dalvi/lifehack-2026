@@ -17,6 +17,7 @@ from app.auth import (
     consumer_from_token,
     new_secret,
     require_consumer,
+    session_expiry,
     token_digest,
 )
 from app.db import connect, json_load, transaction, utc_now
@@ -122,7 +123,7 @@ def create_session(
     with transaction() as connection:
         connection.execute(
             "INSERT INTO sessions(session_id,session_token_hash,merchant_id,consumer_id,"
-            "is_anonymous,category,created_at) VALUES (?,?,?,?,?,?,?)",
+            "is_anonymous,category,created_at,expires_at) VALUES (?,?,?,?,?,?,?,?)",
             (
                 session_id,
                 token_digest(session_token),
@@ -131,6 +132,7 @@ def create_session(
                 0 if signed_in else 1,
                 "skincare",
                 utc_now(),
+                session_expiry(),
             ),
         )
     intent = create_session_scope(

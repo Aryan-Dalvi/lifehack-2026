@@ -12,7 +12,18 @@ import re
 
 os.environ["DEMO_MODE"] = "1"
 
+import pytest
 from fastapi.testclient import TestClient
+
+from app.auth import clear_rate_limits
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """The throttle is process-global; tests share a process and would accumulate into it."""
+    clear_rate_limits()
+    yield
+    clear_rate_limits()
 
 _SESSION_PATH = re.compile(r"/agent/session/(?P<session_id>[^/?]+)")
 

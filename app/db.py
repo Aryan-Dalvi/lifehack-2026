@@ -210,7 +210,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     active_cart_id TEXT,
     visible_skus_json TEXT NOT NULL DEFAULT '[]',
     profile_json TEXT NOT NULL DEFAULT '{}',
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    expires_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS mandates (
@@ -349,6 +350,7 @@ _ADDED_COLUMNS = (
     ("merchants", "api_key_hash", "TEXT"),
     ("sessions", "session_token_hash", "TEXT"),
     ("sessions", "is_anonymous", "INTEGER NOT NULL DEFAULT 1"),
+    ("sessions", "expires_at", "TEXT"),
 )
 
 
