@@ -65,6 +65,32 @@ def test_answer_never_shows_an_empty_message(client: TestClient) -> None:
                 )
 
 
+def test_a_stock_question_is_answered_not_fuzzily_searched(client: TestClient) -> None:
+    # The shop stocks no eye cream. Searching for one returns near-misses and presents them
+    # as if they were eye creams, so these phrasings go to the adviser instead.
+    session = _session(client)
+    for text in ["do you have an eye cream?", "so no night eye cream?"]:
+        events = _turn(client, session, text)
+        cards = [e for e in events if e["type"] == "product_cards"]
+        for card_event in cards:
+            skus = {product["sku"] for product in card_event["data"]["products"]}
+            assert "eye" not in " ".join(skus).lower()
+        assert any(e["type"] == "token" for e in events), f"{text!r} produced no answer"
+
+
+def test_no_results_never_asks_about_a_non_safety_preference(client: TestClient) -> None:
+    """The old empty-result text was internal vocabulary shown to shoppers.
+
+    "Which non-safety preference may I relax?" is meaningless to someone who stated no
+    preference, and it was the catch-all for every unmatched query.
+    """
+    session = _session(client)
+    for text in ["do you have an eye cream?", "hyaluronic acid ampoule for wrinkles"]:
+        for event in _turn(client, session, text):
+            body = str(event["data"].get("message") or event["data"].get("text") or "")
+            assert "non-safety preference" not in body.lower(), f"{text!r} leaked jargon"
+
+
 def test_guardian_rejects_prose_prices_but_keeps_the_product_card() -> None:
     # The card carries the merchant's real price, so the answer survives without the prose.
     safe, violations = validate_answer(

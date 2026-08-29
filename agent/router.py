@@ -15,7 +15,7 @@ from agent.guardian import (
     validate_products,
     validate_recommendation,
 )
-from agent.interpreter import PACK, USAGE_DETAIL_TERMS, interpret
+from agent.interpreter import PACK, STOCK_QUESTION_TERMS, USAGE_DETAIL_TERMS, interpret
 from agent.recommender import build_routine, deterministic_recommendation, phrase_routine
 from app.auth import (
     anonymous_consumer_id,
@@ -496,6 +496,11 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
 
     # "What's in this one?" / "how much is it?" is a question about a product, and the adviser
     # answers it with the catalog in hand — the card carries the price so the prose need not.
+    # "Do you sell an eye cream?" must be answered from the catalog, not searched: a fuzzy
+    # search returns the nearest products and implies they are the thing that was asked for.
+    if any(term in text.lower() for term in STOCK_QUESTION_TERMS):
+        interpretation["route"] = "answer"
+
     if interpretation["route"] in {"answer", "product_detail"}:
         return await _answer_events(
             session_id,
@@ -583,16 +588,16 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
             (json.dumps([product["sku"] for product in products]), session_id),
         )
     if not products:
-        return [
-            {
-                "type": "clarification",
-                "data": {
-                    "message": "Nothing matches all of those preferences. Which non-safety preference may I relax?",
-                    "missing_fields": ["relaxable_preference"],
-                    "applied_filters": filters,
-                },
-            }
-        ]
+        # An empty catalog result is a question the shopper deserves a straight answer to —
+        # usually "we don't stock that". The old text ("which non-safety preference may I
+        # relax?") was internal vocabulary, and meaningless to a shopper who stated no
+        # preferences. The adviser answers it from the real catalog instead.
+        return await _answer_events(
+            session_id,
+            merchant_id=session["merchant_id"],
+            question=text,
+            profile=profile,
+        )
     if wants_routine:
         return await _routine_events(
             session_id,

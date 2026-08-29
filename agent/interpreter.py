@@ -111,6 +111,22 @@ QUESTION_OPENERS = (
     "should i ",
 )
 
+# "Do you sell an eye cream?" is a question about the shop, not a search within it. Searching
+# answers it badly: a fuzzy match returns near-misses and presents them as if they were the
+# thing asked for. These phrasings are unambiguous enough to route in code.
+STOCK_QUESTION_TERMS = (
+    "do you have",
+    "do you sell",
+    "do you stock",
+    "do you carry",
+    "have you got",
+    "is there a",
+    "are there any",
+    "so no ",
+    "you don't have",
+    "you dont have",
+)
+
 USAGE_DETAIL_TERMS = (
     "how do i use",
     "how to use",
