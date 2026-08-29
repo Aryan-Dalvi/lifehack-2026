@@ -139,6 +139,23 @@ export function ShopperApp() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, products, routine, decline, comparison, categories, receipt, busy]);
 
+  // Escape pressed inside an embedded storefront never reaches the page hosting it, so the
+  // widget's own launcher could not be closed from the chat. Tell the host instead — after
+  // this app's own dialogs have had their chance at the key.
+  useEffect(() => {
+    if (!embedded) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (document.querySelector(".sheet-backdrop")) return;
+      // The host page's origin is by definition unknown — it is any merchant's site. The
+      // message carries no data, and the widget verifies both the origin and the frame it
+      // came from before acting on it.
+      window.parent?.postMessage({ type: "sway:close" }, "*");
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [embedded]);
+
   const loadTrust = useCallback(async (activeSessionId: string) => {
     const payload = await api<{ events: TrustEvent[] }>(`/trust/events/snapshot?session_id=${encodeURIComponent(activeSessionId)}`);
     setTrustEvents(payload.events);

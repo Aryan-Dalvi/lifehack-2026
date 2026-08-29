@@ -571,3 +571,54 @@ Merchant keys now live in `localStorage` under `sway.merchantStores`, one entry 
 where a single key already lived. Anyone with the device and browser profile can open those
 stores — which the gate says out loud in "Why a key, and where it is kept" rather than leaving
 it to be discovered.
+
+---
+
+## 2026-08-30 (T+~19) — The embeddable widget, on someone else's site
+
+**Target:** `web/public/widget.js` — the one-line embed, tested the way a merchant installs
+it: a script tag on a page served from a **different origin**, which is the case
+`widget-demo.html` (same-origin) could never exercise.
+**Run by:** Aryan / Claude Code window. API `:8001`, app `:5174`, and the host page served by
+a real listener on `:5199` from inside the spec.
+
+**Result: green.** 183 pytest (+2), 24 Playwright specs (+6), Ruff clean, `tsc -b` clean,
+`vite build` clean.
+
+### What was wrong
+
+| Found | Now |
+|---|---|
+| **The close button sat on top of the storefront's own "Sign in" control.** `.close` was absolutely positioned with no positioned ancestor, so it landed on the app's header by coincidence of the host box matching the frame box | The panel has a chrome bar — merchant mark, name, "Powered by Sway", close — above the iframe. Asserted: the close button's box does not intersect the iframe's |
+| The launcher was a 58px circle with the letter **S** in it. Nothing said what it was or whose it was | A pill with the merchant's mark and *"Ask &lt;merchant&gt;"*, in the merchant's own accent, read from `GET /merchant/{id}/profile` |
+| Every embed announced **"Mysa Skin"** in its aria-label and iframe title, whatever store it was for | Both come from the profile; a merchant can override with `data-label` / `data-accent` |
+| The storefront loaded on page load, before anyone clicked | `src` is set on first open. A merchant's visitors do not pay for a storefront they never asked for |
+| No backdrop, no transition — the panel appeared instantly over a fully interactive page | Dimmed backdrop (click to dismiss), a short scale-and-fade, and `prefers-reduced-motion` honoured |
+| **Escape did nothing while typing in the chat.** The key never leaves the iframe | The storefront posts `sway:close` to its host, which acts on it only after checking `event.origin` **and** that the message came from its own frame |
+| Two script tags stacked two launchers | The second run sees the host element and returns |
+| `document.currentScript` only — a `defer`d or async tag silently did nothing | Falls back to a `script[data-merchant]` lookup |
+| The merchant's name appeared twice: once in the widget chrome, once in the storefront header below it | `.shopper-shell--embedded .brand` is hidden; the header keeps the controls that matter |
+
+### Two blind alleys worth writing down
+
+**Private Network Access.** The first cross-origin fixture used `page.route` to fulfil a page
+at `http://merchant.test/`. Chromium refused to let it load `http://127.0.0.1:5174/widget.js`
+at all — *"the request client is not a secure context and the resource is in more-private
+address space `loopback`"*. Moving the fixture to a loopback URL did not help either: a
+route-fulfilled page is treated as public whatever its URL says. The spec now starts a real
+`node:http` listener. **A fixture that cannot load the thing under test looks exactly like a
+broken product.**
+
+**A rect read mid-transition.** The phone test measured the panel the instant after the click
+and got 386px against a 390px viewport — the panel scales in from `0.985`, and
+`getBoundingClientRect` returns the *animated* box. It polls for the settled layout now. The
+first instinct — that four pixels of the merchant's page were showing down one edge — was
+wrong, and would have been "fixed" by breaking the animation.
+
+### On the host page, not the widget
+
+`demo-site/index.html` had a dead product photo: Unsplash `photo-1608248597359-…` returns
+**404**, which a browser reports on a cross-origin image as `ERR_BLOCKED_BY_ORB` — so it read
+like a security block rather than a missing file. Swapped for a live photo, and every product
+image now hides itself if it fails rather than rendering as alt text in Times. That file is
+untracked and is not part of this commit.

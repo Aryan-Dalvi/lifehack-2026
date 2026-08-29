@@ -233,3 +233,31 @@ def test_a_missing_key_file_is_an_unavailable_demo_not_an_error(
     response = client.get("/merchant/demo-store")
     assert response.status_code == 200
     assert response.json()["available"] is False
+
+
+def test_a_storefronts_public_face_is_readable_without_a_key(client: TestClient) -> None:
+    """The embeddable widget reads this to wear the merchant's brand, from any origin."""
+    profile = client.get("/merchant/m_mysa/profile")
+    assert profile.status_code == 200, profile.text
+    assert profile.json() == {
+        "merchant_id": "m_mysa",
+        "name": "Mysa Skin",
+        "accent_color": "#6f8066",
+        "logo_url": None,
+        "status": "published",
+    }
+    # Brand fields only — nothing that would let a stranger act as the merchant.
+    assert set(profile.json()) == {"merchant_id", "name", "accent_color", "logo_url", "status"}
+
+    assert client.get("/merchant/m_nonexistent/profile").status_code == 404
+
+
+def test_each_merchants_profile_is_their_own(client: TestClient) -> None:
+    first = onboard(client, "Aurora Skin")
+    api = keyed(first["api_key"])
+    api.put(f"/merchant/{first['merchant_id']}/config", json={"accent_color": "#255B78"})
+
+    profile = client.get(f"/merchant/{first['merchant_id']}/profile").json()
+    assert profile["name"] == "Aurora Skin"
+    assert profile["accent_color"] == "#255B78"
+    assert profile["merchant_id"] != "m_mysa"

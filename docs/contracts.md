@@ -15,7 +15,9 @@ discovered: the shopper now enters a **card** (`PUT /agent/session/{id}/card`), 
 for an **emailed receipt** (`PUT /agent/session/{id}/receipt-email`, or `receipt_email` on
 `/agent/confirm`), and a merchant can upload a **logo** (`POST|DELETE|GET /merchant/{id}/logo`).
 The admin gate also gained a deliberate public route, `GET /merchant/demo-store`, so the demo
-can be opened without finding a key — read its row below before deploying anywhere real.
+can be opened without finding a key — read its row below before deploying anywhere real. The
+widget reads `GET /merchant/{id}/profile` for the same reason it exists at all: an embed has
+to know whose store it is opening.
 `create_cart` refuses with **`CARD_REQUIRED`** until a card is on the session, exactly as it
 already refuses with `ADDRESS_REQUIRED`. See the module tables below for the full shapes. Y4:
 please confirm or push back — nothing above the tables was changed.
@@ -202,6 +204,7 @@ never floats, never a bare number.
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
 | POST | `/merchant/onboard` | `{name, size, category, currency}` | `{merchant_id, api_key, embed_snippet}` | 400 `VALIDATION` |
+| GET | `/merchant/{id}/profile` | — | `{merchant_id, name, accent_color, logo_url, status}` — **public**: the storefront's own face, already returned unauthenticated by `POST /agent/session`. Read by the embeddable widget so a launcher can wear the merchant's brand | 404 |
 | GET | `/merchant/demo-store` | — | `{available, merchant_id, name, api_key}` — **public and deliberate**: the seeded demo store's key, for one-click sign-in. Only `settings.demo_merchant_id`, only where the seed wrote the key file, only while `DEMO_LOGIN_ENABLED` is on. `available:false` is a normal answer | — |
 | POST | `/merchant/{id}/catalog/uploads` (`/catalog` alias) | multipart `.xlsx`/CSV (`file`, optional `sheet_name`) **or** versioned JSON | staged review preview with `upload_id`, mappings, row statuses, taxonomy, pagination, and mode-bound approval plans; live catalog unchanged | 400 `BAD_CATALOG`, 404 `NO_MERCHANT`, 413 `TOO_LARGE` |
 | GET | `/merchant/{id}/catalog/uploads/{upload_id}` | query: `offset=0, limit=100` | paginated staged preview and `replace`/`upsert` approval plans | 400 `BAD_PAGINATION`, 404 `NO_CATALOG_UPLOAD`, 409 |

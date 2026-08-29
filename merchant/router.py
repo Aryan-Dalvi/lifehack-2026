@@ -104,6 +104,31 @@ def _merchant_payload(row) -> dict[str, Any]:
     }
 
 
+@merchant_router.get("/{merchant_id}/profile")
+def merchant_profile(merchant_id: str) -> dict[str, Any]:
+    """A storefront's public face: the name, the accent and the logo.
+
+    Public because every one of these is already visible to anyone who opens the storefront,
+    and `POST /agent/session` already returns the same three fields unauthenticated. It exists
+    so the embeddable widget can wear the merchant's brand without opening a shopping session
+    just to read a name. Nothing private is here — no key, no catalog, no counts.
+    """
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT merchant_id,name,accent_color,logo_url,status FROM merchants WHERE merchant_id=?",
+            (merchant_id,),
+        ).fetchone()
+    if not row:
+        raise api_error(404, "NO_MERCHANT", "The merchant was not found.")
+    return {
+        "merchant_id": row["merchant_id"],
+        "name": row["name"],
+        "accent_color": row["accent_color"],
+        "logo_url": row["logo_url"],
+        "status": row["status"],
+    }
+
+
 @merchant_router.get("/demo-store")
 def demo_store() -> dict[str, Any]:
     """The seeded demo store's credentials, for the admin page's one-click demo sign-in.

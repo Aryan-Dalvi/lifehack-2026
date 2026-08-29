@@ -141,12 +141,14 @@ test("a published merchant lands on the CRM dashboard at /admin", async ({ page 
 test("one-line merchant widget opens an isolated storefront without redirecting", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/widget-demo.html");
-  await page.getByRole("button", { name: "Open Mysa Skin shopping assistant" }).click();
+  // The launcher wears the merchant's own name, read from their public profile.
+  await page.getByRole("button", { name: /Ask Mysa Skin/ }).click();
   await expect(page).toHaveURL(/widget-demo\.html$/);
 
-  const iframe = page.locator('iframe[title="Mysa Skin conversational storefront"]');
+  const iframe = page.locator("#sway-commerce-widget iframe");
   await expect(iframe).toHaveAttribute("sandbox", "allow-scripts allow-forms allow-same-origin");
-  const commerceCanvas = page.frameLocator('iframe[title="Mysa Skin conversational storefront"]');
+  await expect(iframe).toHaveAttribute("title", "Mysa Skin conversational storefront");
+  const commerceCanvas = page.frameLocator("#sway-commerce-widget iframe");
   await expect(
     commerceCanvas.getByRole("heading", { name: "What does your skin need today?" }),
   ).toBeVisible();

@@ -57,11 +57,17 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
         "/merchant/{merchant_id}/logo",
     ): "a brand mark loaded by an <img> on the storefront, which cannot send a key; the "
     "bytes carry no shopper, catalog or account data",
+    (
+        "GET",
+        "/merchant/{merchant_id}/profile",
+    ): "name, accent and logo — the storefront's public face, already returned "
+    "unauthenticated by POST /agent/session. Read by the embeddable widget",
 }
 
 # Merchant-scoped routes that are deliberately not key-checked, for the reason given.
 PUBLIC_MERCHANT_ROUTES: dict[tuple[str, str], str] = {
     ("GET", "/merchant/{merchant_id}/logo"): "see PUBLIC_ROUTES: a public brand mark",
+    ("GET", "/merchant/{merchant_id}/profile"): "see PUBLIC_ROUTES: public brand fields only",
 }
 
 

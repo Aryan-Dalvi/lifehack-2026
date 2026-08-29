@@ -134,6 +134,16 @@ img {
   gap: 12px;
 }
 
+/* Embedded in the widget, the panel's own chrome bar already carries the merchant's name and
+   mark directly above this header. Two of them in a row is one too many. */
+.shopper-shell--embedded .brand {
+  display: none;
+}
+
+.shopper-shell--embedded .shopper-header {
+  justify-content: flex-end;
+}
+
 .brand span {
   font-family: var(--serif);
   font-size: 22px;
