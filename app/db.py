@@ -63,6 +63,7 @@ def transaction(*, issuer: bool = False) -> Iterator[sqlite3.Connection]:
 MAIN_SCHEMA = """
 CREATE TABLE IF NOT EXISTS merchants (
     merchant_id TEXT PRIMARY KEY,
+    api_key_hash TEXT,
     name TEXT NOT NULL,
     size TEXT NOT NULL CHECK (size IN ('sme', 'enterprise')),
     category TEXT NOT NULL CHECK (category = 'skincare'),
@@ -104,8 +105,10 @@ CREATE TABLE IF NOT EXISTS addresses (
 
 CREATE TABLE IF NOT EXISTS sessions (
     session_id TEXT PRIMARY KEY,
+    session_token_hash TEXT,
     merchant_id TEXT NOT NULL REFERENCES merchants(merchant_id),
     consumer_id TEXT NOT NULL,
+    is_anonymous INTEGER NOT NULL DEFAULT 1,
     category TEXT NOT NULL CHECK (category = 'skincare'),
     active_intent_id TEXT,
     active_cart_id TEXT,
@@ -190,6 +193,23 @@ CREATE TABLE IF NOT EXISTS trust_events (
     detail_json TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS consumers (
+    consumer_id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    display_name TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS consumer_tokens (
+    token_hash TEXT PRIMARY KEY,
+    consumer_id TEXT NOT NULL REFERENCES consumers(consumer_id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_consumer_tokens_consumer ON consumer_tokens(consumer_id);
+
 CREATE TABLE IF NOT EXISTS tap_nonces (
     nonce TEXT PRIMARY KEY,
     expires_at INTEGER NOT NULL
@@ -226,6 +246,23 @@ CREATE TABLE IF NOT EXISTS issuer_tokens (
 """
 
 
+# Columns added after the first databases were written. SQLite has no ADD COLUMN IF NOT
+# EXISTS, so they are applied by inspection — an existing var/sway.db must not have to be
+# deleted to pick up authentication.
+_ADDED_COLUMNS = (
+    ("merchants", "api_key_hash", "TEXT"),
+    ("sessions", "session_token_hash", "TEXT"),
+    ("sessions", "is_anonymous", "INTEGER NOT NULL DEFAULT 1"),
+)
+
+
+def _migrate(connection: sqlite3.Connection) -> None:
+    for table, column, declaration in _ADDED_COLUMNS:
+        existing = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+
+
 def init_databases(*, reset: bool = False) -> None:
     if reset:
         for path in (settings.database_path, settings.issuer_database_path):
@@ -234,6 +271,8 @@ def init_databases(*, reset: bool = False) -> None:
 
     with connect() as connection:
         connection.executescript(MAIN_SCHEMA)
+        _migrate(connection)
+        connection.commit()
     with issuer_connect() as connection:
         connection.executescript(ISSUER_SCHEMA)
 

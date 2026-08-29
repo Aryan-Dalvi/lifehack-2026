@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.errors import api_error
@@ -59,21 +60,62 @@ def validate_interpretation(
     return value
 
 
-MEDICAL_CLAIM_TERMS = {
-    "cure",
-    "cures",
-    "heals",
-    "diagnose",
-    "diagnosis",
-    "prescription",
+# One source of truth for the medical boundary, used on the way in (interpreter, before the
+# model is consulted) and on the way out (phrasing, below). These were previously two separate
+# lists that disagreed: naming a condition was refused in generated advice but accepted as a
+# shopping filter, so "my eczema is flaring" was routed to search instead of the safety boundary.
+MEDICAL_CONDITIONS = {
     "eczema",
     "psoriasis",
     "dermatitis",
     "rosacea",
+    "melanoma",
+    "impetigo",
+    "shingles",
+    "cellulitis",
+}
+
+# Acts only a clinician performs. "treat"/"treatment" is deliberately absent: "treatment" is a
+# legitimate routine step in the catalog schema, so it cannot mean a medical request on its own.
+MEDICAL_ACTS = {
+    "diagnose",
+    "diagnosed",
+    "diagnosis",
+    "cure",
+    "cures",
+    "cured",
+    "heal",
+    "heals",
+    "prescribe",
+    "prescribed",
+    "prescription",
+}
+
+MEDICAL_MARKETING_CLAIMS = {
     "clinically proven",
     "medical grade",
     "medical-grade",
 }
+
+MEDICAL_CLAIM_TERMS = MEDICAL_CONDITIONS | MEDICAL_ACTS | MEDICAL_MARKETING_CLAIMS
+
+_MEDICAL_REQUEST_PATTERN = re.compile(
+    r"\b(?:"
+    + "|".join(
+        sorted((re.escape(term) for term in MEDICAL_CONDITIONS | MEDICAL_ACTS), key=len, reverse=True)
+    )
+    + r")\b"
+)
+
+
+def is_medical_request(message: str) -> bool:
+    """True when a shopper message names a medical condition or asks for a clinical act.
+
+    Word-boundary matched on purpose. The previous check tested for contiguous phrases like
+    "treat eczema", so inserting a single word — "treat my eczema" — walked straight past it.
+    """
+    return bool(_MEDICAL_REQUEST_PATTERN.search(message.lower()))
+
 
 MAX_SUMMARY_CHARS = 400
 MAX_ADVICE_CHARS = 240

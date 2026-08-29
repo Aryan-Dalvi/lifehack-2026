@@ -1,7 +1,7 @@
 import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, ExternalLink, FileSpreadsheet, Link2, LoaderCircle, LockKeyhole, RefreshCw, Store } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { type ChangeEvent, useEffect, useState } from "react";
-import { api, money } from "../../api";
+import { api, getMerchantKey, money, setMerchantKey } from "../../api";
 import type { Product } from "../../types";
 
 type MerchantConfig = {
@@ -43,8 +43,16 @@ export function MerchantAdmin() {
   const [published, setPublished] = useState(false);
   const [copied, setCopied] = useState<"snippet" | "url" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [merchantKey, setKey] = useState<string>(getMerchantKey() ?? "");
 
   useEffect(() => {
+    // Admin data belongs to one merchant and is read with that merchant's API key. Seeding
+    // writes it to var/merchant-key.txt; onboarding returns it once.
+    if (!merchantKey) {
+      setError("Enter your merchant API key to load this store.");
+      return;
+    }
+    setError(null);
     Promise.all([
       api<MerchantConfig>("/merchant/m_mysa/config"),
       api<{ results: Product[] }>("/catalog/search?merchant_id=m_mysa&category=skincare&limit=5"),
@@ -55,7 +63,7 @@ export function MerchantAdmin() {
         setPublished(merchant.status === "published");
       })
       .catch((requestError: Error) => setError(requestError.message));
-  }, []);
+  }, [merchantKey]);
 
   const uploadCatalog = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -107,7 +115,38 @@ export function MerchantAdmin() {
   };
 
   if (!config) {
-    return <main className="admin-loading"><LoaderCircle className="spin" /> Loading Mysa Skin…</main>;
+    // Without a key there is nothing to show: this page reads and writes one merchant's
+    // private configuration and catalog, and the API will not serve either unauthenticated.
+    return (
+      <main className="admin-loading admin-gate">
+        {merchantKey ? (
+          <>
+            <LoaderCircle className="spin" /> Loading Mysa Skin…
+          </>
+        ) : (
+          <form
+            className="admin-key-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const value = new FormData(event.currentTarget).get("key");
+              const next = typeof value === "string" ? value.trim() : "";
+              if (!next) return;
+              setMerchantKey(next);
+              setKey(next);
+            }}
+          >
+            <h1>Merchant sign in</h1>
+            <p>
+              Paste your merchant API key. Local development writes it to
+              <code> var/merchant-key.txt</code> when the database is seeded.
+            </p>
+            <input name="key" type="password" placeholder="mk_…" autoComplete="off" required />
+            <button type="submit">Open store setup</button>
+          </form>
+        )}
+        {error ? <p className="admin-key-error">{error}</p> : null}
+      </main>
+    );
   }
 
   const mappings = upload?.mappings ?? defaultMappings;

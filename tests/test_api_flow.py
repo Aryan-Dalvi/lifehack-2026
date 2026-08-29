@@ -9,14 +9,23 @@ from agent.guardian import validate_recommendation
 from app.db import connect, init_databases
 from app.main import app
 from payments.tap import canonical_json, sign_tap_request
-from seed.reset import seed
+from seed.reset import DEMO_CONSUMER_EMAIL, MERCHANT_KEY_FILE, seed
+from tests.conftest import SessionAwareClient
 
 
 @pytest.fixture()
 def client() -> TestClient:
     init_databases(reset=True)
     seed()
-    with TestClient(app) as test_client:
+    with SessionAwareClient(app) as test_client:
+        # The purchase journey is a signed-in one: a cart resolves the shopper's saved
+        # shipping address, which an anonymous session does not have.
+        login = test_client.post(
+            "/consumer/login",
+            json={"email": DEMO_CONSUMER_EMAIL, "password": "mysa-demo-password"},
+        )
+        assert login.status_code == 200, login.text
+        test_client.consumer_token = login.json()["token"]
         yield test_client
 
 
@@ -26,7 +35,6 @@ def create_session(client: TestClient, budget_cents: int | None = None) -> str:
         json={
             "merchant_id": "m_mysa",
             "category": "skincare",
-            "consumer_id": "usr_demo",
             "budget_cents": budget_cents,
         },
     )
@@ -448,6 +456,7 @@ def test_catalog_upload_keeps_valid_rows_and_reports_invalid_ones(client: TestCl
     response = client.post(
         "/merchant/m_mysa/catalog",
         files={"file": ("catalog.csv", catalog.encode(), "text/csv")},
+        headers={"X-Merchant-Key": MERCHANT_KEY_FILE.read_text(encoding="utf-8").strip()},
     )
     assert response.status_code == 200, response.text
     result = response.json()

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Header, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.auth import assert_session
 from app.db import connect, issuer_connect, json_load
 from app.errors import api_error
 from payments.service import (
@@ -113,7 +114,18 @@ async def authorize(
 
 
 @pay_router.get("/mandates/{mandate_id}/chain")
-def chain(mandate_id: str) -> dict[str, Any]:
+def chain(
+    mandate_id: str,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    with connect() as connection:
+        owner = connection.execute(
+            "SELECT session_id FROM mandates WHERE mandate_id=?", (mandate_id,)
+        ).fetchone()
+    if not owner:
+        raise api_error(404, "NO_MANDATE", "The mandate was not found.")
+    # The chain is this shopper's consent trail; it is read with the session that made it.
+    assert_session(owner["session_id"], x_session_token)
     result = mandate_chain(mandate_id)
     if not result["links"]:
         raise api_error(404, "NO_MANDATE", "The mandate was not found.")
@@ -121,13 +133,20 @@ def chain(mandate_id: str) -> dict[str, Any]:
 
 
 @pay_router.get("/receipt/{transaction_id}")
-def receipt(transaction_id: str) -> dict[str, Any]:
+def receipt(
+    transaction_id: str,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
     with connect() as connection:
         order = connection.execute(
-            "SELECT evidence_json FROM orders WHERE transaction_id=?", (transaction_id,)
+            "SELECT session_id, evidence_json FROM orders WHERE transaction_id=?",
+            (transaction_id,),
         ).fetchone()
     if not order:
         raise api_error(404, "NO_TRANSACTION", "The receipt was not found.")
+    # A receipt carries the shopper's items, totals and address: it belongs to the session
+    # that bought it, not to whoever can name a transaction id.
+    assert_session(order["session_id"], x_session_token)
     return json_load(order["evidence_json"], {})["receipt"]
 
 
@@ -146,12 +165,21 @@ def _trust_rows(session_id: str) -> list[dict[str, Any]]:
 
 
 @trust_router.get("/events/snapshot")
-def trust_snapshot(session_id: str) -> dict[str, Any]:
+def trust_snapshot(
+    session_id: str,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    assert_session(session_id, x_session_token)
     return {"events": _trust_rows(session_id)}
 
 
 @trust_router.get("/events")
-def trust_events(session_id: str) -> StreamingResponse:
+def trust_events(
+    session_id: str,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> StreamingResponse:
+    assert_session(session_id, x_session_token)
+
     def stream():
         for event in _trust_rows(session_id):
             yield f"event: trust_event\ndata: {json.dumps(event)}\n\n"

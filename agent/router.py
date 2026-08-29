@@ -11,6 +11,13 @@ from pydantic import BaseModel, Field
 from agent.guardian import validate_interpretation, validate_products, validate_recommendation
 from agent.interpreter import PACK, USAGE_DETAIL_TERMS, interpret
 from agent.recommender import build_routine, deterministic_recommendation, phrase_routine
+from app.auth import (
+    anonymous_consumer_id,
+    assert_session,
+    consumer_from_token,
+    new_secret,
+    token_digest,
+)
 from app.db import connect, json_load, transaction, utc_now
 from app.errors import api_error
 from app.ids import new_id
@@ -29,9 +36,15 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 
 
 class SessionRequest(BaseModel):
+    """No consumer_id field, on purpose.
+
+    Identity comes from the Authorization header or it is anonymous. While it was read from
+    the body, anyone could open a session as any shopper and have that shopper's saved
+    address resolved into their cart.
+    """
+
     merchant_id: str = "m_mysa"
     category: str = "skincare"
-    consumer_id: str = "usr_demo"
     budget_cents: int | None = Field(default=None, gt=0)
 
 
@@ -89,7 +102,10 @@ def _session(session_id: str):
 
 
 @router.post("/session")
-def create_session(body: SessionRequest) -> dict[str, Any]:
+def create_session(
+    body: SessionRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     if body.category != "skincare":
         raise api_error(400, "VALIDATION", "The Phase 0 agent supports skincare only.")
     with connect() as connection:
@@ -98,18 +114,33 @@ def create_session(body: SessionRequest) -> dict[str, Any]:
         ).fetchone()
     if not merchant:
         raise api_error(404, "NO_MERCHANT", "The merchant was not found.")
+    signed_in = consumer_from_token(authorization)
+    consumer_id = signed_in or anonymous_consumer_id()
     session_id = new_id("ses")
+    session_token = new_secret("st")
     with transaction() as connection:
         connection.execute(
-            "INSERT INTO sessions(session_id,merchant_id,consumer_id,category,created_at) "
-            "VALUES (?,?,?,?,?)",
-            (session_id, body.merchant_id, body.consumer_id, "skincare", utc_now()),
+            "INSERT INTO sessions(session_id,session_token_hash,merchant_id,consumer_id,"
+            "is_anonymous,category,created_at) VALUES (?,?,?,?,?,?,?)",
+            (
+                session_id,
+                token_digest(session_token),
+                body.merchant_id,
+                consumer_id,
+                0 if signed_in else 1,
+                "skincare",
+                utc_now(),
+            ),
         )
     intent = create_session_scope(
         session_id, body.merchant_id, budget_cents=body.budget_cents
     )
     return {
         "session_id": session_id,
+        # Shown once. Every later call on this session must present it in X-Session-Token.
+        "session_token": session_token,
+        "consumer_id": consumer_id,
+        "anonymous": signed_in is None,
         "intent_mandate_id": intent["mandate_id"],
         "category_pack_id": PACK["id"],
         "greeting": PACK["greeting"],
@@ -119,7 +150,11 @@ def create_session(body: SessionRequest) -> dict[str, Any]:
 
 
 @router.get("/session/{session_id}")
-def session_status(session_id: str) -> dict[str, Any]:
+def session_status(
+    session_id: str,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    assert_session(session_id, x_session_token)
     session, intent = _session(session_id)
     return {
         "session_id": session_id,
@@ -135,17 +170,29 @@ def session_status(session_id: str) -> dict[str, Any]:
 
 
 @router.put("/session/{session_id}/limit")
-def set_limit(session_id: str, body: LimitRequest) -> dict[str, Any]:
+def set_limit(
+    session_id: str,
+    body: LimitRequest,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    assert_session(session_id, x_session_token)
     if body.currency != "SGD":
         raise api_error(400, "VALIDATION", "The Mysa Skin demo uses SGD.")
     return update_session_limit(session_id, body.budget_cents)
 
 
-def _comparison(skus: list[str]) -> dict[str, Any]:
+def _comparison(skus: list[str], merchant_id: str) -> dict[str, Any]:
+    """Compare products, never leaving the session's merchant.
+
+    Every SKU is read scoped to merchant_id and re-checked by the Guardian, so a SKU from
+    another merchant is a 404 rather than a cross-tenant read.
+    """
     unique = list(dict.fromkeys(skus))[:3]
     if len(unique) < 2:
         raise api_error(400, "VALIDATION", "Choose at least two products to compare.")
-    products = [catalog_product(sku) for sku in unique]
+    products = validate_products(
+        [catalog_product(sku, merchant_id) for sku in unique], merchant_id
+    )
     dimensions = []
     for dimension in PACK["comparison_dimensions"]:
         cells = []
@@ -343,13 +390,19 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
         interpretation["route"] = "recommend"
 
     if interpretation["route"] == "compare":
-        return [{"type": "comparison", "data": _comparison(interpretation["selected_skus"])}]
+        return [
+            {
+                "type": "comparison",
+                "data": _comparison(interpretation["selected_skus"], session["merchant_id"]),
+            }
+        ]
     wants_routine = interpretation["route"] == "recommend"
     query = interpretation["catalog_query"]
     if wants_routine and not query and visible_skus:
         # "Which of these do I use at night?" — plan over what is already on screen.
         products = validate_products(
-            [catalog_product(sku) for sku in visible_skus], session["merchant_id"]
+            [catalog_product(sku, session["merchant_id"]) for sku in visible_skus],
+            session["merchant_id"],
         )
         return await _routine_events(
             session_id,
@@ -402,7 +455,11 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
         # products in play so a narrow or empty re-search can never strand the shopper.
         known = {product["sku"] for product in products}
         products = products + validate_products(
-            [catalog_product(sku) for sku in visible_skus if sku not in known],
+            [
+                catalog_product(sku, session["merchant_id"])
+                for sku in visible_skus
+                if sku not in known
+            ],
             session["merchant_id"],
         )
     with transaction() as connection:
@@ -443,7 +500,11 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
 
 
 @router.post("/message")
-async def message(body: MessageRequest) -> StreamingResponse:
+async def message(
+    body: MessageRequest,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> StreamingResponse:
+    assert_session(body.session_id, x_session_token)
     events = await _turn(body.session_id, body.text)
 
     def stream():
@@ -455,14 +516,23 @@ async def message(body: MessageRequest) -> StreamingResponse:
 
 
 @router.post("/turn")
-async def turn(body: MessageRequest) -> dict[str, Any]:
+async def turn(
+    body: MessageRequest,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    assert_session(body.session_id, x_session_token)
     return {"events": await _turn(body.session_id, body.text)}
 
 
 @router.post("/action")
-async def action(body: ActionRequest) -> dict[str, Any]:
+async def action(
+    body: ActionRequest,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    assert_session(body.session_id, x_session_token)
     if body.action == "compare":
-        return {"type": "comparison", "data": _comparison(body.skus)}
+        session, _ = _session(body.session_id)
+        return {"type": "comparison", "data": _comparison(body.skus, session["merchant_id"])}
     if body.action == "select":
         if body.items:
             cart_items = [item.model_dump() for item in body.items]
@@ -479,7 +549,11 @@ async def action(body: ActionRequest) -> dict[str, Any]:
 
 
 @router.post("/confirm")
-def confirm(body: ConfirmRequest) -> dict[str, Any]:
+def confirm(
+    body: ConfirmRequest,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    assert_session(body.session_id, x_session_token)
     if body.confirmation.get("method") not in {"click", "button"}:
         raise api_error(400, "HUMAN_NOT_PRESENT", "Use the confirmation control for this cart.")
     return record_consent(body.session_id, body.cart_id)
@@ -489,7 +563,9 @@ def confirm(body: ConfirmRequest) -> dict[str, Any]:
 def pay(
     body: PayRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
 ) -> dict[str, Any]:
+    assert_session(body.session_id, x_session_token)
     payload = body.model_dump()
     raw_body = canonical_json(payload)
     headers = sign_tap_request(

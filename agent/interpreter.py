@@ -8,6 +8,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
+from agent.guardian import is_medical_request
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -103,17 +104,6 @@ USAGE_DETAIL_TERMS = (
 )
 
 
-MEDICAL_TERMS = {
-    "diagnose",
-    "diagnosis",
-    "cure",
-    "treat eczema",
-    "treat psoriasis",
-    "prescription",
-    "melanoma",
-}
-
-
 def _price_filter(text: str) -> int | None:
     match = re.search(r"(?:under|below|less than|max(?:imum)?)[^\d]{0,8}(\d+(?:\.\d{1,2})?)", text)
     return round(float(match.group(1)) * 100) if match else None
@@ -137,7 +127,7 @@ def deterministic_interpret(
             "quantity": None,
             "wants_usage_detail": wants_usage_detail,
         }
-    if any(term in text for term in MEDICAL_TERMS):
+    if is_medical_request(text):
         return {
             "route": "unsupported",
             "missing_required_fields": [],
@@ -264,11 +254,11 @@ async def interpret(
             "deterministic_demo_parser",
         )
 
-    # The medical boundary is decided in code, never by the model. Asked to "diagnose my
-    # eczema", gpt-4.1 declines but routes to 'clarify', which renders as an ordinary
-    # follow-up question instead of the safety boundary. Checking here keeps the refusal
-    # identical whether or not a model is in the loop.
-    if any(term in " ".join(message.lower().split()) for term in MEDICAL_TERMS):
+    # The medical boundary is decided in code, never by the model. Asked about a condition
+    # the model declines but routes to 'clarify' or 'search', which renders as an ordinary
+    # follow-up (or an empty catalog result) instead of the safety boundary. Checking here
+    # keeps the refusal identical whether or not a model is in the loop.
+    if is_medical_request(message):
         return (
             deterministic_interpret(
                 message=message, merchant_id=merchant_id, visible_skus=visible_skus

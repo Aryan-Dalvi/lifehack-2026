@@ -39,6 +39,11 @@ test("merchant onboarding and both deployment options render", async ({ page }) 
   });
 
   await page.setViewportSize({ width: 1584, height: 1024 });
+  // The admin page reads one merchant's private config, so it needs that merchant's key.
+  // Seeding writes the local key to var/merchant-key.txt; MERCHANT_KEY carries it in CI.
+  await page.addInitScript((key) => {
+    window.localStorage.setItem("sway.merchantKey", key);
+  }, process.env.MERCHANT_KEY ?? "");
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Make your catalog conversational" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Website widget" })).toBeVisible();

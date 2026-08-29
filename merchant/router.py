@@ -6,10 +6,20 @@ import json
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Header, Request
 from openpyxl import load_workbook
 from pydantic import BaseModel, Field
 
+from app.auth import (
+    assert_consumer,
+    assert_merchant,
+    hash_password,
+    issue_consumer_token,
+    new_secret,
+    require_consumer,
+    token_digest,
+    verify_password,
+)
 from app.db import connect, json_load, transaction, utc_now
 from app.errors import api_error
 from app.ids import new_id
@@ -67,21 +77,32 @@ def onboard(body: OnboardRequest) -> dict[str, Any]:
     if body.size not in {"sme", "enterprise"}:
         raise api_error(400, "VALIDATION", "Merchant size must be sme or enterprise.")
     merchant_id = new_id("m")
+    api_key = new_secret("mk")
     with transaction() as connection:
         connection.execute(
-            "INSERT INTO merchants(merchant_id,name,size,category,currency,created_at) VALUES (?,?,?,?,?,?)",
-            (merchant_id, body.name.strip(), body.size, "skincare", body.currency, utc_now()),
+            "INSERT INTO merchants(merchant_id,api_key_hash,name,size,category,currency,created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (
+                merchant_id,
+                token_digest(api_key),
+                body.name.strip(),
+                body.size,
+                "skincare",
+                body.currency,
+                utc_now(),
+            ),
         )
     return {
         "merchant_id": merchant_id,
-        "api_key": f"demo_{new_id('key')}",
+        # Shown once. Only the digest is stored, so this response is the only copy.
+        "api_key": api_key,
         "embed_snippet": _snippet(merchant_id),
         "hosted_url": f"{settings.web_base_url}/storefront?merchant={merchant_id}",
     }
 
 
-@merchant_router.get("/{merchant_id}/config")
 def merchant_config(merchant_id: str) -> dict[str, Any]:
+    """Internal read. Callers that are reachable over HTTP must authorise first."""
     with connect() as connection:
         row = connection.execute(
             "SELECT * FROM merchants WHERE merchant_id=?", (merchant_id,)
@@ -91,8 +112,22 @@ def merchant_config(merchant_id: str) -> dict[str, Any]:
     return _merchant_payload(row)
 
 
+@merchant_router.get("/{merchant_id}/config")
+def merchant_config_route(
+    merchant_id: str,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
+    assert_merchant(merchant_id, x_merchant_key)
+    return merchant_config(merchant_id)
+
+
 @merchant_router.put("/{merchant_id}/config")
-def update_config(merchant_id: str, body: ConfigUpdate) -> dict[str, Any]:
+def update_config(
+    merchant_id: str,
+    body: ConfigUpdate,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
+    assert_merchant(merchant_id, x_merchant_key)
     values = body.model_dump(exclude_none=True)
     if values.get("size") not in {None, "sme", "enterprise"}:
         raise api_error(400, "VALIDATION", "Merchant size must be sme or enterprise.")
@@ -118,7 +153,11 @@ def update_config(merchant_id: str, body: ConfigUpdate) -> dict[str, Any]:
 
 
 @merchant_router.get("/{merchant_id}/snippet")
-def merchant_snippet(merchant_id: str) -> dict[str, str]:
+def merchant_snippet(
+    merchant_id: str,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, str]:
+    assert_merchant(merchant_id, x_merchant_key)
     merchant_config(merchant_id)
     return {
         "snippet": _snippet(merchant_id),
@@ -276,7 +315,12 @@ async def _catalog_rows(request: Request) -> tuple[list[dict[str, Any]], dict[st
 
 
 @merchant_router.post("/{merchant_id}/catalog")
-async def ingest_catalog(merchant_id: str, request: Request) -> dict[str, Any]:
+async def ingest_catalog(
+    merchant_id: str,
+    request: Request,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
+    assert_merchant(merchant_id, x_merchant_key)
     merchant = merchant_config(merchant_id)
     rows, source = await _catalog_rows(request)
     if not isinstance(rows, list) or not rows:
@@ -441,21 +485,105 @@ def catalog_search(
     }
 
 
-@catalog_router.get("/product/{sku}")
-def catalog_product(sku: str) -> dict[str, Any]:
+def catalog_product(sku: str, merchant_id: str) -> dict[str, Any]:
+    """Read one product, always scoped to a merchant.
+
+    merchant_id is a required argument, not an option: while this lookup was unscoped, a
+    session pinned to one merchant could read another merchant's rows — title, price and
+    ingredient list — by naming their SKU through /agent/action.
+    """
     with connect() as connection:
         row = connection.execute(
             "SELECT p.*,m.name AS merchant_name,m.size AS merchant_size FROM products p "
-            "JOIN merchants m ON m.merchant_id=p.merchant_id WHERE p.sku=?",
-            (sku,),
+            "JOIN merchants m ON m.merchant_id=p.merchant_id "
+            "WHERE p.sku=? AND p.merchant_id=?",
+            (sku, merchant_id),
         ).fetchone()
     if not row:
         raise api_error(404, "NO_PRODUCT", "The product was not found.")
     return _product_payload(row)
 
 
+@catalog_router.get("/product/{sku}")
+def catalog_product_route(sku: str, merchant_id: str) -> dict[str, Any]:
+    """merchant_id is a required query parameter — there is no unscoped product read."""
+    return catalog_product(sku, merchant_id)
+
+
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(min_length=8, max_length=200)
+    display_name: str = Field(default="", max_length=100)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(min_length=1, max_length=200)
+
+
+@consumer_router.post("/register")
+def register(body: RegisterRequest) -> dict[str, Any]:
+    email = body.email.strip().lower()
+    consumer_id = new_id("usr")
+    with transaction() as connection:
+        taken = connection.execute(
+            "SELECT 1 FROM consumers WHERE email=?", (email,)
+        ).fetchone()
+        if taken:
+            raise api_error(409, "EMAIL_TAKEN", "That email already has an account.")
+        connection.execute(
+            "INSERT INTO consumers(consumer_id,email,password_hash,display_name,created_at) "
+            "VALUES (?,?,?,?,?)",
+            (consumer_id, email, hash_password(body.password), body.display_name.strip(), utc_now()),
+        )
+        token = issue_consumer_token(connection, consumer_id)
+    return {"consumer_id": consumer_id, "email": email,
+            "display_name": body.display_name.strip(), "token": token}
+
+
+@consumer_router.post("/login")
+def login(body: LoginRequest) -> dict[str, Any]:
+    email = body.email.strip().lower()
+    with transaction() as connection:
+        row = connection.execute(
+            "SELECT consumer_id,password_hash,display_name FROM consumers WHERE email=?", (email,)
+        ).fetchone()
+        # One message for "no such account" and "wrong password" — a distinct reply would
+        # turn this endpoint into a way to test which emails are registered.
+        if not row or not verify_password(body.password, row["password_hash"]):
+            raise api_error(401, "BAD_CREDENTIALS", "That email and password do not match.")
+        token = issue_consumer_token(connection, row["consumer_id"])
+    return {"consumer_id": row["consumer_id"], "email": email,
+            "display_name": row["display_name"], "token": token}
+
+
+@consumer_router.post("/logout")
+def logout(authorization: str | None = Header(default=None)) -> dict[str, str]:
+    consumer_id = require_consumer(authorization)
+    with transaction() as connection:
+        connection.execute("DELETE FROM consumer_tokens WHERE consumer_id=?", (consumer_id,))
+    return {"status": "signed_out"}
+
+
+@consumer_router.get("/me")
+def me(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    consumer_id = require_consumer(authorization)
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT consumer_id,email,display_name FROM consumers WHERE consumer_id=?",
+            (consumer_id,),
+        ).fetchone()
+    if not row:
+        raise api_error(404, "NO_CONSUMER", "The account was not found.")
+    return dict(row)
+
+
 @consumer_router.get("/{consumer_id}/addresses")
-def addresses(consumer_id: str) -> dict[str, Any]:
+def addresses(
+    consumer_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    assert_consumer(consumer_id, authorization)
     with connect() as connection:
         rows = connection.execute(
             "SELECT * FROM addresses WHERE consumer_id=? ORDER BY is_default DESC", (consumer_id,)
@@ -483,7 +611,12 @@ def addresses(consumer_id: str) -> dict[str, Any]:
 
 
 @consumer_router.put("/{consumer_id}/addresses/{address_id}/default")
-def set_default_address(consumer_id: str, address_id: str) -> dict[str, str]:
+def set_default_address(
+    consumer_id: str,
+    address_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict[str, str]:
+    assert_consumer(consumer_id, authorization)
     with transaction() as connection:
         exists = connection.execute(
             "SELECT 1 FROM addresses WHERE consumer_id=? AND address_id=?",

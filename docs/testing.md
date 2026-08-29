@@ -208,3 +208,68 @@ source of task ownership — does not exist in the repo. `STATUS` cannot flag un
 Deployed / hosted environment (only localhost was tested) · the web UI as a user drives it (API only)
 · the `/pay` authorize→receipt leg end to end · rate-limit (429) behaviour under real quota
 exhaustion · sustained load beyond 5 concurrent turns.
+
+---
+
+## 2026-08-29 20:05 (T+9:05) — Tenant isolation audit + fixes
+
+**Target:** cross-tenant access across `agent/`, `merchant/`, `payments/` — can a merchant reach
+another merchant's data or code, can a buyer reach another buyer.
+**Branch:** `aryan/tenant-isolation`.
+**Method:** two merchants and two buyers created for real against a running server, then every
+crossing attempted over HTTP. Code changes made only after each hole was reproduced.
+
+### Holes found (all confirmed by reproduction, then fixed)
+
+| # | Hole | Evidence before |
+|---|---|---|
+| 1 | Rewrite **any** merchant's config, unauthenticated | `PUT /merchant/{B}/config` → `200`, name became `PWNED BY A` |
+| 2 | Inject products into **any** merchant's catalog | `POST /merchant/{B}/catalog` → `200 ingested=1` |
+| 3 | Agent read a rival merchant's product through `/agent/action` | session pinned to `m_mysa` returned `Rival Secret Serum` + its ingredient list |
+| 4 | `GET /catalog/product/{sku}` unscoped | returned any merchant's title, price and ingredients |
+| 5 | Read **any** buyer's saved addresses | `GET /consumer/usr_victim/addresses` → `200` with recipient, street, postal code |
+| 6 | Open a session as **any** buyer | `consumer_id` read from the body; the cart then resolved the victim's shipping address |
+| 7 | Read **any** session's trust log | `GET /trust/events?session_id=…` → `200` |
+
+Note on method: an early run reported holes 3 and 4 as passing. That was wrong — the rival
+catalog had failed to ingest (`ingested=0`, missing a required column), so those cases passed
+vacuously against an empty catalog. Re-run with a valid rival product, both were real.
+
+### After the fix — 24/24, zero holes
+
+Merchant: wrong key `403` on read, config write and catalog write; no key `401`; own key `200`.
+Agent comparing a rival SKU leaks nothing; unscoped product read `422`; cross-merchant `404`.
+
+Buyer: Alice→Bob addresses `403`, no token `401`, Alice→Bob default address `403`; another
+session's token `403` on turn and on trust log; no token `401`; identity claimed in the body is
+ignored and the session comes back anonymous.
+
+Anonymous: browse and search `200` with products; two anonymous shoppers get different consumer
+ids; sign-in binds the session; wrong password `401`; signed-in buyer reads their own addresses.
+
+### Demo journey re-verified end to end
+
+anonymous browse → `409 ADDRESS_REQUIRED` at guest checkout → sign in → signed-in session →
+search → usage turn → cart (S$34.00) → consent → own trust log readable (7 events) → another
+session `403` → medical boundary `safety_boundary`. **JOURNEY OK.**
+
+### Earlier P1 findings, now fixed
+
+- **Medical boundary** — the interpreter's `MEDICAL_TERMS` and the Guardian's
+  `MEDICAL_CLAIM_TERMS` are now one shared policy in `agent/guardian.py`, matched on word
+  boundaries. `treat eczema`, `treat my eczema`, bare `eczema`, `rosacea`, `psoriasis` and
+  `dermatitis` all reach `safety_boundary`; `treatment serum`, `secure packaging` and
+  `sensitive skin` correctly do not. 16/16 on a matcher table, and live through the API.
+- **Test suite hermeticity** — `tests/conftest.py` pins `DEMO_MODE=1` and now also carries
+  session and consumer credentials the way a browser does.
+
+### Suite
+
+`28 passed` (13 original + 15 new isolation regressions in `tests/test_isolation.py`), 11.0s,
+no live model calls. Frontend `npm run build` clean.
+
+### Still open (documented in `docs/security.md`)
+
+No rate limiting on login/register · consumer tokens do not rotate (7-day life, sign-out revokes
+all) · merchant key has no rotation path · CORS still wide for demo convenience · `/pay`
+authorize→receipt leg and the hosted environment remain untested.
