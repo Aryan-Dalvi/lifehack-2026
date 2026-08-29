@@ -251,18 +251,25 @@
 
 .crm-main {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
+  min-width: 0;
+}
+
+.crm-main > * {
   min-width: 0;
 }
 
 .crm-rail {
   display: grid;
   gap: 14px;
+  min-width: 0;
   position: sticky;
   top: 92px;
 }
 
 .crm-card {
+  min-width: 0;
   padding: 18px;
   border: 1px solid var(--crm-line);
   border-radius: var(--crm-radius);
@@ -691,7 +698,11 @@
 }
 
 .crm-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
 }
 
 .crm-table {
@@ -831,6 +842,7 @@
 
 .crm-product-manager {
   padding-bottom: 14px;
+  overflow: hidden;
 }
 
 .crm-product-manager-head {

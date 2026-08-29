@@ -137,10 +137,37 @@ test("a published merchant lands on the CRM dashboard at /admin", async ({ page 
   await expect(page.getByRole("heading", { name: "Catalog management" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Product purchase history" })).toBeVisible();
   await expect(page.locator(".crm-product-input--title").first()).toBeEditable();
+
+  // At a narrower desktop width the wide editor must scroll inside its card, never underneath
+  // the sticky priority/assistant rail.
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  const [productPanelBox, railBox] = await Promise.all([
+    page.locator("#product-management").boundingBox(),
+    page.locator(".crm-rail").boundingBox(),
+  ]);
+  expect(productPanelBox).not.toBeNull();
+  expect(railBox).not.toBeNull();
+  expect((productPanelBox?.x ?? 0) + (productPanelBox?.width ?? 0)).toBeLessThanOrEqual(
+    (railBox?.x ?? 0) + 1,
+  );
+  const productOverflow = await page.locator("#product-management").evaluate((panel) => {
+    const scroller = panel.querySelector<HTMLElement>(".crm-table-scroll");
+    const panelBounds = panel.getBoundingClientRect();
+    const scrollerBounds = scroller?.getBoundingClientRect();
+    return {
+      panelRight: panelBounds.right,
+      scrollerRight: scrollerBounds?.right ?? Number.POSITIVE_INFINITY,
+      scrollsInternally: (scroller?.scrollWidth ?? 0) > (scroller?.clientWidth ?? 0),
+    };
+  });
+  expect(productOverflow.scrollerRight).toBeLessThanOrEqual(productOverflow.panelRight + 1);
+  expect(productOverflow.scrollsInternally).toBe(true);
+
   await page.getByRole("button", { name: "Add product" }).click();
   await expect(page.getByRole("heading", { name: "Add a product" })).toBeVisible();
   await expect(page.getByLabel("SKU", { exact: true })).toBeEditable();
   await page.getByRole("button", { name: "Cancel" }).click();
+  await page.setViewportSize({ width: 1584, height: 1024 });
   await page.getByRole("button", { name: "Overview", exact: true }).click();
 
   // Ask it to summarise something, and the answer must arrive with its own figures.
