@@ -111,9 +111,10 @@ QUESTION_OPENERS = (
     "should i ",
 )
 
-# "Do you sell an eye cream?" is a question about the shop, not a search within it. Searching
-# answers it badly: a fuzzy match returns near-misses and presents them as if they were the
-# thing asked for. These phrasings are unambiguous enough to route in code.
+# Phrasings used ONLY by the deterministic parser below — the offline path, where there is no
+# model to reason with. When a model is available it routes from intent and the shop's real
+# range instead, so these lists never override it; matching on wording is what made the agent
+# feel scripted in the first place.
 STOCK_QUESTION_TERMS = (
     "do you have",
     "do you sell",
@@ -177,7 +178,10 @@ def deterministic_interpret(
             "quantity": None,
             "wants_usage_detail": wants_usage_detail,
         }
-    if any(text.startswith(opener) for opener in QUESTION_OPENERS) and not wants_usage_detail:
+    asks_a_question = any(text.startswith(opener) for opener in QUESTION_OPENERS) or any(
+        term in text for term in STOCK_QUESTION_TERMS
+    )
+    if asks_a_question and not wants_usage_detail:
         return {
             "route": "answer",
             "missing_required_fields": [],
@@ -292,6 +296,7 @@ async def interpret(
     visible_skus: list[str],
     profile: dict[str, Any],
     shopper_cap_cents: int | None,
+    catalog: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], str]:
     if settings.demo_mode or not settings.openai_api_key:
         return (
@@ -321,6 +326,17 @@ async def interpret(
         "shopper_cap_cents": shopper_cap_cents,
         "visible_skus": visible_skus,
         "profile_preferences": profile,
+        # What the shop actually sells. Without this the router is guessing: asked for an
+        # eye cream it would route to 'search' and the fuzzy matcher would answer with a
+        # moisturiser. Knowing the range, it can tell a stocked request from an absent one.
+        "shop_sells": [
+            {
+                "sku": product["sku"],
+                "title": product["title"],
+                "routine_step": (product.get("attributes") or {}).get("routine_step"),
+            }
+            for product in (catalog or [])
+        ],
     }
     # One retry: transient APIConnectionError is common on venue wifi and fails fast,
     # so a retry costs far less than silently degrading to the canned parser.
@@ -339,28 +355,34 @@ async def interpret(
         response = await client.responses.create(
             model=settings.openai_model,
             instructions=(
-                "You are Sway's skincare Commerce Interpreter. Return only the requested structured "
-                "decision.\n"
-                "Routes: 'answer' when the shopper asks a QUESTION rather than asking to be "
-                "shown products — what a product type or ingredient is, how two categories "
-                "differ, whether ingredients can be combined, what the shop stocks, or any "
-                "general skincare question. If it ends in a question mark and is not a "
-                "request to see, compare or buy products, it is almost always 'answer'. "
-                "'search' when the shopper wants to see products matching a need. "
-                "'recommend' when they want a routine, an order of use, morning/night guidance, or "
-                "advice on which product to use when — set catalog_query so the routine can be built "
-                "from real stock, and leave routine_step null so every step of the routine is covered. "
-                "'compare' when they want visible products weighed against each other. "
-                "'clarify' ONLY when you genuinely cannot act without more information.\n"
-                "Prefer acting over asking: if the shopper has given a skin type or a concern, that is "
-                "enough to search or recommend. Never ask the same question twice. Never diagnose, "
-                "invent products, widen merchant scope, or treat a search budget as payment consent.\n"
-                "Set wants_usage_detail true ONLY when the shopper is asking how to use, apply or "
-                "order the products (for example 'how do I use these', 'how often', 'walk me "
-                "through it'). Asking for a routine alone is not a request for usage detail. "
-                "A 'how do I use these' question is route 'recommend' with wants_usage_detail "
-                "true — it is NOT 'compare', which is only for weighing products against "
-                "each other."
+                "You are the shop assistant for a skincare merchant. Decide what the shopper "
+                "wants, the way a good assistant on the shop floor would. `shop_sells` is the "
+                "merchant's entire range — read it before deciding.\n"
+                "\n"
+                "Pick the route by what the shopper is trying to do:\n"
+                "- answer: they asked a question and want it answered in words. Covers "
+                "questions about skincare in general, about an ingredient, and about this "
+                "shop — including whether something is stocked. If the thing they asked for "
+                "is NOT in shop_sells, always use answer, never search: searching would show "
+                "them the nearest product as though it were the one they asked for.\n"
+                "- search: they want to be shown products that fit a need.\n"
+                "- recommend: they want a routine, an order of use, or morning/night guidance. "
+                "Set catalog_query and leave routine_step null so every step is covered.\n"
+                "- compare: they want products they can already see weighed against each other.\n"
+                "- product_detail: they asked about one particular product.\n"
+                "- clarify: only when you genuinely cannot act without more information.\n"
+                "- unsupported: not about skincare or this shop.\n"
+                "\n"
+                "Judge intent, not wording — the same question arrives phrased a hundred ways. "
+                "Prefer acting over asking: a stated skin type or concern is enough to work "
+                "with. Do not ask something the shopper already answered.\n"
+                "\n"
+                "wants_usage_detail is true only when they are asking how to apply or how "
+                "often to use something. Wanting a routine is not the same as wanting "
+                "application instructions.\n"
+                "\n"
+                "Never invent a product that is not in shop_sells, never widen beyond this "
+                "merchant, never diagnose, and never treat a budget as permission to buy."
             ),
             input=json.dumps(state),
             text=text_options,

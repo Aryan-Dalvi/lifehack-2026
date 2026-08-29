@@ -15,7 +15,7 @@ from agent.guardian import (
     validate_products,
     validate_recommendation,
 )
-from agent.interpreter import PACK, STOCK_QUESTION_TERMS, USAGE_DETAIL_TERMS, interpret
+from agent.interpreter import PACK, interpret
 from agent.recommender import build_routine, deterministic_recommendation, phrase_routine
 from app.auth import (
     anonymous_consumer_id,
@@ -450,6 +450,7 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
     session, intent_payload = _session(session_id)
     visible_skus = json_load(session["visible_skus_json"], [])
     profile = json_load(session["profile_json"], {})
+    catalog = catalog_digest(session["merchant_id"])
     interpretation, source = await interpret(
         session_id=session_id,
         message=text,
@@ -457,6 +458,7 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
         visible_skus=visible_skus,
         profile=profile,
         shopper_cap_cents=intent_payload.get("max_amount_cents"),
+        catalog=catalog,
     )
     interpretation = validate_interpretation(
         interpretation,
@@ -487,20 +489,10 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
                 },
             }
         ]
-    # A plainly worded "how do I use these?" must reach the routine even if the model
-    # routed it elsewhere — the wording is unambiguous enough to trust over the model.
-    asked_for_usage = any(term in text.lower() for term in USAGE_DETAIL_TERMS)
-    include_usage = bool(interpretation.get("wants_usage_detail")) or asked_for_usage
-    if asked_for_usage and interpretation["route"] == "compare" and visible_skus:
-        interpretation["route"] = "recommend"
+    include_usage = bool(interpretation.get("wants_usage_detail"))
 
-    # "What's in this one?" / "how much is it?" is a question about a product, and the adviser
-    # answers it with the catalog in hand — the card carries the price so the prose need not.
-    # "Do you sell an eye cream?" must be answered from the catalog, not searched: a fuzzy
-    # search returns the nearest products and implies they are the thing that was asked for.
-    if any(term in text.lower() for term in STOCK_QUESTION_TERMS):
-        interpretation["route"] = "answer"
-
+    # A question about a product is answered with the catalog in hand; the card beside the
+    # answer carries the price, so the prose never has to.
     if interpretation["route"] in {"answer", "product_detail"}:
         return await _answer_events(
             session_id,
