@@ -26,6 +26,7 @@ INTERPRETATION_SCHEMA = {
             "type": "string",
             "enum": [
                 "clarify",
+                "answer",
                 "search",
                 "recommend",
                 "compare",
@@ -90,6 +91,26 @@ INTERPRETATION_SCHEMA = {
     ],
 }
 
+# Openers that mean the shopper is asking something rather than shopping. Used only by the
+# deterministic parser; the live interpreter decides the route from the sentence itself.
+QUESTION_OPENERS = (
+    "what is",
+    "whats",
+    "what's",
+    "what does",
+    "what do you",
+    "what are",
+    "why ",
+    "can i ",
+    "can you explain",
+    "is it ",
+    "are there",
+    "do you sell",
+    "do you have",
+    "difference between",
+    "should i ",
+)
+
 USAGE_DETAIL_TERMS = (
     "how do i use",
     "how to use",
@@ -135,6 +156,16 @@ def deterministic_interpret(
                 "I can compare cosmetic skincare products, but I can’t diagnose or recommend treatment "
                 "for a medical condition. A qualified clinician can help with that safely."
             ),
+            "catalog_query": None,
+            "selected_skus": [],
+            "quantity": None,
+            "wants_usage_detail": wants_usage_detail,
+        }
+    if any(text.startswith(opener) for opener in QUESTION_OPENERS) and not wants_usage_detail:
+        return {
+            "route": "answer",
+            "missing_required_fields": [],
+            "clarification": None,
             "catalog_query": None,
             "selected_skus": [],
             "quantity": None,
@@ -294,7 +325,12 @@ async def interpret(
             instructions=(
                 "You are Sway's skincare Commerce Interpreter. Return only the requested structured "
                 "decision.\n"
-                "Routes: 'search' when the shopper wants to see products matching a need. "
+                "Routes: 'answer' when the shopper asks a QUESTION rather than asking to be "
+                "shown products — what a product type or ingredient is, how two categories "
+                "differ, whether ingredients can be combined, what the shop stocks, or any "
+                "general skincare question. If it ends in a question mark and is not a "
+                "request to see, compare or buy products, it is almost always 'answer'. "
+                "'search' when the shopper wants to see products matching a need. "
                 "'recommend' when they want a routine, an order of use, morning/night guidance, or "
                 "advice on which product to use when — set catalog_query so the routine can be built "
                 "from real stock, and leave routine_step null so every step of the routine is covered. "

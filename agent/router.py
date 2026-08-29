@@ -8,7 +8,13 @@ from fastapi import APIRouter, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from agent.guardian import validate_interpretation, validate_products, validate_recommendation
+from agent.adviser import answer_question
+from agent.guardian import (
+    validate_answer,
+    validate_interpretation,
+    validate_products,
+    validate_recommendation,
+)
 from agent.interpreter import PACK, USAGE_DETAIL_TERMS, interpret
 from agent.recommender import build_routine, deterministic_recommendation, phrase_routine
 from app.auth import (
@@ -23,7 +29,7 @@ from app.auth import (
 from app.db import connect, json_load, transaction, utc_now
 from app.errors import api_error
 from app.ids import new_id
-from merchant.router import catalog_product, catalog_search
+from merchant.router import catalog_digest, catalog_product, catalog_search
 from payments.service import (
     authorize_payment,
     create_cart,
@@ -274,6 +280,59 @@ def _remember_profile(session_id: str, profile: dict[str, Any], filters: dict[st
     return updated
 
 
+async def _answer_events(
+    session_id: str,
+    *,
+    merchant_id: str,
+    question: str,
+    profile: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Answer a question about skincare or this shop, then show any product it named."""
+    products = catalog_digest(merchant_id)
+    answer, source = await answer_question(
+        question=question, products=products, profile=profile
+    )
+    allowed = [product["sku"] for product in products]
+    answer, violations = validate_answer(answer, allowed_skus=allowed)
+    record_trust(
+        session_id,
+        "agent",
+        "Skincare question answered",
+        "warn" if violations else "ok",
+        {
+            "source": source,
+            "llm_calls": int(source == "openai_responses"),
+            "cited_skus": answer["cited_skus"],
+            "dropped": sorted(set(violations)),
+        },
+    )
+
+    # The Guardian rejected the prose; never show a shopper an unchecked answer. If it named
+    # real products we can still answer with their cards, which carry the verified facts.
+    text = answer["answer"] or (
+        "Here is what the catalog holds — the details and price on each card are the "
+        "merchant's own."
+        if answer["cited_skus"]
+        else "I can only answer that from this shop's catalog. Tell me your skin type or "
+        "concern and I'll show what fits."
+    )
+
+    events: list[dict[str, Any]] = [{"type": "token", "data": {"text": text, "source": source}}]
+    if answer["cited_skus"]:
+        cited = validate_products(
+            [catalog_product(sku, merchant_id) for sku in answer["cited_skus"]], merchant_id
+        )
+        with transaction() as connection:
+            connection.execute(
+                "UPDATE sessions SET visible_skus_json=? WHERE session_id=?",
+                (json.dumps([product["sku"] for product in cited]), session_id),
+            )
+        events.append(
+            {"type": "product_cards", "data": {"products": cited, "source": "catalog_database"}}
+        )
+    return events
+
+
 async def _routine_events(
     session_id: str,
     products: list[dict[str, Any]],
@@ -411,11 +470,19 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
         detail={"route": interpretation["route"], "source": source, "llm_calls": int(source == "openai_responses")},
     )
     if interpretation["route"] in {"clarify", "unsupported"}:
+        unsupported = interpretation["route"] == "unsupported"
+        # The model may route to clarify/unsupported without filling in the text. Never send
+        # the shopper an empty bubble — say something true and useful instead.
+        message = interpretation["clarification"] or (
+            "I can only help with skincare and this shop's products."
+            if unsupported
+            else "What would you like help with — a skin concern, a routine step, or a product?"
+        )
         return [
             {
-                "type": "clarification" if interpretation["route"] == "clarify" else "safety_boundary",
+                "type": "safety_boundary" if unsupported else "clarification",
                 "data": {
-                    "message": interpretation["clarification"],
+                    "message": message,
                     "missing_fields": interpretation["missing_required_fields"],
                 },
             }
@@ -426,6 +493,16 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
     include_usage = bool(interpretation.get("wants_usage_detail")) or asked_for_usage
     if asked_for_usage and interpretation["route"] == "compare" and visible_skus:
         interpretation["route"] = "recommend"
+
+    # "What's in this one?" / "how much is it?" is a question about a product, and the adviser
+    # answers it with the catalog in hand — the card carries the price so the prose need not.
+    if interpretation["route"] in {"answer", "product_detail"}:
+        return await _answer_events(
+            session_id,
+            merchant_id=session["merchant_id"],
+            question=text,
+            profile=profile,
+        )
 
     if interpretation["route"] == "compare":
         return [
