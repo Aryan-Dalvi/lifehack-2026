@@ -24,15 +24,16 @@ to `payments/` · UI surfaces are specified in `docs/ux.md` and `docs/wireframes
 
 | Directory | Owns | Member |
 |---|---|---|
-| `payments/` | mock Visa stack: token vault, authorize/capture, mandate chain, TAP signature verification, trust events | **Y4** |
-| `agent/` | LLM orchestration, tools, category packs, agent-side signing, demo-mode fallback | **Y3** |
+| `payments/` | mock Visa stack: token vault, authorize/capture, cart builder, mandate chain, TAP verification, trust events, **mock issuer ACS (`/bank/*`, own store)** | **Y4** |
+| `agent/` | orchestrator + specialists, Guardian, category packs, agent-side signing, demo-mode fallback | **Y3** |
 | `web/` | chat widget, trust panel, merchant console (Vite + React + Tailwind) | **Y2** |
-| `merchant/` | catalog ingest, merchant registry, discovery/search API, merchant config + embed snippet | **Aryan** |
+| `merchant/` | catalog ingest, merchant registry, discovery/search API, merchant config + embed snippet, **consumer addresses (`/consumer/*`)** | **Aryan** |
 | `app/` | FastAPI entrypoint, router mounting, middleware wiring, DB session, settings | **Aryan** (shared — PRs, not direct pushes, after freeze) |
 | `seed/`, `demo/`, `docs/`, `Makefile` | seed catalogs, demo script, ops | **Aryan** |
 
-**One process, three routers.** `uvicorn app.main:app` mounts `agent`, `merchant` and `pay` routers
-on **:8000**; the web app runs on **:5173**. Rationale: walking-format judging needs a cold start in
+**One process, five routers.** `uvicorn app.main:app` mounts `agent`, `merchant`, `consumer`, `pay`
+and `bank` on **:8000**; the web app runs on **:5173**. Router count is not module count — `consumer`
+is Aryan's code inside `merchant/`, and `bank` is Y4's inside `payments/` (with its own store). Rationale: walking-format judging needs a cold start in
 seconds, and one process cannot half-die. Signature verification is still honest — the agent calls
 the merchant/payment routes over real HTTP to `http://localhost:8000`, so requests really are signed
 and really are verified at the edge.
@@ -252,7 +253,10 @@ transaction and mints a token bound to it.
 **Demo mode:** with `DEMO_MODE=1` the ACS accepts a fixed code (`492 118`) and still enforces every
 binding rule above. The refusals must be real even when the network is off.
 
-### `consumer/` — profile + addresses (new in v0.11) — owner Aryan
+### `/consumer/*` — profile + addresses (new in v0.11) — owner Aryan
+
+Routes live at `/consumer/*` but the code sits in **`merchant/consumer.py`**, inside Aryan's module —
+a fourth top-level package for two endpoints isn't worth the ownership boundary.
 
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
@@ -281,7 +285,8 @@ ignore gracefully):
 
 ## Subagents — internal structure of `agent/` (new in v0.10)
 
-Diagrams: `docs/wireframes.html` Part 3. **This is internal to `agent/`** — no other module sees
+Diagrams: `docs/wireframes.html` Part 3. **Step-by-step execution spec (inputs, outputs, tools per
+step): `docs/agent-workflow.md`.** This is internal to `agent/` — no other module sees
 these types, so Y3 may refactor freely below this line as long as the HTTP surface above holds.
 
 ### The roster

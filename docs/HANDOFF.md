@@ -43,6 +43,8 @@ Proposed, frozen by Y4 at the huddle. Full detail: `docs/contracts.md` (DRAFT v0
   `contracts.md` → v0.10.
   **Revision 3** — ratings, progressive disclosure, issuer authentication, shipping address;
   plates renumbered **C1–C9**; `contracts.md` → v0.11; board at **~56 h, no buffer left**.
+  **`agent-workflow.md`** — the full execution spec: 22 steps across 6 phases, each with its exact
+  input, output, required tools, Guardian checks, failure codes, and latency/cost budget.
 - **In progress:** nothing — **no code exists yet.**
 - **Blocked:** everything downstream of the huddle (T-01) and the OpenAI key (T-04).
 

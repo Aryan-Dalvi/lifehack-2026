@@ -201,7 +201,9 @@ agent going live. The capability is what the rubric scores; the wizard is how we
 
 ## Part 3 — one agent becomes six
 
-Rationale, diagrams and the roster table are in `docs/wireframes.html` Part 3. The contract-level
+Rationale, diagrams and the roster table are in `docs/wireframes.html` Part 3. **Every step of the
+run, with its exact input, output and required tools, is in `docs/agent-workflow.md`** — that is the
+file to implement against. The contract-level
 detail (message types, Guardian checks, ownership) lives in `docs/contracts.md` §Subagents.
 
 **One-line summary:** facts travel through code, only phrasing travels through a model, and there is
