@@ -72,7 +72,7 @@ class ParsedCatalog:
 
     @property
     def mappings(self) -> dict[str, str]:
-        """The unambiguous alias matches. Ties and gaps are settled by resolve_mappings."""
+        """The unambiguous alias matches. Ties are settled by resolve_mappings."""
         return self.candidates.resolved
 
     @property
@@ -673,26 +673,20 @@ def normalize_locked_facts(
     }
 
 
-def _descriptive_fields(
-    row: SourceRow,
-    mappings: dict[str, str],
-    descriptive_aliases: dict[str, str] | None = None,
-) -> dict[str, Any]:
-    """Evidence the classifier may read.
+def _descriptive_fields(row: SourceRow, mappings: dict[str, str]) -> dict[str, Any]:
+    """Evidence the screening model may read.
 
-    Three ways in, and a locked-fact column is excluded from all of them:
+    Two ways in, and a locked-fact column is excluded from both:
 
     1. a field the mapping step resolved to a descriptive target - this is what lets a
-       header like "What we call it" still be read as the product title,
-    2. a header whose own name is on the allow-list, and
-    3. a header the mapping model recognised and renamed.
+       header like `full_inci` still be read as the ingredient list, and
+    2. a header whose own name is on the allow-list.
 
-    (1) matters more than it looks: without it, evidence reached the classifier only when a
+    (1) matters more than it looks: without it, evidence reached the model only when a
     merchant's header happened to be spelled the way the allow-list spells it, so a correctly
-    mapped but oddly named title column would be classified with nothing to go on.
+    mapped but differently named title column was screened with nothing to go on.
     """
     excluded_columns = {mappings[target] for target in MODEL_EXCLUDED_TARGETS if target in mappings}
-    aliases = descriptive_aliases or {}
     fields: dict[str, Any] = {}
 
     for target, column in mappings.items():
@@ -707,8 +701,6 @@ def _descriptive_fields(
             continue
         if normalize_key(column) in MODEL_DESCRIPTIVE_FIELDS:
             fields[column] = value
-        elif column in aliases:
-            fields.setdefault(aliases[column], value)
     return fields
 
 
@@ -887,20 +879,21 @@ def _preview_hash(
     ).hexdigest()
 
 
-async def _resolved_mappings(parsed: ParsedCatalog) -> MappingResolution:
+def _resolved_mappings(parsed: ParsedCatalog) -> MappingResolution:
     """Settle the column mapping before anything is staged.
 
-    A tie the model cannot break is still a hard stop: guessing which of two columns is the
-    price is exactly the kind of decision that has to come back to the merchant.
+    A tie is a hard stop: guessing which of two columns is the price is exactly the kind of
+    decision that has to go back to the merchant, and the template exists so it never arises.
     """
-    resolution = await resolve_mappings(parsed.candidates)
+    resolution = resolve_mappings(parsed.candidates)
     if resolution.unresolved:
         first = resolution.unresolved[0]
         raise api_error(
             400,
             "BAD_CATALOG",
-            f"Multiple columns could map to {first['target']}: "
-            f"{', '.join(first['candidate_columns'])}. Rename or remove one and upload again.",
+            f"Two columns could both be {first['target']}: "
+            f"{', '.join(first['candidate_columns'])}. Rename or remove one and upload again, "
+            f"or start from the catalog template.",
             unresolved_fields=resolution.unresolved,
         )
     return resolution
@@ -909,7 +902,7 @@ async def _resolved_mappings(parsed: ParsedCatalog) -> MappingResolution:
 async def stage_and_clean_catalog(
     *, merchant: dict[str, Any], parsed: ParsedCatalog
 ) -> dict[str, Any]:
-    mapping = await _resolved_mappings(parsed)
+    mapping = _resolved_mappings(parsed)
     upload_id = new_id("upl")
     run_id = new_id("run")
     now = utc_now()
@@ -980,7 +973,7 @@ async def stage_and_clean_catalog(
     records = [
         {
             "source_record_id": row.source_record_id,
-            "fields": _descriptive_fields(row, mapping.mappings, mapping.descriptive_aliases),
+            "fields": _descriptive_fields(row, mapping.mappings),
         }
         for row in parsed.rows
     ]
@@ -1103,98 +1096,73 @@ async def stage_and_clean_catalog(
 def catalog_image_url(image_id: str) -> str:
     return f"{settings.catalog_image_base_url.rstrip('/')}/catalog/images/{image_id}"
 
-
-async def attach_catalog_images(
-    *, merchant: dict[str, Any], upload_id: str, content: bytes, filename: str
+async def attach_product_images(
+    *, merchant: dict[str, Any], content: bytes, filename: str
 ) -> dict[str, Any]:
-    """Bind a ZIP of pictures to the rows of a staged upload, by file name.
+    """Bind a ZIP of photos to a merchant's live products, by file name.
 
-    This rewrites staged rows, so it is only allowed while the upload is still awaiting
-    review - never after publication - and it recomputes the preview hash, which invalidates
-    any approval token the merchant was holding. That is the intent: the preview they approve
-    has to be the preview they last looked at, pictures included.
+    Photos are the one thing merchants add after the fact, so this deliberately does not wait
+    for a catalog upload: it matches against the products that are already in the catalog and
+    updates them in place. It only ever writes `image_url` - never a price, a title or stock -
+    so it cannot change what a product *is*, only how it looks.
     """
     merchant_id = merchant["merchant_id"]
-    with connect() as connection:
-        run = connection.execute(
-            "SELECT r.*,s.source_sha256 FROM catalog_clean_runs r "
-            "JOIN catalog_sources s ON s.upload_id=r.upload_id "
-            "WHERE r.upload_id=? AND r.merchant_id=?",
-            (upload_id, merchant_id),
-        ).fetchone()
-        if not run:
-            raise api_error(404, "NO_CATALOG_UPLOAD", "The catalog upload was not found.")
-        if run["status"] != "review_ready":
-            raise api_error(
-                409,
-                "CATALOG_NOT_READY",
-                "Images can only be added while an upload is awaiting review.",
-            )
-        rows = connection.execute(
-            "SELECT * FROM catalog_clean_rows WHERE run_id=? ORDER BY row_number",
-            (run["run_id"],),
-        ).fetchall()
-
     try:
         images, skipped = extract_image_archive(content, filename)
     except ImageArchiveError as exc:
         raise api_error(400, "BAD_IMAGE_ARCHIVE", str(exc)) from exc
 
-    clean_rows = [
-        {
-            "source_record_id": row["source_record_id"],
-            "row_number": row["row_number"],
-            "status": row["status"],
-            "canonical": json_load(row["canonical_json"], None),
-            "issues": json_load(row["issues_json"], []),
-        }
-        for row in rows
-    ]
-    # A previous archive's bindings are cleared, because those files are about to be
-    # deleted. A URL the merchant typed into the workbook is never cleared and never
-    # overwritten - the two ways of supplying an image do not get to overrule each other.
-    keeps_own_image = 0
-    for row in clean_rows:
-        canonical = row["canonical"]
-        if not canonical:
-            continue
-        cleaning = canonical["attributes"]["catalog_cleaning"]
-        if cleaning.get("image_source") == "image_archive":
-            canonical["image_url"] = None
-            cleaning["image_source"] = "none"
-            cleaning.pop("image_match", None)
-        elif canonical.get("image_url"):
-            keeps_own_image += 1
+    with connect() as connection:
+        rows = connection.execute(
+            "SELECT sku,title,image_url FROM products WHERE merchant_id=? ORDER BY sku",
+            (merchant_id,),
+        ).fetchall()
+    if not rows:
+        raise api_error(
+            409,
+            "NO_PRODUCTS",
+            "Publish a catalog before adding photos - there is nothing to attach them to yet.",
+        )
 
+    products = [dict(row) for row in rows]
     targets = [
         ImageTarget(
-            source_record_id=row["source_record_id"],
-            row_number=row["row_number"],
-            sku=row["canonical"]["sku"],
-            title=row["canonical"]["title"],
+            source_record_id=product["sku"],
+            row_number=index,
+            sku=product["sku"],
+            title=product["title"],
         )
-        for row in clean_rows
-        if row["canonical"] and not row["canonical"].get("image_url")
+        for index, product in enumerate(products, start=1)
     ]
     matches, match_source = await match_images(images, targets)
 
     now = utc_now()
-    by_record = {row["source_record_id"]: row for row in clean_rows}
     stored: list[dict[str, Any]] = []
+    matched_skus: set[str] = set()
     with transaction() as connection:
-        # A second archive replaces the first: the merchant is correcting the match, not
-        # accumulating copies of every attempt.
-        connection.execute("DELETE FROM catalog_images WHERE upload_id=?", (upload_id,))
         for image in images:
             match = matches.get(image.entry_name)
+            if not match:
+                # Nothing references an unmatched photo, so storing its bytes would leave an
+                # orphan - and hand the merchant's browser a URL that 404s the moment the
+                # sweep below runs.
+                stored.append(
+                    {
+                        "entry_name": image.entry_name,
+                        "content_type": image.content_type,
+                        "byte_count": image.byte_count,
+                        "url": None,
+                        "matched": False,
+                    }
+                )
+                continue
             image_id = new_id("img")
             connection.execute(
-                "INSERT INTO catalog_images(image_id,upload_id,merchant_id,archive_name,entry_name,"
+                "INSERT INTO catalog_images(image_id,merchant_id,archive_name,entry_name,"
                 "stem,content_type,byte_count,sha256,image_bytes,created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (
                     image_id,
-                    upload_id,
                     merchant_id,
                     filename,
                     image.entry_name,
@@ -1212,57 +1180,58 @@ async def attach_catalog_images(
                 "content_type": image.content_type,
                 "byte_count": image.byte_count,
                 "url": catalog_image_url(image_id),
-                "matched": bool(match),
-                **({} if not match else match),
+                "matched": True,
+                **match,
             }
             stored.append(record)
-            if not match:
-                continue
-            row = by_record[match["source_record_id"]]
-            row["canonical"]["image_url"] = record["url"]
-            row["canonical"]["attributes"]["catalog_cleaning"]["image_source"] = "image_archive"
-            row["canonical"]["attributes"]["catalog_cleaning"]["image_match"] = {
-                "entry_name": image.entry_name,
-                "method": match["method"],
-                "confidence": match["confidence"],
-            }
+            sku = match["source_record_id"]
+            matched_skus.add(sku)
+            previous = connection.execute(
+                "SELECT image_url FROM products WHERE merchant_id=? AND sku=?",
+                (merchant_id, sku),
+            ).fetchone()
+            connection.execute(
+                "UPDATE products SET image_url=?,updated_at=? WHERE merchant_id=? AND sku=?",
+                (record["url"], now, merchant_id, sku),
+            )
+            record["replaced_url"] = previous["image_url"] if previous else None
+            record["sku"] = sku
+            record["title"] = next(p["title"] for p in products if p["sku"] == sku)
 
-        taxonomy = json_load(run["taxonomy_json"], {})
-        preview_hash = _preview_hash(
-            source_sha256=run["source_sha256"],
-            mappings=json_load(run["mapping_json"], {}),
-            taxonomy=taxonomy,
-            rows=clean_rows,
-        )
-        for row in clean_rows:
-            if row["canonical"]:
-                connection.execute(
-                    "UPDATE catalog_clean_rows SET canonical_json=? "
-                    "WHERE run_id=? AND source_record_id=?",
-                    (canonical_json(row["canonical"]), run["run_id"], row["source_record_id"]),
-                )
-        matched_records = {match["source_record_id"] for match in matches.values()}
-        report = {
-            "archive": filename,
-            "match_source": match_source,
-            "image_count": len(images),
-            "matched_count": len(matched_records),
-            "kept_workbook_images": keeps_own_image,
-            "unmatched_images": [image["entry_name"] for image in stored if not image["matched"]],
-            "products_without_images": [
-                target.row_number
-                for target in targets
-                if target.source_record_id not in matched_records
-                and not by_record[target.source_record_id]["canonical"].get("image_url")
-            ],
-            "skipped_entries": skipped,
-            "images": stored,
+        # Photos this archive replaced are now referenced by nothing, and keeping them would
+        # grow the database every time a merchant corrects a picture.
+        live = connection.execute(
+            "SELECT image_url FROM products WHERE merchant_id=? AND image_url IS NOT NULL",
+            (merchant_id,),
+        ).fetchall()
+        in_use = {
+            row["image_url"].rsplit("/", 1)[-1]
+            for row in live
+            if "/catalog/images/" in row["image_url"]
         }
-        connection.execute(
-            "UPDATE catalog_clean_runs SET image_report_json=?,preview_hash=? WHERE run_id=?",
-            (canonical_json(report), preview_hash, run["run_id"]),
-        )
-    return catalog_upload_preview(merchant_id, upload_id)
+        for row in connection.execute(
+            "SELECT image_id FROM catalog_images WHERE merchant_id=?", (merchant_id,)
+        ).fetchall():
+            if row["image_id"] not in in_use:
+                connection.execute(
+                    "DELETE FROM catalog_images WHERE image_id=?", (row["image_id"],)
+                )
+
+    return {
+        "archive": filename,
+        "match_source": match_source,
+        "image_count": len(images),
+        "matched_count": len(matched_skus),
+        "product_count": len(products),
+        "unmatched_images": [image["entry_name"] for image in stored if not image["matched"]],
+        "products_without_images": [
+            product["sku"]
+            for product in products
+            if product["sku"] not in matched_skus and not product["image_url"]
+        ],
+        "skipped_entries": skipped,
+        "images": stored,
+    }
 
 
 def catalog_upload_preview(
@@ -1352,7 +1321,6 @@ def catalog_upload_preview(
         "mappings": json_load(run["mapping_json"], {}),
         "mapping_report": json_load(run["mapping_report_json"], {}),
         "diagnostics": json_load(run["diagnostics_json"], {}),
-        "images": json_load(run["image_report_json"], {}),
         "summary": summary,
         "taxonomy": json_load(run["taxonomy_json"], {}),
         "approval": {

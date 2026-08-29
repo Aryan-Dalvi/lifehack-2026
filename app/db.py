@@ -132,7 +132,6 @@ CREATE TABLE IF NOT EXISTS catalog_clean_runs (
     mapping_json TEXT NOT NULL DEFAULT '{}',
     mapping_report_json TEXT NOT NULL DEFAULT '{}',
     diagnostics_json TEXT NOT NULL DEFAULT '{}',
-    image_report_json TEXT NOT NULL DEFAULT '{}',
     taxonomy_json TEXT NOT NULL DEFAULT '{}',
     summary_json TEXT NOT NULL DEFAULT '{}',
     preview_hash TEXT,
@@ -162,7 +161,6 @@ CREATE TABLE IF NOT EXISTS catalog_clean_rows (
 
 CREATE TABLE IF NOT EXISTS catalog_images (
     image_id TEXT PRIMARY KEY,
-    upload_id TEXT NOT NULL REFERENCES catalog_sources(upload_id) ON DELETE CASCADE,
     merchant_id TEXT NOT NULL REFERENCES merchants(merchant_id) ON DELETE CASCADE,
     archive_name TEXT NOT NULL,
     entry_name TEXT NOT NULL,
@@ -174,7 +172,7 @@ CREATE TABLE IF NOT EXISTS catalog_images (
     created_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS catalog_images_by_upload ON catalog_images(upload_id);
+CREATE INDEX IF NOT EXISTS catalog_images_by_merchant ON catalog_images(merchant_id);
 
 CREATE TRIGGER IF NOT EXISTS catalog_sources_immutable
 BEFORE UPDATE ON catalog_sources
@@ -372,7 +370,6 @@ _ADDED_COLUMNS = (
     ("sessions", "expires_at", "TEXT"),
     ("catalog_clean_runs", "mapping_report_json", "TEXT NOT NULL DEFAULT '{}'"),
     ("catalog_clean_runs", "diagnostics_json", "TEXT NOT NULL DEFAULT '{}'"),
-    ("catalog_clean_runs", "image_report_json", "TEXT NOT NULL DEFAULT '{}'"),
 )
 
 

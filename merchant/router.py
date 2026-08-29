@@ -29,12 +29,13 @@ from app.settings import settings
 from merchant.catalog_images import MAX_ARCHIVE_BYTES
 from merchant.catalog_pipeline import (
     approve_catalog_upload,
-    attach_catalog_images,
+    attach_product_images,
     catalog_image_url,
     catalog_upload_preview,
     parse_catalog,
     stage_and_clean_catalog,
 )
+from merchant.catalog_template import TEMPLATE_FILENAME, build_template
 
 merchant_router = APIRouter(prefix="/merchant", tags=["merchant"])
 catalog_router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -216,30 +217,33 @@ async def ingest_catalog(
     return await stage_and_clean_catalog(merchant=merchant, parsed=parsed)
 
 
-@merchant_router.post("/{merchant_id}/catalog/uploads/{upload_id}/images")
-async def ingest_catalog_images(
+@merchant_router.post("/{merchant_id}/catalog/images")
+async def ingest_product_images(
     merchant_id: str,
-    upload_id: str,
     request: Request,
     x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
 ) -> dict[str, Any]:
-    """Attach a ZIP of product pictures to a staged upload, matched by file name."""
+    """Attach a ZIP of product photos to the live catalog, matched by file name.
+
+    Photos do not go through the staged review that catalog rows do: they only ever set
+    `image_url`, so the worst a bad match can do is show the wrong picture, which the
+    merchant can see and correct by uploading a corrected archive.
+    """
     assert_merchant(merchant_id, x_merchant_key)
     merchant = merchant_config(merchant_id)
     if "multipart/form-data" not in request.headers.get("content-type", ""):
-        raise api_error(400, "BAD_IMAGE_ARCHIVE", "Upload the images as a multipart .zip file.")
+        raise api_error(400, "BAD_IMAGE_ARCHIVE", "Upload the photos as a multipart .zip file.")
     form = await request.form()
     upload = form.get("file")
     if upload is None or not hasattr(upload, "read"):
-        raise api_error(400, "BAD_IMAGE_ARCHIVE", "Choose a .zip file of product images.")
+        raise api_error(400, "BAD_IMAGE_ARCHIVE", "Choose a .zip file of product photos.")
     content = await upload.read()
     if len(content) > MAX_ARCHIVE_BYTES:
         raise api_error(413, "TOO_LARGE", "Image archives are limited to 25 MB.")
-    return await attach_catalog_images(
+    return await attach_product_images(
         merchant=merchant,
-        upload_id=upload_id,
         content=content,
-        filename=getattr(upload, "filename", "images.zip") or "images.zip",
+        filename=getattr(upload, "filename", "photos.zip") or "photos.zip",
     )
 
 
@@ -451,6 +455,19 @@ def catalog_product_route(
     """merchant_id is a required query parameter — there is no unscoped product read."""
     return catalog_product(
         sku, merchant_id, include_unpublished=is_merchant(merchant_id, x_merchant_key)
+    )
+
+
+@catalog_router.get("/template")
+def catalog_template() -> Response:
+    """The blank catalog workbook. Public: it contains no merchant data, only the shape."""
+    return Response(
+        content=build_template(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{TEMPLATE_FILENAME}"',
+            "Cache-Control": "public, max-age=3600",
+        },
     )
 
 

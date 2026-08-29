@@ -3537,3 +3537,24 @@ img {
 }
 
 .classification-preview td:first-child { width: 56px; }
+
+.section-heading .template-link {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: white;
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.section-heading .template-link:hover {
+  border-color: var(--sage-500);
+  background: var(--sage-50);
+  color: var(--sage-700);
+}

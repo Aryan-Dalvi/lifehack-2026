@@ -42,6 +42,7 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
     ("POST", "/consumer/login"): "exchanging a password for the credential",
     ("POST", "/merchant/onboard"): "creating the merchant and its key",
     ("GET", "/catalog/search"): "public storefront; merchant_id is required and scopes it",
+    ("GET", "/catalog/template"): "a blank workbook; the shape of a catalog, no merchant data",
     ("GET", "/catalog/product/{sku}"): "public storefront; merchant_id is required and scopes it",
     ("GET", "/bank/token/{bank_token}"): "issuer simulator; the bank token is itself the secret",
 }

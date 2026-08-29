@@ -1,9 +1,31 @@
-import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, ExternalLink, FileSpreadsheet, Images, Link2, LoaderCircle, LockKeyhole, RefreshCw, Sparkles, Store, TriangleAlert } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, Download, ExternalLink, FileSpreadsheet, Images, Link2, LoaderCircle, LockKeyhole, RefreshCw, Sparkles, Store, TriangleAlert } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { type ChangeEvent, useEffect, useState } from "react";
 import { api, getMerchantKey, money, setMerchantKey } from "../../api";
 import { StagedImage } from "./StagedImage";
 import type { Product } from "../../types";
+
+type ImageReport = {
+  archive: string;
+  match_source: string;
+  image_count: number;
+  matched_count: number;
+  product_count: number;
+  unmatched_images: string[];
+  products_without_images: string[];
+  skipped_entries: Array<{ entry: string; reason: string }>;
+  images: Array<{
+    image_id?: string;
+    entry_name: string;
+    url: string | null;
+    matched: boolean;
+    sku?: string;
+    title?: string;
+    method?: string;
+    confidence?: number;
+    reason?: string;
+  }>;
+};
 
 type MerchantConfig = {
   merchant_id: string;
@@ -30,10 +52,9 @@ type UploadResult = {
   mappings: Record<string, string>;
   mapping_report: {
     source: string;
-    model_assisted: boolean;
-    descriptive_aliases: Record<string, string>;
-    decisions: Array<{ target: string; column: string; method: string; confidence: number; reason: string }>;
+    decisions: Array<{ target: string; column: string; method: string; reason: string }>;
     unresolved: Array<{ target: string; candidate_columns: string[]; reason: string }>;
+    ignored_columns: string[];
   };
   diagnostics: {
     headline: string;
@@ -48,17 +69,6 @@ type UploadResult = {
       example_rows: number[];
       blocking: boolean;
     }>;
-  };
-  images: {
-    archive?: string;
-    match_source?: string;
-    image_count?: number;
-    matched_count?: number;
-    kept_workbook_images?: number;
-    unmatched_images?: string[];
-    products_without_images?: number[];
-    skipped_entries?: Array<{ entry: string; reason: string }>;
-    images?: Array<{ image_id: string; entry_name: string; url: string; matched: boolean; method?: string; confidence?: number; reason?: string }>;
   };
   partial_success: boolean;
   summary: { input_rows: number; ready: number; review_required: number; rejected: number; fallback_rows: number };
@@ -118,6 +128,7 @@ export function MerchantAdmin() {
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
+  const [imageReport, setImageReport] = useState<ImageReport | null>(null);
   const [loadingReview, setLoadingReview] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
@@ -165,17 +176,19 @@ export function MerchantAdmin() {
 
   const uploadImages = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !config || !upload) return;
+    if (!file || !config) return;
     setUploadingImages(true);
     setError(null);
     try {
       const form = new FormData();
       form.append("file", file);
-      // Binding pictures rewrites the staged rows, so the response is a fresh preview with
-      // a new approval token - replacing the one held here rather than merging into it.
-      setUpload(await api<UploadResult>(`/merchant/${config.merchant_id}/catalog/uploads/${upload.upload_id}/images`, { method: "POST", body: form }));
+      // Photos apply to the live catalog straight away, so this needs no staged upload and
+      // no approval - refresh the product strip to show what actually changed.
+      setImageReport(await api<ImageReport>(`/merchant/${config.merchant_id}/catalog/images`, { method: "POST", body: form }));
+      const catalog = await api<{ results: Product[] }>(`/catalog/search?merchant_id=${config.merchant_id}&category=skincare&limit=5`);
+      setProducts(catalog.results);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "The image archive could not be read.");
+      setError(requestError instanceof Error ? requestError.message : "The photo archive could not be read.");
     } finally {
       setUploadingImages(false);
       event.target.value = "";
@@ -287,7 +300,6 @@ export function MerchantAdmin() {
 
   const mappings = upload?.mappings ?? defaultMappings;
   const diagnostics = upload?.diagnostics;
-  const imageReport = upload?.images?.image_count ? upload.images : null;
   const productCount = upload?.ready ?? 6;
   const issueCount = upload?.skipped ?? 0;
   const reviewComplete = !upload || upload.products.length === upload.approval.reviewed_row_count_required;
@@ -335,7 +347,12 @@ export function MerchantAdmin() {
           <section className="setup-section">
             <div className="section-number">2</div>
             <div className="section-content">
-              <div className="section-heading"><FileSpreadsheet size={20} /><h2>Your catalog</h2></div>
+              <div className="section-heading">
+                <FileSpreadsheet size={20} /><h2>Your catalog</h2>
+                <a className="template-link" href="/api/catalog/template" download>
+                  <Download size={14} /> Download the Excel template
+                </a>
+              </div>
               <label className={`dropzone ${uploading ? "is-uploading" : ""}`}>
                 <input type="file" accept=".csv,.xlsx,.json" onChange={(event) => void uploadCatalog(event)} disabled={uploading} />
                 {uploading ? <LoaderCircle className="spin" size={30} /> : <CloudUpload size={32} />}
@@ -350,11 +367,11 @@ export function MerchantAdmin() {
               </div>
 
               <label className={`dropzone dropzone--images ${uploadingImages ? "is-uploading" : ""}`}>
-                <input type="file" accept=".zip" onChange={(event) => void uploadImages(event)} disabled={!upload || uploadingImages} />
+                <input type="file" accept=".zip" onChange={(event) => void uploadImages(event)} disabled={uploadingImages} />
                 {uploadingImages ? <LoaderCircle className="spin" size={26} /> : <Images size={28} />}
                 <span>
-                  {uploadingImages ? "Matching pictures to products…" : upload ? "Add a ZIP of product photos" : "Upload a catalog first, then add photos"}
-                  <small>Name each file after the product or its SKU · PNG, JPEG, WebP or GIF · maximum 25 MB</small>
+                  {uploadingImages ? "Matching photos to your products…" : "Add a ZIP of product photos"}
+                  <small>Applies to your live catalog right away · name each file after the product or its SKU · PNG, JPEG, WebP or GIF · maximum 25 MB</small>
                 </span>
                 <strong>{uploadingImages ? "Working" : "Browse ZIP"}</strong>
               </label>
@@ -363,43 +380,32 @@ export function MerchantAdmin() {
                 <div className="image-report">
                   <header>
                     <strong>{imageReport.archive}</strong>
-                    <span className="ready-count"><Check size={14} /> {imageReport.matched_count} of {imageReport.image_count} matched</span>
+                    <span className="ready-count"><Check size={14} /> {imageReport.matched_count} of {imageReport.image_count} photos matched</span>
                     {imageReport.match_source?.startsWith("hybrid") ? <span className="ai-badge"><Sparkles size={12} /> Assistant matched some names</span> : null}
                   </header>
                   <div className="image-strip">
                     {(imageReport.images ?? []).map((image) => (
-                      <figure key={image.image_id} className={image.matched ? "" : "is-unmatched"}>
+                      <figure key={image.entry_name} className={image.matched ? "" : "is-unmatched"}>
                         <StagedImage src={image.url} alt={image.entry_name} />
                         <figcaption>
-                          {image.entry_name}
-                          <small>{image.matched ? `${image.method?.replaceAll("_", " ")} · ${Math.round((image.confidence ?? 0) * 100)}%` : "No product matched"}</small>
+                          {image.matched ? image.title ?? image.sku : image.entry_name}
+                          <small>{image.matched ? `${image.sku} · ${image.method?.replaceAll("_", " ")}` : "No product matched"}</small>
                         </figcaption>
                       </figure>
                     ))}
                   </div>
-                  {imageReport.products_without_images?.length ? <small>Rows still without a picture: {imageReport.products_without_images.join(", ")}.</small> : null}
-                  {imageReport.kept_workbook_images ? <small>{imageReport.kept_workbook_images} product{imageReport.kept_workbook_images === 1 ? "" : "s"} kept the image link from your spreadsheet.</small> : null}
-                  {imageReport.skipped_entries?.length ? <small>Skipped {imageReport.skipped_entries.length} file{imageReport.skipped_entries.length === 1 ? "" : "s"}: {imageReport.skipped_entries.slice(0, 3).map((entry) => `${entry.entry} (${entry.reason})`).join("; ")}.</small> : null}
+                  {imageReport.products_without_images?.length ? <small>Still without a photo: {imageReport.products_without_images.join(", ")}.</small> : null}
+                                    {imageReport.skipped_entries?.length ? <small>Skipped {imageReport.skipped_entries.length} file{imageReport.skipped_entries.length === 1 ? "" : "s"}: {imageReport.skipped_entries.slice(0, 3).map((entry) => `${entry.entry} (${entry.reason})`).join("; ")}.</small> : null}
                 </div>
               ) : null}
 
               <div className="mapping-block">
-                <div>
-                  <strong>Auto-mapped columns</strong>
-                  {upload?.mapping_report.model_assisted ? <span className="ai-badge"><Sparkles size={12} /> Assistant helped</span> : null}
-                </div>
-                <ul>{Object.entries(mappings).map(([target, source]) => {
-                  const decision = upload?.mapping_report.decisions.find((item) => item.target === target);
-                  const byModel = decision?.method.startsWith("model");
-                  return (
-                    <li key={target} className={byModel ? "is-model-mapped" : ""} title={decision?.reason}>
-                      <span>{source}</span><ArrowRight size={13} /><strong>{target.replace("_cents", "")}</strong>
-                      {byModel ? <em><Sparkles size={11} /> {Math.round((decision?.confidence ?? 0) * 100)}%</em> : null}
-                    </li>
-                  );
-                })}</ul>
-                {Object.entries(upload?.mapping_report.descriptive_aliases ?? {}).length ? (
-                  <small>Also read as product detail: {Object.entries(upload!.mapping_report.descriptive_aliases).map(([column, name]) => `${column} → ${name}`).join(", ")}.</small>
+                <div><strong>Mapped columns</strong></div>
+                <ul>{Object.entries(mappings).map(([target, source]) => (
+                  <li key={target}><span>{source}</span><ArrowRight size={13} /><strong>{target.replace("_cents", "")}</strong></li>
+                ))}</ul>
+                {upload?.mapping_report.ignored_columns.length ? (
+                  <small>Not recognised, so skipped: {upload.mapping_report.ignored_columns.join(", ")}. Rename a column to match the template if it holds product detail.</small>
                 ) : null}
               </div>
 

@@ -11,8 +11,9 @@ any live catalog change.
 
 The canonical application representation is versioned JSON stored in the database. UTF-8 CSV and
 `catalog-source.v1` JSON are supported as fallbacks. Product images arrive one of exactly two ways -
-an `image_url` column, or a separate ZIP archive matched by file name (see "Product images"); images
-embedded in the workbook, macros, and external workbook links are not accepted as catalog facts.
+an `image_url` column, or a ZIP archive matched to live products by file name (see "Product
+images"); images embedded in the workbook, macros, and external workbook links are not accepted as
+catalog facts.
 Formula-like cell content is retained as raw evidence but quarantined for merchant review.
 
 ## XLSX workbook contract
@@ -55,55 +56,73 @@ Unknown values should be blank rather than guessed.
 
 ## Column mapping
 
-Headers are matched to fields by an alias table first, and that result always wins. The model is
-asked only about what the aliases could not settle - a header the table has never seen, or two
-headers competing for one field - and it is given the header wording plus at most three short sample
-values per column. Its answer is validated back against the real headers before anything is applied:
-the column must exist, the field must still be free, an ambiguous field must be resolved to one of
-its own candidate columns, no column may be used twice, and anything below 0.55 confidence is
-discarded. A tie the model cannot break still stops the upload for explicit correction.
+Mapping is deterministic and costs nothing. Headers are matched against a fixed alias table,
+and the downloadable template ships exactly those headers - so a file filled in from the
+template maps perfectly, every time, with no model call and no latency.
 
-The model names columns; it never reads or authors values. Every mapped value goes through the same
-deterministic normalisation, so a mapping mistake can misfile a column but cannot invent a price.
-The model may also rename an unrecognised descriptive column to a canonical name (for example
-`Who it's for` to `skin_types`) so it reaches the classifier as evidence. Columns mapped to locked
-facts are excluded from classifier input whatever they are renamed to.
+- A header the table does not know is **ignored and reported**, never guessed at. Merchants
+  keep their own internal columns (cost, supplier, notes) in the file without consequence,
+  and `mapping_report.ignored_columns` tells them what had no effect.
+- Two headers competing for one field **stop the upload** for correction.
+- Every decision appears in `mapping_report.decisions` with its method (`exact_alias`).
 
-Every mapping decision is returned in `mapping_report` with its method (`exact_alias`, `model`,
-`model_descriptive`), confidence and reason, and is shown to the merchant before publication.
+There is deliberately no model in this path. Naming columns is a job a template solves better
+than a model does: cheaper, instant, and the same answer every time.
+
+## The catalog template
+
+`GET /catalog/template` returns `skincare-catalog-template.xlsx`. It is public - it holds the
+shape of a catalog, never a merchant's data. Two sheets:
+
+- **Products** - the header row, styled so required columns stand out, plus two greyed example
+  rows to delete, and a yes/no validation list on `fragrance_free`.
+- **How to fill this in** - every column, whether it is required, and what to put in it.
+
+Five columns are required: `sku`, `title`, `price`, `stock`, `ingredients`. Everything else is
+optional - evidence the assistant uses when present and skips when blank. A blank cell is
+always preferred to a guess.
+
+Every template header is either a mapped field or recognised evidence; a test asserts this, so
+a column cannot be added to the template that the importer would silently ignore.
 
 ## Product images
 
-Two supported routes, and neither overrules the other:
+Two routes, and neither overrules the other:
 
-1. **`image_url` column.** Accepted only as an `https://` address or a path on this store. A
-   `javascript:`, `data:`, protocol-relative or other scheme is a row-level rejection with a
-   merchant-facing message, because the value is rendered in an `<img src>` on every shopper's page.
-2. **ZIP archive**, uploaded to `POST /merchant/{merchant_id}/catalog/uploads/{upload_id}/images`
-   while the upload is awaiting review. Each file is named after the product or its SKU.
+1. **`image_url` column** in the workbook. Accepted only as an `https://` address or a path on
+   this store. A `javascript:`, `data:`, protocol-relative or other scheme is a row-level
+   rejection with a merchant-facing message, because the value is rendered in an `<img src>`
+   on every shopper's page.
+2. **ZIP archive** posted to `POST /merchant/{merchant_id}/catalog/images`, matched to the
+   **live catalog** by file name and applied immediately.
+
+Photos deliberately do not go through staged review. They only ever set `image_url` - never a
+price, title or stock - so the worst a wrong match can do is show the wrong picture, which the
+merchant can see in the report and correct by uploading a corrected archive. Requiring a
+catalog upload first made the feature unreachable for any merchant who already had a catalog,
+which is precisely when photos get added.
 
 Archive limits: 25 MB uploaded, 100 MB expanded, 500 files, 5 MB per image, PNG/JPEG/WebP/GIF
-decided by magic bytes rather than by extension. Path traversal, absolute paths, symlinks, hidden
-entries and `__MACOSX/` are refused per entry, with the reason reported back.
+decided by magic bytes rather than by extension. Path traversal, absolute paths, symlinks,
+hidden entries and `__MACOSX/` are refused per entry, with the reason reported back.
 
-Matching is deterministic first - exact SKU, then exact product name, then a fuzzy name match that
-requires a clear winner - and only leftover files and product rows are shown to the model, whose
-answer must name real ids, stay one image to one product, and clear 0.6 confidence. An unmatched
-file is a safe outcome and is reported rather than guessed at.
+Matching is deterministic first - exact SKU, then exact product name, then a fuzzy name match
+that requires a clear winner - and only leftover files and products are shown to the model,
+whose answer must name real ids, stay one photo to one product, and clear 0.6 confidence. In
+practice a well-named archive costs zero model calls. An unmatched file is a safe outcome: it
+is reported, and its bytes are not stored at all.
 
-A ZIP may replace a binding from a previous ZIP but never an `image_url` the merchant typed into the
-workbook. Attaching images rewrites staged rows, so it recomputes the preview hash and invalidates
-any approval token already issued: the preview a merchant approves is always the one they last saw.
-
-Bytes are stored with the upload and served from `GET /catalog/images/{image_id}`, public only once
-the image is on a live product in a published store and merchant-authenticated before that.
+A replaced photo's bytes are swept once nothing references them. Images are served from
+`GET /catalog/images/{image_id}`, public only once the photo is on a live product in a
+published store, and merchant-authenticated before that.
 
 ## Upload diagnostics
 
-Every preview carries a `diagnostics` block explaining why rows did not make it through. Rows are
-grouped, counted and coded deterministically; the model is only allowed to rewrite the prose of a
-group it was handed, and must return exactly the codes it was given. Counts and row numbers never
-come from the model. If the model is unavailable the deterministic wording stands.
+Every preview carries a `diagnostics` block explaining why rows did not make it through. Rows
+are grouped, counted and coded deterministically; the model is only allowed to rewrite the
+prose of a group it was handed, and must return exactly the codes it was given. Counts and row
+numbers never come from the model. If the model is unavailable the deterministic wording
+stands. Unrecognised columns are surfaced here too, as a note.
 
 ## Limits and deterministic parsing
 
@@ -114,8 +133,7 @@ come from the model. If the model is unavailable the deterministic wording stand
 - XLSX macros and external links are rejected. Formula-like cells are held for review rather than
   evaluated. SKUs formatted with leading zeroes remain text when the worksheet number format makes
   that intent explicit.
-- An ambiguous worksheet stops the upload for explicit correction. An ambiguous field mapping is
-  offered to the model first, and stops the upload only if the model cannot settle it either.
+- An ambiguous worksheet or field mapping stops the upload for explicit correction.
 - SKU, price, currency, stock, ratings, and image URLs are locked deterministic facts and are never
   supplied to or generated by the categorization model.
 
@@ -123,8 +141,6 @@ come from the model. If the model is unavailable the deterministic wording stand
 
 1. Upload `.xlsx`, `.csv`, or JSON to `POST /merchant/{merchant_id}/catalog/uploads` (the legacy
    `/catalog` path is an alias). The response is a staged preview; it does not change live products.
-1a. Optionally attach product photos with `POST .../uploads/{upload_id}/images`. This reissues the
-   preview and its approval tokens.
 2. Review every page with `GET /merchant/{merchant_id}/catalog/uploads/{upload_id}` using `offset`
    and `limit`.
 3. Choose the preview's `replace` or `upsert` plan. Replace is blocked while any row is held for

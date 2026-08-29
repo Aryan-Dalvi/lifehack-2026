@@ -337,10 +337,12 @@ async def summarize_upload(
             f"Two columns could both be {unresolved['target']}: "
             f"{', '.join(unresolved['candidate_columns'])}. Rename or remove one and upload again."
         )
-    if mapping_report.get("model_assisted"):
+    ignored = mapping_report.get("ignored_columns") or []
+    if ignored:
         notes.append(
-            "Some columns were matched to catalog fields by the assistant. "
-            "Check the mapping panel before publishing."
+            f"These columns were not recognised and had no effect: {', '.join(ignored[:8])}. "
+            "That is fine for your own internal columns - but if one of them holds product "
+            "detail, rename it to match the catalog template so the assistant can use it."
         )
 
     diagnostics = {
