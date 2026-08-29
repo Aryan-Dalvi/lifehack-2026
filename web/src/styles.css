@@ -1797,7 +1797,17 @@ img {
   font-size: 8px;
 }
 
-.url-row > svg { flex: 0 0 auto; }
+.hosted-qr {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 3px;
+  border-radius: 3px;
+  color: var(--ink);
+  background: white;
+}
+
+.hosted-qr svg { display: block; }
 
 .publish-bar {
   position: sticky;

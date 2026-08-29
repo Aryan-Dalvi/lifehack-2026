@@ -44,6 +44,7 @@ test("merchant onboarding and both deployment options render", async ({ page }) 
   await expect(page.getByRole("heading", { name: "Website widget" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Hosted storefront" })).toBeVisible();
   await expect(page.getByText("Fixed for Phase 0")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open hosted storefront QR code" })).toBeVisible();
   await page.screenshot({ path: "test-results/merchant-admin.png" });
   expect(consoleErrors).toEqual([]);
 });

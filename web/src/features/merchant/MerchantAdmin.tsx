@@ -1,4 +1,5 @@
-import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, ExternalLink, FileSpreadsheet, Link2, LoaderCircle, LockKeyhole, QrCode, RefreshCw, Store } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, ExternalLink, FileSpreadsheet, Link2, LoaderCircle, LockKeyhole, RefreshCw, Store } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { type ChangeEvent, useEffect, useState } from "react";
 import { api, money } from "../../api";
 import type { Product } from "../../types";
@@ -197,7 +198,7 @@ export function MerchantAdmin() {
                 </article>
                 <article>
                   <h3>Hosted storefront</h3><p>Launch a ready-to-go storefront hosted by Sway.</p>
-                  <div className="url-row"><code>{config.hosted_url}</code><button type="button" onClick={() => void copy("url", config.hosted_url)}><Clipboard size={15} /> {copied === "url" ? "Copied" : "Copy"}</button><QrCode size={34} /></div>
+                  <div className="url-row"><code>{config.hosted_url}</code><button type="button" onClick={() => void copy("url", config.hosted_url)}><Clipboard size={15} /> {copied === "url" ? "Copied" : "Copy"}</button><a className="hosted-qr" href={config.hosted_url} aria-label="Open hosted storefront QR code"><QRCodeSVG value={config.hosted_url} size={52} level="M" /></a></div>
                   <span><Check size={14} /> Shareable · always up to date</span>
                 </article>
               </div>
@@ -230,4 +231,3 @@ export function MerchantAdmin() {
     </div>
   );
 }
-
