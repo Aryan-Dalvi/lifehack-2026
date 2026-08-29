@@ -1,8 +1,10 @@
-"""Test environment: the suite must never reach a live model, and it must carry credentials.
+"""Test environment: the suite must never reach a live model or a live payment network.
 
-app/settings.py loads .env, so without DEMO_MODE a developer's real OPENAI_API_KEY would make
-the suite billable, slow and non-deterministic. It is set before app.settings is first
-imported - its Settings dataclass reads the environment once, when its class body executes.
+app/settings.py loads .env, so without these forced a developer's real OPENAI_API_KEY or
+PAYMENT_ADAPTER=visa would make the suite billable, slow, non-deterministic, and — for
+payments — dependent on a real sandbox being reachable and fully configured. Both are set
+before app.settings is first imported - its Settings dataclass reads the environment once,
+when its class body executes.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ import os
 import re
 
 os.environ["DEMO_MODE"] = "1"
+os.environ["PAYMENT_ADAPTER"] = "simulator"
 
 import pytest
 from fastapi.testclient import TestClient

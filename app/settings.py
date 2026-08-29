@@ -54,6 +54,25 @@ class Settings:
     web_base_url: str = os.getenv("WEB_BASE_URL", "http://localhost:5173")
     merchant_hard_ceiling_cents: int = int(os.getenv("MERCHANT_HARD_CEILING_CENTS", "50000"))
 
+    # "simulator" (default, always safe) or "visa" (real VisaNet Connect sandbox call).
+    # Never default this to "visa" — an unreachable or misconfigured sandbox must never
+    # silently become the payment path the demo runs on.
+    payment_adapter: str = os.getenv("PAYMENT_ADAPTER", "simulator")
+    visa_api_base_url: str = os.getenv("VISA_API_BASE_URL", "https://sandbox.api.visa.com")
+    visa_endpoint_path: str = os.getenv("VISA_ENDPOINT_PATH", "/acs/v3/payments/authorizations")
+    visa_ssl_cert_path: str | None = os.getenv("VISA_SSL_CERT_PATH") or None
+    visa_ssl_private_key_path: str | None = os.getenv("VISA_SSL_PRIVATE_KEY_PATH") or None
+    visa_ca_bundle_path: str | None = os.getenv("VISA_CA_BUNDLE_PATH") or None
+    visa_api_username: str | None = os.getenv("VISA_API_USERNAME") or None
+    visa_api_password: str | None = os.getenv("VISA_API_PASSWORD") or None
+    visa_mle_key_id: str | None = os.getenv("VISA_MLE_KEY_ID") or None
+    visa_mle_private_key_path: str | None = os.getenv("VISA_MLE_PRIVATE_KEY_PATH") or None
+    # Visa's own public key/cert, used to encrypt outbound MLE fields (distinct from our
+    # private key above, which only decrypts what Visa encrypted back to us). Downloaded
+    # from the Encryption section of the Visa Developer Center project, not generated here.
+    visa_mle_encrypt_cert_path: str | None = os.getenv("VISA_MLE_ENCRYPT_CERT_PATH") or None
+    visa_client_id: str | None = os.getenv("VISA_CLIENT_ID") or None
+
 
 settings = Settings()
 

@@ -10,7 +10,68 @@ from app.db import connect, issuer_connect, json_load, transaction, utc_now
 from app.errors import api_error
 from app.ids import new_id
 from app.settings import settings
+from payments import visa_client
 from payments.tap import canonical_json, sign_record, verify_record
+
+
+class _AuthorizationOutcome:
+    """The one thing the network step decides: did the card network approve this charge.
+
+    Everything before this (mandate chain, cap, issuer token) and after it (writing the
+    order) is unchanged regardless of which adapter answered — this is the sole seam.
+    """
+
+    __slots__ = ("approved", "auth_code", "decline_reason", "simulated")
+
+    def __init__(
+        self,
+        *,
+        approved: bool,
+        auth_code: str | None,
+        simulated: bool,
+        decline_reason: str | None = None,
+    ) -> None:
+        self.approved = approved
+        self.auth_code = auth_code
+        self.simulated = simulated
+        self.decline_reason = decline_reason
+
+
+def _run_authorization(
+    *, amount_cents: int, currency: str, merchant_id: str, card_last4: str
+) -> _AuthorizationOutcome:
+    """Ask a card network to approve or decline. `simulator` (default) always approves,
+    matching the demo's original behaviour exactly. `visa` calls the real sandbox.
+
+    A misconfigured or unreachable Visa adapter is an operational fault, not a business
+    decline, and is raised as one (502) — it must never be mistaken for "the issuer said
+    no", and it must never silently fall back to the simulator's automatic approval.
+    """
+    if settings.payment_adapter != "visa":
+        return _AuthorizationOutcome(
+            approved=True, auth_code=secrets.token_hex(3).upper(), simulated=True
+        )
+    try:
+        result = visa_client.authorize(
+            amount_cents=amount_cents,
+            currency=currency,
+            merchant_id=merchant_id,
+            card_last4=card_last4,
+        )
+    except visa_client.VisaConfigurationError as error:
+        raise api_error(
+            502, "VISA_ADAPTER_UNAVAILABLE", f"The Visa sandbox adapter is not configured: {error}"
+        ) from error
+    except visa_client.VisaAuthorizationError as error:
+        raise api_error(
+            502, "VISA_ADAPTER_UNAVAILABLE", f"The Visa sandbox did not return a usable response: {error}"
+        ) from error
+    return _AuthorizationOutcome(
+        approved=result.approved,
+        auth_code=result.auth_code or (secrets.token_hex(3).upper() if result.approved else None),
+        simulated=False,
+        decline_reason=result.decline_reason,
+    )
 
 DEMO_OTP = "492118"
 
@@ -690,6 +751,39 @@ def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str
                 "order_created": False,
             }
 
+    # The network decision happens outside any DB transaction — a real call is genuine I/O
+    # and must never hold a sqlite lock while it runs.
+    authorization = _run_authorization(
+        amount_cents=cart["total_cents"],
+        currency=cart["currency"],
+        merchant_id=cart["merchant_id"],
+        card_last4="4821",
+    )
+    if not authorization.approved:
+        # The bank token was already consumed above; a declined authorization gives it back
+        # rather than burning a single-use credential on a charge that never happened.
+        with transaction(issuer=True) as issuer_db:
+            issuer_db.execute(
+                "UPDATE issuer_tokens SET status='issued' WHERE bank_token=? AND status='consumed'",
+                (payload["bank_token"],),
+            )
+        record_trust(
+            payload["session_id"],
+            "decision",
+            "Visa authorization declined",
+            "fail",
+            detail={
+                "decline_reason": authorization.decline_reason,
+                "simulated": authorization.simulated,
+            },
+        )
+        return {
+            "status": "declined",
+            "decline_code": "AUTHORIZATION_DECLINED",
+            "reason": authorization.decline_reason or "The issuer declined this authorization.",
+            "order_created": False,
+        }
+
     try:
         with transaction() as connection:
             token_updated = connection.execute(
@@ -700,7 +794,7 @@ def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str
                 raise api_error(409, "TOKEN_REUSED", "The constrained payment token was already used.")
             transaction_id = new_id("txn")
             order_id = new_id("ord")
-            auth_code = secrets.token_hex(3).upper()
+            auth_code = authorization.auth_code
             items = json_load(cart["items_json"], [])
             receipt = {
                 "transaction_id": transaction_id,
@@ -714,12 +808,12 @@ def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str
                 "issuer": issuer_token["issuer"],
                 "eci": issuer_token["eci"],
                 "at": utc_now(),
-                "simulated": True,
+                "simulated": authorization.simulated,
             }
             connection.execute(
                 "INSERT INTO transactions(transaction_id,idempotency_key,session_id,cart_id,status,"
                 "amount_cents,currency,auth_code,issuer,eci,simulated,created_at) "
-                "VALUES (?,?,?,?, 'approved',?,?,?,?,?,1,?)",
+                "VALUES (?,?,?,?, 'approved',?,?,?,?,?,?,?)",
                 (
                     transaction_id,
                     idempotency_key,
@@ -730,6 +824,7 @@ def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str
                     auth_code,
                     issuer_token["issuer"],
                     issuer_token["eci"],
+                    int(authorization.simulated),
                     utc_now(),
                 ),
             )
@@ -755,8 +850,10 @@ def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str
             record_trust(
                 payload["session_id"],
                 "decision",
-                "Simulated Visa authorization approved",
-                detail={"transaction_id": transaction_id, "simulated": True},
+                "Simulated Visa authorization approved"
+                if authorization.simulated
+                else "Visa sandbox authorization approved",
+                detail={"transaction_id": transaction_id, "simulated": authorization.simulated},
                 connection=connection,
             )
             record_trust(
@@ -783,7 +880,7 @@ def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str
         "eci": issuer_token["eci"],
         "amount_cents": cart["total_cents"],
         "currency": cart["currency"],
-        "simulated": True,
+        "simulated": authorization.simulated,
         "receipt": receipt,
         "idempotent_replay": False,
     }
