@@ -248,6 +248,23 @@ def test_partial_updates_clear_optional_fields_and_remove_zero_stock_from_search
     )
     assert search.json()["results"] == []
 
+    # Seeded rows use their routine step as a backwards-compatible display type. Once a
+    # merchant explicitly clears that field, the editor reflects the explicit choice while
+    # retaining the routine metadata used elsewhere by the recommendation flow.
+    cleared_seeded_type = client.put(
+        "/merchant/m_mysa/products/MYSA-CLN-101",
+        headers=keyed(merchant_key),
+        json={"product_type": None},
+    )
+    assert cleared_seeded_type.json()["product_type"] is None
+    with connect() as connection:
+        attributes = json.loads(
+            connection.execute(
+                "SELECT attributes_json FROM products WHERE sku='MYSA-CLN-101'"
+            ).fetchone()["attributes_json"]
+        )
+    assert attributes["routine_step"] == "cleanser"
+
 
 @pytest.mark.parametrize(
     "changes",

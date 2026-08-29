@@ -194,6 +194,11 @@ class ProductUpdate(BaseModel):
 
 def _payload(row: sqlite3.Row) -> dict[str, Any]:
     attributes = json_load(row["attributes_json"], {})
+    product_type = (
+        attributes["product_type"]
+        if "product_type" in attributes
+        else attributes.get("routine_step")
+    )
     return {
         "sku": row["sku"],
         "title": row["title"],
@@ -202,7 +207,7 @@ def _payload(row: sqlite3.Row) -> dict[str, Any]:
         "currency": row["currency"],
         "stock": int(row["stock"]),
         "image_url": row["image_url"],
-        "product_type": attributes.get("product_type") or attributes.get("routine_step"),
+        "product_type": product_type,
         "ingredients": attributes.get("ingredients", []),
         "skin_types": attributes.get("skin_types", []),
         "concerns": attributes.get("concerns", []),
