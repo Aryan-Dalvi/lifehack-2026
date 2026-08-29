@@ -1,7 +1,8 @@
-import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, ExternalLink, FileSpreadsheet, Link2, LoaderCircle, LockKeyhole, RefreshCw, Store } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, ExternalLink, FileSpreadsheet, Images, Link2, LoaderCircle, LockKeyhole, RefreshCw, Sparkles, Store, TriangleAlert } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { type ChangeEvent, useEffect, useState } from "react";
 import { api, getMerchantKey, money, setMerchantKey } from "../../api";
+import { StagedImage } from "./StagedImage";
 import type { Product } from "../../types";
 
 type MerchantConfig = {
@@ -27,6 +28,38 @@ type UploadResult = {
   errors: Array<{ row: number; reason: string; status: "review_required" | "rejected" }>;
   source: { filename: string; format: string; sha256: string; row_count: number };
   mappings: Record<string, string>;
+  mapping_report: {
+    source: string;
+    model_assisted: boolean;
+    descriptive_aliases: Record<string, string>;
+    decisions: Array<{ target: string; column: string; method: string; confidence: number; reason: string }>;
+    unresolved: Array<{ target: string; candidate_columns: string[]; reason: string }>;
+  };
+  diagnostics: {
+    headline: string;
+    source: string;
+    notes: string[];
+    groups: Array<{
+      code: string;
+      title: string;
+      why: string;
+      fix: string;
+      row_count: number;
+      example_rows: number[];
+      blocking: boolean;
+    }>;
+  };
+  images: {
+    archive?: string;
+    match_source?: string;
+    image_count?: number;
+    matched_count?: number;
+    kept_workbook_images?: number;
+    unmatched_images?: string[];
+    products_without_images?: number[];
+    skipped_entries?: Array<{ entry: string; reason: string }>;
+    images?: Array<{ image_id: string; entry_name: string; url: string; matched: boolean; method?: string; confidence?: number; reason?: string }>;
+  };
   partial_success: boolean;
   summary: { input_rows: number; ready: number; review_required: number; rejected: number; fallback_rows: number };
   classifier: { source: string; model: string; prompt_hash: string };
@@ -49,7 +82,16 @@ type UploadResult = {
   products: Array<{
     row: number;
     status: "ready" | "review_required" | "rejected";
-    canonical: { title: string; attributes: { product_type: string | null; categories: string[] } } | null;
+    canonical: {
+      sku: string;
+      title: string;
+      image_url: string | null;
+      attributes: {
+        product_type: string | null;
+        categories: string[];
+        catalog_cleaning: { image_source?: string; image_match?: { entry_name: string; method: string; confidence: number } };
+      };
+    } | null;
     classification: {
       assignments: Array<{
         axis: string;
@@ -75,6 +117,7 @@ export function MerchantAdmin() {
   const [products, setProducts] = useState<Product[]>([]);
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const [loadingReview, setLoadingReview] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
@@ -116,6 +159,25 @@ export function MerchantAdmin() {
       setError(requestError instanceof Error ? requestError.message : "The catalog could not be uploaded.");
     } finally {
       setUploading(false);
+      event.target.value = "";
+    }
+  };
+
+  const uploadImages = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !config || !upload) return;
+    setUploadingImages(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      // Binding pictures rewrites the staged rows, so the response is a fresh preview with
+      // a new approval token - replacing the one held here rather than merging into it.
+      setUpload(await api<UploadResult>(`/merchant/${config.merchant_id}/catalog/uploads/${upload.upload_id}/images`, { method: "POST", body: form }));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "The image archive could not be read.");
+    } finally {
+      setUploadingImages(false);
       event.target.value = "";
     }
   };
@@ -224,6 +286,8 @@ export function MerchantAdmin() {
   }
 
   const mappings = upload?.mappings ?? defaultMappings;
+  const diagnostics = upload?.diagnostics;
+  const imageReport = upload?.images?.image_count ? upload.images : null;
   const productCount = upload?.ready ?? 6;
   const issueCount = upload?.skipped ?? 0;
   const reviewComplete = !upload || upload.products.length === upload.approval.reviewed_row_count_required;
@@ -285,10 +349,78 @@ export function MerchantAdmin() {
                 <label className="replace-file">Replace file<input type="file" accept=".csv,.xlsx,.json" onChange={(event) => void uploadCatalog(event)} /></label>
               </div>
 
+              <label className={`dropzone dropzone--images ${uploadingImages ? "is-uploading" : ""}`}>
+                <input type="file" accept=".zip" onChange={(event) => void uploadImages(event)} disabled={!upload || uploadingImages} />
+                {uploadingImages ? <LoaderCircle className="spin" size={26} /> : <Images size={28} />}
+                <span>
+                  {uploadingImages ? "Matching pictures to products…" : upload ? "Add a ZIP of product photos" : "Upload a catalog first, then add photos"}
+                  <small>Name each file after the product or its SKU · PNG, JPEG, WebP or GIF · maximum 25 MB</small>
+                </span>
+                <strong>{uploadingImages ? "Working" : "Browse ZIP"}</strong>
+              </label>
+
+              {imageReport ? (
+                <div className="image-report">
+                  <header>
+                    <strong>{imageReport.archive}</strong>
+                    <span className="ready-count"><Check size={14} /> {imageReport.matched_count} of {imageReport.image_count} matched</span>
+                    {imageReport.match_source?.startsWith("hybrid") ? <span className="ai-badge"><Sparkles size={12} /> Assistant matched some names</span> : null}
+                  </header>
+                  <div className="image-strip">
+                    {(imageReport.images ?? []).map((image) => (
+                      <figure key={image.image_id} className={image.matched ? "" : "is-unmatched"}>
+                        <StagedImage src={image.url} alt={image.entry_name} />
+                        <figcaption>
+                          {image.entry_name}
+                          <small>{image.matched ? `${image.method?.replaceAll("_", " ")} · ${Math.round((image.confidence ?? 0) * 100)}%` : "No product matched"}</small>
+                        </figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                  {imageReport.products_without_images?.length ? <small>Rows still without a picture: {imageReport.products_without_images.join(", ")}.</small> : null}
+                  {imageReport.kept_workbook_images ? <small>{imageReport.kept_workbook_images} product{imageReport.kept_workbook_images === 1 ? "" : "s"} kept the image link from your spreadsheet.</small> : null}
+                  {imageReport.skipped_entries?.length ? <small>Skipped {imageReport.skipped_entries.length} file{imageReport.skipped_entries.length === 1 ? "" : "s"}: {imageReport.skipped_entries.slice(0, 3).map((entry) => `${entry.entry} (${entry.reason})`).join("; ")}.</small> : null}
+                </div>
+              ) : null}
+
               <div className="mapping-block">
-                <div><strong>Auto-mapped columns</strong><button type="button">Edit mapping</button></div>
-                <ul>{Object.entries(mappings).map(([target, source]) => <li key={target}><span>{source}</span><ArrowRight size={13} /><strong>{target.replace("_cents", "")}</strong></li>)}</ul>
+                <div>
+                  <strong>Auto-mapped columns</strong>
+                  {upload?.mapping_report.model_assisted ? <span className="ai-badge"><Sparkles size={12} /> Assistant helped</span> : null}
+                </div>
+                <ul>{Object.entries(mappings).map(([target, source]) => {
+                  const decision = upload?.mapping_report.decisions.find((item) => item.target === target);
+                  const byModel = decision?.method.startsWith("model");
+                  return (
+                    <li key={target} className={byModel ? "is-model-mapped" : ""} title={decision?.reason}>
+                      <span>{source}</span><ArrowRight size={13} /><strong>{target.replace("_cents", "")}</strong>
+                      {byModel ? <em><Sparkles size={11} /> {Math.round((decision?.confidence ?? 0) * 100)}%</em> : null}
+                    </li>
+                  );
+                })}</ul>
+                {Object.entries(upload?.mapping_report.descriptive_aliases ?? {}).length ? (
+                  <small>Also read as product detail: {Object.entries(upload!.mapping_report.descriptive_aliases).map(([column, name]) => `${column} → ${name}`).join(", ")}.</small>
+                ) : null}
               </div>
+
+              {diagnostics && (diagnostics.groups.length || diagnostics.notes.length) ? (
+                <div className="diagnostics-block">
+                  <header>
+                    <TriangleAlert size={15} />
+                    <strong>{diagnostics.headline}</strong>
+                    {diagnostics.source.startsWith("model") ? <span className="ai-badge"><Sparkles size={12} /> Explained by the assistant</span> : null}
+                  </header>
+                  {diagnostics.groups.map((group) => (
+                    <article key={group.code} className={group.blocking ? "is-blocking" : ""}>
+                      <h4>{group.title}<span>{group.row_count} row{group.row_count === 1 ? "" : "s"}</span></h4>
+                      <p>{group.why}</p>
+                      <p className="fix"><strong>Fix:</strong> {group.fix}</p>
+                      <small>For example row{group.example_rows.length === 1 ? "" : "s"} {group.example_rows.join(", ")}.</small>
+                    </article>
+                  ))}
+                  {diagnostics.notes.map((note) => <small key={note} className="diagnostics-note">{note}</small>)}
+                </div>
+              ) : null}
 
               <div className="validation-block">
                 <header>
@@ -304,11 +436,11 @@ export function MerchantAdmin() {
                   <div className="classification-preview">
                     <strong>Agent category preview · {upload.products.length}/{upload.pagination.total} rows reviewed</strong>
                     <div className="review-table-scroll"><table>
-                        <thead><tr><th>Product</th><th>Proposed categories</th><th>Source evidence</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Photo</th><th>Product</th><th>Proposed categories</th><th>Source evidence</th><th>Status</th></tr></thead>
                         <tbody>{upload.products.map((product) => {
                           const assignments = product.classification.assignments.filter((assignment) => assignment.axis === "product_type" || assignment.axis === "skin_type" || assignment.axis === "concern");
                           const evidence = assignments.flatMap((assignment) => assignment.evidence.map((item) => `${item.column}: “${item.raw_excerpt}”`));
-                          return <tr key={product.row}><td>{product.canonical?.title ?? `Row ${product.row}`}</td><td>{assignments.map((assignment) => assignment.proposed_label).join(", ") || "Needs review"}</td><td>{evidence.slice(0, 2).join(" · ") || "No accepted evidence"}</td><td>{product.status.replace("_", " ")}</td></tr>;
+                          return <tr key={product.row}><td><StagedImage src={product.canonical?.image_url ?? null} alt="" /></td><td>{product.canonical?.title ?? `Row ${product.row}`}</td><td>{assignments.map((assignment) => assignment.proposed_label).join(", ") || "Needs review"}</td><td>{evidence.slice(0, 2).join(" · ") || "No accepted evidence"}</td><td>{product.status.replace("_", " ")}</td></tr>;
                         })}</tbody>
                       </table></div>
                     {upload.pagination.next_offset !== null ? <button className="load-review" type="button" onClick={() => void loadMoreReview()} disabled={loadingReview}>{loadingReview ? "Loading…" : `Load next ${Math.min(100, upload.pagination.total - upload.products.length)} rows`}</button> : null}

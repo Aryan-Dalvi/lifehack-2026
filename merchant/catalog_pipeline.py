@@ -27,6 +27,22 @@ from merchant.catalog_cleaner import (
     classify_records,
     normalize_key,
 )
+from merchant.catalog_diagnostics import summarize_upload
+from merchant.catalog_images import (
+    ImageArchiveError,
+    ImageTarget,
+    extract_image_archive,
+    match_images,
+)
+from merchant.catalog_mapping import (
+    FIELD_ALIASES,
+    MODEL_DESCRIPTIVE_FIELDS,
+    MODEL_EXCLUDED_TARGETS,
+    MappingCandidates,
+    MappingResolution,
+    detect_mappings,
+    resolve_mappings,
+)
 
 CATALOG_SCHEMA_VERSION = "catalog-cleaning.v1"
 JSON_SOURCE_SCHEMA_VERSION = "catalog-source.v1"
@@ -36,82 +52,6 @@ MAX_EXPANDED_XLSX_BYTES = 50 * 1024 * 1024
 MAX_CATALOG_ROWS = 10_000
 MAX_CATALOG_COLUMNS = 200
 MAX_PREVIEW_ROWS = 100
-
-FIELD_ALIASES: dict[str, tuple[str, ...]] = {
-    "sku": ("sku", "item_code", "product_id"),
-    "title": ("title", "name", "product_name"),
-    "description": ("description", "details", "product_description"),
-    "price_cents": ("price_cents",),
-    "price": ("price", "price_sgd", "unit_price"),
-    "currency": ("currency", "currency_code"),
-    "stock": ("stock", "inventory", "quantity"),
-    "ingredients": ("ingredients", "ingredient_list", "inci"),
-    "image_url": ("image_url", "image", "photo", "product_image"),
-    "rating_avg": ("rating_avg", "rating", "average_rating"),
-    "rating_count": ("rating_count", "reviews", "review_count"),
-    "size_ml": ("size_ml", "volume_ml"),
-    "fragrance_free": ("fragrance_free",),
-    "excludes": ("excludes", "free_from"),
-    "texture": ("texture", "formulation"),
-}
-MODEL_EXCLUDED_TARGETS = {
-    "sku",
-    "price_cents",
-    "price",
-    "currency",
-    "stock",
-    "image_url",
-    "rating_avg",
-    "rating_count",
-}
-MODEL_DESCRIPTIVE_FIELDS = {
-    "title",
-    "name",
-    "product_name",
-    "description",
-    "short_description",
-    "long_description",
-    "details",
-    "product_details",
-    "product_description",
-    "benefits",
-    "key_benefits",
-    "features",
-    "product_features",
-    "tags",
-    "category",
-    "subcategory",
-    "product_type",
-    "item_type",
-    "type",
-    "routine_step",
-    "skin_type",
-    "skin_types",
-    "suitable_for",
-    "skin_suitability",
-    "concern",
-    "concerns",
-    "skin_concern",
-    "skin_concerns",
-    "ingredients",
-    "ingredient_list",
-    "active_ingredients",
-    "key_ingredients",
-    "inci",
-    "fragrance_free",
-    "excludes",
-    "free_from",
-    "texture",
-    "formulation",
-    "finish",
-    "scent",
-    "usage_time",
-    "when_to_use",
-    "directions",
-    "how_to_use",
-    "claims",
-}
-
 
 @dataclass(frozen=True)
 class SourceRow:
@@ -128,7 +68,12 @@ class ParsedCatalog:
     raw_bytes: bytes
     rows: list[SourceRow]
     metadata: dict[str, Any]
-    mappings: dict[str, str]
+    candidates: MappingCandidates
+
+    @property
+    def mappings(self) -> dict[str, str]:
+        """The unambiguous alias matches. Ties and gaps are settled by resolve_mappings."""
+        return self.candidates.resolved
 
     @property
     def source_sha256(self) -> str:
@@ -206,29 +151,6 @@ def _validate_headers(headers: list[Any]) -> list[str]:
     return normalized_headers
 
 
-def _detect_mappings(rows: list[SourceRow]) -> dict[str, str]:
-    headers: list[str] = []
-    seen: set[str] = set()
-    for row in rows:
-        for header in row.values:
-            if header not in seen:
-                seen.add(header)
-                headers.append(header)
-    normalized = {normalize_key(header): header for header in headers}
-    mappings: dict[str, str] = {}
-    for target, aliases in FIELD_ALIASES.items():
-        matches = [normalized[alias] for alias in aliases if alias in normalized]
-        if len(matches) > 1:
-            raise api_error(
-                400,
-                "BAD_CATALOG",
-                f"Multiple columns could map to {target}: {', '.join(matches)}.",
-            )
-        if matches:
-            mappings[target] = matches[0]
-    return mappings
-
-
 def _parse_csv(content: bytes, filename: str) -> ParsedCatalog:
     if content.startswith((b"\xff\xfe", b"\xfe\xff")):
         encoding = "utf-16"
@@ -289,9 +211,9 @@ def _parse_csv(content: bytes, filename: str) -> ParsedCatalog:
         raw_bytes=content,
         rows=rows,
         metadata={"delimiter": dialect.delimiter, "encoding": encoding},
-        mappings={},
+        candidates=detect_mappings(rows),
     )
-    return ParsedCatalog(**{**parsed.__dict__, "mappings": _detect_mappings(rows)})
+    return parsed
 
 
 def _inspect_xlsx_archive(content: bytes) -> None:
@@ -437,9 +359,9 @@ def _parse_xlsx(content: bytes, filename: str, requested_sheet: str | None = Non
             "worksheet_candidates": worksheet_candidates,
             "formula_cells": formula_cells,
         },
-        mappings={},
+        candidates=detect_mappings(rows),
     )
-    return ParsedCatalog(**{**parsed.__dict__, "mappings": _detect_mappings(rows)})
+    return parsed
 
 
 def _parse_json(content: bytes, filename: str) -> ParsedCatalog:
@@ -491,9 +413,9 @@ def _parse_json(content: bytes, filename: str) -> ParsedCatalog:
         raw_bytes=content,
         rows=rows,
         metadata={"schema_version": source_schema_version or "legacy-unversioned"},
-        mappings={},
+        candidates=detect_mappings(rows),
     )
-    return ParsedCatalog(**{**parsed_catalog.__dict__, "mappings": _detect_mappings(rows)})
+    return parsed_catalog
 
 
 def parse_catalog(content: bytes, filename: str, *, sheet_name: str | None = None) -> ParsedCatalog:
@@ -603,6 +525,35 @@ def _split_list(value: Any) -> list[str]:
     return result
 
 
+_LOCAL_IMAGE_HOSTS = ("localhost", "127.0.0.1")
+
+
+def _image_url(value: Any) -> str | None:
+    """A product image link a browser can safely load.
+
+    An image URL is merchant-supplied text that ends up in an ``<img src>`` on every
+    shopper's page, so only two shapes are accepted: an https address, or a path on this
+    site. Everything else - javascript:, data:, protocol-relative //evil.example - is
+    refused with a message the merchant can act on rather than being passed through.
+    """
+    text = _clean_text(value)
+    if not text:
+        return None
+    if text.startswith("/") and not text.startswith("//"):
+        return text
+    lowered = text.lower()
+    if lowered.startswith("https://"):
+        return text
+    if lowered.startswith("http://") and any(
+        lowered.startswith(f"http://{host}") for host in _LOCAL_IMAGE_HOSTS
+    ):
+        return text
+    raise ValueError(
+        "image_url must be an https:// link or a path on this store, "
+        "or be left blank and supplied in the image ZIP"
+    )
+
+
 def _boolean(value: Any) -> bool | None:
     if isinstance(value, bool):
         return value
@@ -679,6 +630,12 @@ def normalize_locked_facts(
         fragrance_free = None
         issues.append(str(exc))
 
+    try:
+        image_url = _image_url(_mapped(row, mappings, "image_url"))
+    except ValueError as exc:
+        image_url = None
+        issues.append(str(exc))
+
     source_currency = _clean_text(_mapped(row, mappings, "currency")).upper()
     merchant_currency = str(merchant["currency"]).upper()
     if source_currency and source_currency != merchant_currency:
@@ -702,7 +659,7 @@ def normalize_locked_facts(
         "description": _clean_text(_mapped(row, mappings, "description")),
         "price_cents": price_cents,
         "currency": merchant_currency,
-        "image_url": _clean_text(_mapped(row, mappings, "image_url")) or None,
+        "image_url": image_url,
         "category": "skincare",
         "stock": stock,
         "ingredients": ingredients,
@@ -716,15 +673,43 @@ def normalize_locked_facts(
     }
 
 
-def _descriptive_fields(row: SourceRow, mappings: dict[str, str]) -> dict[str, Any]:
+def _descriptive_fields(
+    row: SourceRow,
+    mappings: dict[str, str],
+    descriptive_aliases: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Evidence the classifier may read.
+
+    Three ways in, and a locked-fact column is excluded from all of them:
+
+    1. a field the mapping step resolved to a descriptive target - this is what lets a
+       header like "What we call it" still be read as the product title,
+    2. a header whose own name is on the allow-list, and
+    3. a header the mapping model recognised and renamed.
+
+    (1) matters more than it looks: without it, evidence reached the classifier only when a
+    merchant's header happened to be spelled the way the allow-list spells it, so a correctly
+    mapped but oddly named title column would be classified with nothing to go on.
+    """
     excluded_columns = {mappings[target] for target in MODEL_EXCLUDED_TARGETS if target in mappings}
-    return {
-        column: value
-        for column, value in row.values.items()
-        if column not in excluded_columns
-        and normalize_key(column) in MODEL_DESCRIPTIVE_FIELDS
-        and value not in (None, "")
-    }
+    aliases = descriptive_aliases or {}
+    fields: dict[str, Any] = {}
+
+    for target, column in mappings.items():
+        if target in MODEL_EXCLUDED_TARGETS:
+            continue
+        value = row.values.get(column)
+        if value not in (None, ""):
+            fields[target] = value
+
+    for column, value in row.values.items():
+        if column in excluded_columns or column in mappings.values() or value in (None, ""):
+            continue
+        if normalize_key(column) in MODEL_DESCRIPTIVE_FIELDS:
+            fields[column] = value
+        elif column in aliases:
+            fields.setdefault(aliases[column], value)
+    return fields
 
 
 def _canonical_product(
@@ -779,6 +764,7 @@ def _canonical_product(
             "source_sha256": source_sha256,
             "classification_source": classification["classifier_source"],
             "approval_state": "pending_merchant_review",
+            "image_source": "merchant_image_url" if facts["image_url"] else "none",
         },
     }
     return {
@@ -865,9 +851,65 @@ def _approval_plans(
     return plans
 
 
+def _preview_hash(
+    *,
+    source_sha256: str,
+    mappings: dict[str, str],
+    taxonomy: dict[str, Any],
+    rows: list[dict[str, Any]],
+) -> str:
+    """Everything a merchant approves when they approve a preview.
+
+    Attaching images rewrites canonical rows, so this is recomputed there too - the hash
+    binds the approval tokens, and a preview whose pictures changed is a different preview.
+    """
+    return hashlib.sha256(
+        canonical_json(
+            {
+                "source_sha256": source_sha256,
+                "schema_version": CATALOG_SCHEMA_VERSION,
+                "parser_version": PARSER_VERSION,
+                "cleaner_version": CLEANER_VERSION,
+                "taxonomy_version": TAXONOMY_VERSION,
+                "mappings": mappings,
+                "taxonomy": taxonomy,
+                "rows": [
+                    {
+                        "source_record_id": row["source_record_id"],
+                        "status": row["status"],
+                        "canonical": row["canonical"],
+                        "issues": row["issues"],
+                    }
+                    for row in rows
+                ],
+            }
+        ).encode()
+    ).hexdigest()
+
+
+async def _resolved_mappings(parsed: ParsedCatalog) -> MappingResolution:
+    """Settle the column mapping before anything is staged.
+
+    A tie the model cannot break is still a hard stop: guessing which of two columns is the
+    price is exactly the kind of decision that has to come back to the merchant.
+    """
+    resolution = await resolve_mappings(parsed.candidates)
+    if resolution.unresolved:
+        first = resolution.unresolved[0]
+        raise api_error(
+            400,
+            "BAD_CATALOG",
+            f"Multiple columns could map to {first['target']}: "
+            f"{', '.join(first['candidate_columns'])}. Rename or remove one and upload again.",
+            unresolved_fields=resolution.unresolved,
+        )
+    return resolution
+
+
 async def stage_and_clean_catalog(
     *, merchant: dict[str, Any], parsed: ParsedCatalog
 ) -> dict[str, Any]:
+    mapping = await _resolved_mappings(parsed)
     upload_id = new_id("upl")
     run_id = new_id("run")
     now = utc_now()
@@ -926,19 +968,19 @@ async def stage_and_clean_catalog(
                 if not settings.demo_mode and settings.openai_api_key
                 else "deterministic",
                 "cleaning",
-                canonical_json(parsed.mappings),
+                canonical_json(mapping.mappings),
                 now,
             ),
         )
         connection.execute(
-            "UPDATE catalog_clean_runs SET publication_json=? WHERE run_id=?",
-            (canonical_json(approval_state), run_id),
+            "UPDATE catalog_clean_runs SET publication_json=?,mapping_report_json=? WHERE run_id=?",
+            (canonical_json(approval_state), canonical_json(mapping.report()), run_id),
         )
 
     records = [
         {
             "source_record_id": row.source_record_id,
-            "fields": _descriptive_fields(row, parsed.mappings),
+            "fields": _descriptive_fields(row, mapping.mappings, mapping.descriptive_aliases),
         }
         for row in parsed.rows
     ]
@@ -950,7 +992,7 @@ async def stage_and_clean_catalog(
             classification = classifications[row.source_record_id]
             issues: list[str] = []
             try:
-                facts = normalize_locked_facts(row, merchant, parsed.mappings)
+                facts = normalize_locked_facts(row, merchant, mapping.mappings)
                 if facts["sku"] in seen_skus:
                     raise ProductFactError(
                         [f"duplicate sku {facts['sku']}; each source row must be unique"]
@@ -1003,28 +1045,15 @@ async def stage_and_clean_catalog(
         taxonomy = build_taxonomy(
             [row["classification"] for row in clean_rows if row["status"] == "ready"]
         )
-        preview_hash = hashlib.sha256(
-            canonical_json(
-                {
-                    "source_sha256": parsed.source_sha256,
-                    "schema_version": CATALOG_SCHEMA_VERSION,
-                    "parser_version": PARSER_VERSION,
-                    "cleaner_version": CLEANER_VERSION,
-                    "taxonomy_version": TAXONOMY_VERSION,
-                    "mappings": parsed.mappings,
-                    "taxonomy": taxonomy,
-                    "rows": [
-                        {
-                            "source_record_id": row["source_record_id"],
-                            "status": row["status"],
-                            "canonical": row["canonical"],
-                            "issues": row["issues"],
-                        }
-                        for row in clean_rows
-                    ],
-                }
-            ).encode()
-        ).hexdigest()
+        preview_hash = _preview_hash(
+            source_sha256=parsed.source_sha256,
+            mappings=mapping.mappings,
+            taxonomy=taxonomy,
+            rows=clean_rows,
+        )
+        diagnostics = await summarize_upload(
+            rows=clean_rows, summary=summary, mapping_report=mapping.report()
+        )
         completed_at = utc_now()
         with transaction() as connection:
             for row in clean_rows:
@@ -1050,11 +1079,12 @@ async def stage_and_clean_catalog(
                 )
             connection.execute(
                 "UPDATE catalog_clean_runs SET classifier_source=?,status='review_ready',taxonomy_json=?,"
-                "summary_json=?,preview_hash=?,completed_at=? WHERE run_id=?",
+                "summary_json=?,diagnostics_json=?,preview_hash=?,completed_at=? WHERE run_id=?",
                 (
                     classifier_source,
                     canonical_json(taxonomy),
                     canonical_json(summary),
+                    canonical_json(diagnostics),
                     preview_hash,
                     completed_at,
                     run_id,
@@ -1068,6 +1098,171 @@ async def stage_and_clean_catalog(
             )
         raise
     return catalog_upload_preview(merchant["merchant_id"], upload_id)
+
+
+def catalog_image_url(image_id: str) -> str:
+    return f"{settings.catalog_image_base_url.rstrip('/')}/catalog/images/{image_id}"
+
+
+async def attach_catalog_images(
+    *, merchant: dict[str, Any], upload_id: str, content: bytes, filename: str
+) -> dict[str, Any]:
+    """Bind a ZIP of pictures to the rows of a staged upload, by file name.
+
+    This rewrites staged rows, so it is only allowed while the upload is still awaiting
+    review - never after publication - and it recomputes the preview hash, which invalidates
+    any approval token the merchant was holding. That is the intent: the preview they approve
+    has to be the preview they last looked at, pictures included.
+    """
+    merchant_id = merchant["merchant_id"]
+    with connect() as connection:
+        run = connection.execute(
+            "SELECT r.*,s.source_sha256 FROM catalog_clean_runs r "
+            "JOIN catalog_sources s ON s.upload_id=r.upload_id "
+            "WHERE r.upload_id=? AND r.merchant_id=?",
+            (upload_id, merchant_id),
+        ).fetchone()
+        if not run:
+            raise api_error(404, "NO_CATALOG_UPLOAD", "The catalog upload was not found.")
+        if run["status"] != "review_ready":
+            raise api_error(
+                409,
+                "CATALOG_NOT_READY",
+                "Images can only be added while an upload is awaiting review.",
+            )
+        rows = connection.execute(
+            "SELECT * FROM catalog_clean_rows WHERE run_id=? ORDER BY row_number",
+            (run["run_id"],),
+        ).fetchall()
+
+    try:
+        images, skipped = extract_image_archive(content, filename)
+    except ImageArchiveError as exc:
+        raise api_error(400, "BAD_IMAGE_ARCHIVE", str(exc)) from exc
+
+    clean_rows = [
+        {
+            "source_record_id": row["source_record_id"],
+            "row_number": row["row_number"],
+            "status": row["status"],
+            "canonical": json_load(row["canonical_json"], None),
+            "issues": json_load(row["issues_json"], []),
+        }
+        for row in rows
+    ]
+    # A previous archive's bindings are cleared, because those files are about to be
+    # deleted. A URL the merchant typed into the workbook is never cleared and never
+    # overwritten - the two ways of supplying an image do not get to overrule each other.
+    keeps_own_image = 0
+    for row in clean_rows:
+        canonical = row["canonical"]
+        if not canonical:
+            continue
+        cleaning = canonical["attributes"]["catalog_cleaning"]
+        if cleaning.get("image_source") == "image_archive":
+            canonical["image_url"] = None
+            cleaning["image_source"] = "none"
+            cleaning.pop("image_match", None)
+        elif canonical.get("image_url"):
+            keeps_own_image += 1
+
+    targets = [
+        ImageTarget(
+            source_record_id=row["source_record_id"],
+            row_number=row["row_number"],
+            sku=row["canonical"]["sku"],
+            title=row["canonical"]["title"],
+        )
+        for row in clean_rows
+        if row["canonical"] and not row["canonical"].get("image_url")
+    ]
+    matches, match_source = await match_images(images, targets)
+
+    now = utc_now()
+    by_record = {row["source_record_id"]: row for row in clean_rows}
+    stored: list[dict[str, Any]] = []
+    with transaction() as connection:
+        # A second archive replaces the first: the merchant is correcting the match, not
+        # accumulating copies of every attempt.
+        connection.execute("DELETE FROM catalog_images WHERE upload_id=?", (upload_id,))
+        for image in images:
+            match = matches.get(image.entry_name)
+            image_id = new_id("img")
+            connection.execute(
+                "INSERT INTO catalog_images(image_id,upload_id,merchant_id,archive_name,entry_name,"
+                "stem,content_type,byte_count,sha256,image_bytes,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (
+                    image_id,
+                    upload_id,
+                    merchant_id,
+                    filename,
+                    image.entry_name,
+                    image.stem,
+                    image.content_type,
+                    image.byte_count,
+                    image.sha256,
+                    image.data,
+                    now,
+                ),
+            )
+            record = {
+                "image_id": image_id,
+                "entry_name": image.entry_name,
+                "content_type": image.content_type,
+                "byte_count": image.byte_count,
+                "url": catalog_image_url(image_id),
+                "matched": bool(match),
+                **({} if not match else match),
+            }
+            stored.append(record)
+            if not match:
+                continue
+            row = by_record[match["source_record_id"]]
+            row["canonical"]["image_url"] = record["url"]
+            row["canonical"]["attributes"]["catalog_cleaning"]["image_source"] = "image_archive"
+            row["canonical"]["attributes"]["catalog_cleaning"]["image_match"] = {
+                "entry_name": image.entry_name,
+                "method": match["method"],
+                "confidence": match["confidence"],
+            }
+
+        taxonomy = json_load(run["taxonomy_json"], {})
+        preview_hash = _preview_hash(
+            source_sha256=run["source_sha256"],
+            mappings=json_load(run["mapping_json"], {}),
+            taxonomy=taxonomy,
+            rows=clean_rows,
+        )
+        for row in clean_rows:
+            if row["canonical"]:
+                connection.execute(
+                    "UPDATE catalog_clean_rows SET canonical_json=? "
+                    "WHERE run_id=? AND source_record_id=?",
+                    (canonical_json(row["canonical"]), run["run_id"], row["source_record_id"]),
+                )
+        matched_records = {match["source_record_id"] for match in matches.values()}
+        report = {
+            "archive": filename,
+            "match_source": match_source,
+            "image_count": len(images),
+            "matched_count": len(matched_records),
+            "kept_workbook_images": keeps_own_image,
+            "unmatched_images": [image["entry_name"] for image in stored if not image["matched"]],
+            "products_without_images": [
+                target.row_number
+                for target in targets
+                if target.source_record_id not in matched_records
+                and not by_record[target.source_record_id]["canonical"].get("image_url")
+            ],
+            "skipped_entries": skipped,
+            "images": stored,
+        }
+        connection.execute(
+            "UPDATE catalog_clean_runs SET image_report_json=?,preview_hash=? WHERE run_id=?",
+            (canonical_json(report), preview_hash, run["run_id"]),
+        )
+    return catalog_upload_preview(merchant_id, upload_id)
 
 
 def catalog_upload_preview(
@@ -1155,6 +1350,9 @@ def catalog_upload_preview(
             "metadata": json_load(run["source_metadata_json"], {}),
         },
         "mappings": json_load(run["mapping_json"], {}),
+        "mapping_report": json_load(run["mapping_report_json"], {}),
+        "diagnostics": json_load(run["diagnostics_json"], {}),
+        "images": json_load(run["image_report_json"], {}),
         "summary": summary,
         "taxonomy": json_load(run["taxonomy_json"], {}),
         "approval": {

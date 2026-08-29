@@ -47,6 +47,10 @@ class Settings:
     demo_mode: bool = os.getenv("DEMO_MODE", "1") != "0"
     signature_enforce: bool = os.getenv("SIGNATURE_ENFORCE", "enforce") == "enforce"
     api_base_url: str = os.getenv("API_BASE_URL", "http://localhost:8000")
+    # Prefix the storefront resolves catalog image URLs against. The default matches the
+    # web app's own API base, so an <img> served from the site reaches the API through the
+    # same proxy every other call already uses.
+    catalog_image_base_url: str = os.getenv("CATALOG_IMAGE_BASE_URL", "/api")
     web_base_url: str = os.getenv("WEB_BASE_URL", "http://localhost:5173")
     merchant_hard_ceiling_cents: int = int(os.getenv("MERCHANT_HARD_CEILING_CENTS", "50000"))
 

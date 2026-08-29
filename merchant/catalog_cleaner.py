@@ -293,6 +293,22 @@ CORE_TERMS = {
 }
 
 
+def response_format(name: str, schema: dict[str, Any]) -> dict[str, Any]:
+    """The Responses API `text` argument for one strict JSON schema.
+
+    `verbosity` is a GPT-5 control. gpt-4.1 rejects every value but 'medium' with a 400, and
+    because each caller fails over to deterministic output on any exception, sending it to a
+    model that does not take it turns the model off across the whole pipeline without a
+    visible error. It is therefore only sent to models known to accept it.
+    """
+    text: dict[str, Any] = {
+        "format": {"type": "json_schema", "name": name, "strict": True, "schema": schema}
+    }
+    if settings.openai_model.startswith("gpt-5"):
+        text["verbosity"] = "low"
+    return text
+
+
 class ClassificationValidationError(ValueError):
     pass
 
@@ -999,15 +1015,7 @@ async def _classify_model_batch(records: list[dict[str, Any]]) -> dict[str, dict
                 },
                 ensure_ascii=False,
             ),
-            text={
-                "format": {
-                    "type": "json_schema",
-                    "name": "catalog_classification_batch",
-                    "strict": True,
-                    "schema": CLASSIFICATION_BATCH_SCHEMA,
-                },
-                "verbosity": "low",
-            },
+            text=response_format("catalog_classification_batch", CLASSIFICATION_BATCH_SCHEMA),
             max_output_tokens=8000,
             store=False,
         )

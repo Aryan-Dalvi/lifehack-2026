@@ -130,6 +130,9 @@ CREATE TABLE IF NOT EXISTS catalog_clean_runs (
     classifier_source TEXT NOT NULL DEFAULT 'pending',
     status TEXT NOT NULL CHECK (status IN ('cleaning', 'review_ready', 'published', 'failed')),
     mapping_json TEXT NOT NULL DEFAULT '{}',
+    mapping_report_json TEXT NOT NULL DEFAULT '{}',
+    diagnostics_json TEXT NOT NULL DEFAULT '{}',
+    image_report_json TEXT NOT NULL DEFAULT '{}',
     taxonomy_json TEXT NOT NULL DEFAULT '{}',
     summary_json TEXT NOT NULL DEFAULT '{}',
     preview_hash TEXT,
@@ -156,6 +159,22 @@ CREATE TABLE IF NOT EXISTS catalog_clean_rows (
     FOREIGN KEY (upload_id, source_record_id)
         REFERENCES catalog_source_rows(upload_id, source_record_id)
 );
+
+CREATE TABLE IF NOT EXISTS catalog_images (
+    image_id TEXT PRIMARY KEY,
+    upload_id TEXT NOT NULL REFERENCES catalog_sources(upload_id) ON DELETE CASCADE,
+    merchant_id TEXT NOT NULL REFERENCES merchants(merchant_id) ON DELETE CASCADE,
+    archive_name TEXT NOT NULL,
+    entry_name TEXT NOT NULL,
+    stem TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    byte_count INTEGER NOT NULL CHECK (byte_count > 0),
+    sha256 TEXT NOT NULL,
+    image_bytes BLOB NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS catalog_images_by_upload ON catalog_images(upload_id);
 
 CREATE TRIGGER IF NOT EXISTS catalog_sources_immutable
 BEFORE UPDATE ON catalog_sources
@@ -351,6 +370,9 @@ _ADDED_COLUMNS = (
     ("sessions", "session_token_hash", "TEXT"),
     ("sessions", "is_anonymous", "INTEGER NOT NULL DEFAULT 1"),
     ("sessions", "expires_at", "TEXT"),
+    ("catalog_clean_runs", "mapping_report_json", "TEXT NOT NULL DEFAULT '{}'"),
+    ("catalog_clean_runs", "diagnostics_json", "TEXT NOT NULL DEFAULT '{}'"),
+    ("catalog_clean_runs", "image_report_json", "TEXT NOT NULL DEFAULT '{}'"),
 )
 
 

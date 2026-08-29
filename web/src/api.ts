@@ -95,6 +95,21 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   return payload as T;
 }
 
+/**
+ * Fetch an image the merchant owns but shoppers cannot see yet, as an object URL.
+ *
+ * A staged catalog's pictures are merchant-only until the store publishes, and an <img>
+ * tag cannot send the merchant key - so the admin page fetches the bytes with credentials
+ * and points the tag at the resulting blob. Callers must revokeObjectURL when done.
+ */
+export async function apiObjectUrl(path: string): Promise<string | null> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: credentials.merchantKey ? { "X-Merchant-Key": credentials.merchantKey } : {},
+  });
+  if (!response.ok) return null;
+  return URL.createObjectURL(await response.blob());
+}
+
 export function money(cents: number, currency = "SGD"): string {
   return new Intl.NumberFormat("en-SG", {
     style: "currency",

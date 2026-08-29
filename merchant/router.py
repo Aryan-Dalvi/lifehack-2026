@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from fastapi import APIRouter, Header, Query, Request
+from fastapi import APIRouter, Header, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from app.auth import (
@@ -26,8 +26,11 @@ from app.db import connect, json_load, transaction, utc_now
 from app.errors import api_error
 from app.ids import new_id
 from app.settings import settings
+from merchant.catalog_images import MAX_ARCHIVE_BYTES
 from merchant.catalog_pipeline import (
     approve_catalog_upload,
+    attach_catalog_images,
+    catalog_image_url,
     catalog_upload_preview,
     parse_catalog,
     stage_and_clean_catalog,
@@ -211,6 +214,33 @@ async def ingest_catalog(
     merchant = merchant_config(merchant_id)
     parsed = await _catalog_source(request)
     return await stage_and_clean_catalog(merchant=merchant, parsed=parsed)
+
+
+@merchant_router.post("/{merchant_id}/catalog/uploads/{upload_id}/images")
+async def ingest_catalog_images(
+    merchant_id: str,
+    upload_id: str,
+    request: Request,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
+    """Attach a ZIP of product pictures to a staged upload, matched by file name."""
+    assert_merchant(merchant_id, x_merchant_key)
+    merchant = merchant_config(merchant_id)
+    if "multipart/form-data" not in request.headers.get("content-type", ""):
+        raise api_error(400, "BAD_IMAGE_ARCHIVE", "Upload the images as a multipart .zip file.")
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not hasattr(upload, "read"):
+        raise api_error(400, "BAD_IMAGE_ARCHIVE", "Choose a .zip file of product images.")
+    content = await upload.read()
+    if len(content) > MAX_ARCHIVE_BYTES:
+        raise api_error(413, "TOO_LARGE", "Image archives are limited to 25 MB.")
+    return await attach_catalog_images(
+        merchant=merchant,
+        upload_id=upload_id,
+        content=content,
+        filename=getattr(upload, "filename", "images.zip") or "images.zip",
+    )
 
 
 @merchant_router.get("/{merchant_id}/catalog/uploads/{upload_id}")
@@ -404,6 +434,43 @@ def catalog_product_route(
     """merchant_id is a required query parameter — there is no unscoped product read."""
     return catalog_product(
         sku, merchant_id, include_unpublished=is_merchant(merchant_id, x_merchant_key)
+    )
+
+
+@catalog_router.get("/images/{image_id}")
+def catalog_image(
+    image_id: str,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> Response:
+    """Serve a product picture from a merchant's uploaded archive.
+
+    A picture is public once it is on a live product in a published store - shoppers load it
+    from an <img> tag and cannot send a key. Before that it is part of an unpublished
+    catalog, so it is only served to the merchant who uploaded it, like their staged rows.
+    """
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT i.image_id,i.merchant_id,i.content_type,i.image_bytes,m.status,"
+            "EXISTS(SELECT 1 FROM products p WHERE p.merchant_id=i.merchant_id "
+            "AND p.image_url=?) AS is_live "
+            "FROM catalog_images i JOIN merchants m ON m.merchant_id=i.merchant_id "
+            "WHERE i.image_id=?",
+            (catalog_image_url(image_id), image_id),
+        ).fetchone()
+    if not row:
+        raise api_error(404, "NO_IMAGE", "The product image was not found.")
+    if not (row["status"] == "published" and row["is_live"]):
+        assert_merchant(row["merchant_id"], x_merchant_key)
+    return Response(
+        content=row["image_bytes"],
+        media_type=row["content_type"],
+        headers={
+            # The bytes are immutable and keyed by a random id, so they cache hard. Rendered
+            # inline only, and never sniffed into something executable.
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "Content-Disposition": "inline",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

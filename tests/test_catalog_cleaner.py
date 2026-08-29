@@ -642,7 +642,9 @@ def test_prompt_scanner_normalizes_unicode_and_model_egress_is_allowlisted() -> 
             "rating_avg": "Rating",
         },
     )
-    assert fields == {"Name": "Calm Serum", "Skin Types": "sensitive"}
+    # The title arrives under its mapped field name, not its header, so an oddly named
+    # column still reaches the classifier. Locked facts and internal notes never do.
+    assert fields == {"title": "Calm Serum", "Skin Types": "sensitive"}
 
 
 def test_model_batches_have_full_coverage_and_fail_over_per_batch(monkeypatch) -> None:
