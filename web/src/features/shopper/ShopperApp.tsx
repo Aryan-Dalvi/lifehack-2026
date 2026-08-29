@@ -73,9 +73,8 @@ export function ShopperApp() {
 
   useEffect(() => {
     let active = true;
-    // The session is re-opened whenever sign-in state changes, so it binds to the shopper
-    // who is actually signed in. Identity is never sent in the body - the server reads it
-    // from the consumer token, or treats the session as anonymous.
+    // Identity is never sent in the body: the server reads it from the consumer token, or
+    // treats the session as anonymous.
     setSessionToken(null);
     api<{ session_id: string; session_token: string; greeting: string; anonymous: boolean }>(
       "/agent/session",
@@ -96,7 +95,20 @@ export function ShopperApp() {
     return () => {
       active = false;
     };
-  }, [loadTrust, merchantId, account]);
+  }, [loadTrust, merchantId]);
+
+  // Signing in mid-visit attaches the account to the session already in progress rather
+  // than opening a new one, so a basket built as a guest survives reaching the till.
+  const onAccountChange = useCallback(
+    (next: Account | null) => {
+      setAccount(next);
+      if (!next || !sessionId) return;
+      api<{ anonymous: boolean }>(`/agent/session/${sessionId}/identity`, { method: "PUT" })
+        .then((payload) => setAnonymous(payload.anonymous))
+        .catch((requestError: Error) => setError(requestError.message));
+    },
+    [sessionId],
+  );
 
   const applyEvents = (events: TurnEvent[], suppressToken = false) => {
     // A turn either produces a routine or it does not; never carry a stale plan forward.
@@ -432,7 +444,7 @@ export function ShopperApp() {
               </form>
             ) : null}
           </div>
-          <AccountMenu account={account} onChange={setAccount} />
+          <AccountMenu account={account} onChange={onAccountChange} />
         </div>
       </header>
 

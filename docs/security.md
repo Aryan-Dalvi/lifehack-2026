@@ -69,9 +69,16 @@ shoppers are as isolated from each other as two signed-in ones. Checkout is wher
 starts to matter: a cart needs a shipping address, and an anonymous session has none, so it
 returns `409 ADDRESS_REQUIRED` rather than silently using someone else's.
 
+**Signing in mid-visit claims the session in progress.** `PUT /agent/session/{id}/identity`
+attaches an account to a session that was started as a guest, so a basket built while browsing
+survives reaching the till. It requires **both** credentials — the session token proves you
+opened this session, the consumer token proves who you are — and a session already bound to
+someone else is never re-bound. Without it, signing in at checkout would have to re-open the
+session and throw the basket away.
+
 ## Verified
 
-`tests/test_isolation.py` (15 cases) covers each boundary above, plus a live suite of 24 cases
+`tests/test_isolation.py` (18 cases) covers each boundary above, plus a live suite of 24 cases
 run against a running server. Both were red before these changes and are green after:
 
 | Was | Now |
@@ -83,6 +90,7 @@ run against a running server. Both were red before these changes and are green a
 | Any caller could read any buyer's saved addresses | `401` / `403` |
 | Any caller could open a session as any buyer | identity comes from the token; body is ignored |
 | Any caller could read any session's trust log | session token required, not transferable |
+| Signing in mid-visit discarded the shopper's basket | the session is claimed, the basket survives |
 
 ## Still open
 

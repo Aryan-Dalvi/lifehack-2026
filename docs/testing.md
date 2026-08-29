@@ -273,3 +273,53 @@ no live model calls. Frontend `npm run build` clean.
 No rate limiting on login/register · consumer tokens do not rotate (7-day life, sign-out revokes
 all) · merchant key has no rotation path · CORS still wide for demo convenience · `/pay`
 authorize→receipt leg and the hosted environment remain untested.
+
+---
+
+## 2026-08-29 20:40 (T+9:40) — UI verification through the browser
+
+**Target:** the demo as a judge drives it — Playwright against the real UI, the gap left open by
+the two previous passes (both were API-only).
+**Environment:** API on `:8000` (`DEMO_MODE=1`, deterministic) for the browser suite; a second
+instance on `:8010` with the live key for the isolation and journey re-runs.
+
+**Result: 5/5 e2e pass, 31/31 backend pass, 24/24 live isolation, demo journey OK.**
+
+### The UI revamp broke two e2e tests — stale selectors, not auth
+
+The shopper UI was rebuilt (right sidebar cart, products modal) while the isolation work was in
+flight. Two tests failed because the entry point changed: the storefront used to open with
+`Dryness` quick-pick chips, and now opens with a chat box. Confirmed from the failure's
+accessibility snapshot, which showed the greeting rendered and my "Browsing as guest / Sign in"
+control present — so the session was created and auth was working; only the selector was stale.
+
+Selectors were re-derived by driving the real page and reading its accessibility tree rather
+than guessed. Entry is now `textbox "Ask about skincare products"` + `button "Send message"`;
+choosing from a comparison adds to the cart, and `button "Checkout · S$…"` in the cart sidebar
+opens consent.
+
+### A real flaw the browser test caught that the API tests could not
+
+Signing in mid-visit **recreated the session and discarded the basket**. The API suite never saw
+it because it signs in before shopping; a judge browsing as a guest, adding to the cart, then
+being told to sign in at checkout would have lost their basket.
+
+Fixed with `PUT /agent/session/{id}/identity` — claims a guest session for a signed-in shopper,
+preserving the basket. Requires both the session token and a consumer token; a session already
+bound to another account returns `403`. Three regression tests added
+(`test_signing_in_mid_visit_claims_the_session_in_progress`, `test_claiming_needs_both_credentials`,
+`test_a_session_already_signed_in_cannot_be_re_bound`).
+
+The e2e now walks the honest path: guest checkout → `Add a shipping address before checkout.` →
+sign in → basket intact → checkout → consent → bank → **order confirmed, S$38.00 paid**.
+
+### Note on one assertion
+
+`expect(consoleErrors).toEqual([])` now filters `409`: the test deliberately attempts a guest
+checkout and the browser logs that rejected request. Everything else must still be clean.
+
+### Method note
+
+The claim endpoint appeared to fail at first. The cause was a stale server — `uvicorn` had been
+started without `--reload` before the endpoint existed, and returned `404` for it. Worth
+remembering: a background API here does not pick up code changes.

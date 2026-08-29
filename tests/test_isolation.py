@@ -251,3 +251,69 @@ def test_wrong_password_is_rejected(client) -> None:
         "/consumer/login", json={"email": "alice@test.io", "password": "not-the-password"}
     )
     assert response.status_code == 401
+
+
+# --------------------------------------------------------------------------- claiming
+
+
+def test_signing_in_mid_visit_claims_the_session_in_progress(client) -> None:
+    """A basket built as a guest must survive reaching the till."""
+    started = client.post("/agent/session", json={"merchant_id": "m_mysa"}).json()
+    assert started["anonymous"] is True
+    alice = register(client, "alice@test.io")
+
+    claimed = client.put(
+        f"/agent/session/{started['session_id']}/identity",
+        headers={
+            "X-Session-Token": started["session_token"],
+            "Authorization": f"Bearer {alice['token']}",
+        },
+    )
+    assert claimed.status_code == 200, claimed.text
+    assert claimed.json()["consumer_id"] == alice["consumer_id"]
+    assert claimed.json()["anonymous"] is False
+
+
+def test_claiming_needs_both_credentials(client) -> None:
+    started = client.post("/agent/session", json={"merchant_id": "m_mysa"}).json()
+    alice = register(client, "alice@test.io")
+
+    # Signed in, but not the client that opened this session.
+    assert (
+        client.put(
+            f"/agent/session/{started['session_id']}/identity",
+            headers={
+                "X-Session-Token": "st_not-the-right-token",
+                "Authorization": f"Bearer {alice['token']}",
+            },
+        ).status_code
+        == 403
+    )
+    # Holds the session, but is not signed in as anyone.
+    assert (
+        client.put(
+            f"/agent/session/{started['session_id']}/identity",
+            headers={"X-Session-Token": started["session_token"]},
+        ).status_code
+        == 401
+    )
+
+
+def test_a_session_already_signed_in_cannot_be_re_bound(client) -> None:
+    alice = register(client, "alice@test.io")
+    bob = register(client, "bob@test.io")
+    started = client.post(
+        "/agent/session",
+        json={"merchant_id": "m_mysa"},
+        headers={"Authorization": f"Bearer {alice['token']}"},
+    ).json()
+    assert started["anonymous"] is False
+
+    stolen = client.put(
+        f"/agent/session/{started['session_id']}/identity",
+        headers={
+            "X-Session-Token": started["session_token"],
+            "Authorization": f"Bearer {bob['token']}",
+        },
+    )
+    assert stolen.status_code == 403

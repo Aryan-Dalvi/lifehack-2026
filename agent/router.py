@@ -16,6 +16,7 @@ from app.auth import (
     assert_session,
     consumer_from_token,
     new_secret,
+    require_consumer,
     token_digest,
 )
 from app.db import connect, json_load, transaction, utc_now
@@ -167,6 +168,41 @@ def session_status(
         "budget_cents": intent.get("max_amount_cents"),
         "constraint_mode": intent.get("constraint_mode"),
     }
+
+
+@router.put("/session/{session_id}/identity")
+def claim_session(
+    session_id: str,
+    authorization: str | None = Header(default=None),
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    """Attach a signed-in shopper to a session they started as a guest.
+
+    Guest browsing then signing in at checkout is the normal path, and re-opening the
+    session there would throw away the basket the shopper just built. Claiming needs both
+    credentials: the session token proves you opened this session, the consumer token
+    proves who you are. A session already bound to someone else is never re-bound.
+    """
+    session = assert_session(session_id, x_session_token)
+    consumer_id = require_consumer(authorization)
+    if not session["is_anonymous"]:
+        if session["consumer_id"] != consumer_id:
+            raise api_error(403, "SESSION_FORBIDDEN", "That session belongs to another account.")
+        return {"session_id": session_id, "consumer_id": consumer_id, "anonymous": False}
+    with transaction() as connection:
+        connection.execute(
+            "UPDATE sessions SET consumer_id=?, is_anonymous=0 "
+            "WHERE session_id=? AND is_anonymous=1",
+            (consumer_id, session_id),
+        )
+    record_trust(
+        session_id,
+        "agent",
+        "Guest session signed in",
+        "ok",
+        {"consumer_id": consumer_id},
+    )
+    return {"session_id": session_id, "consumer_id": consumer_id, "anonymous": False}
 
 
 @router.put("/session/{session_id}/limit")

@@ -9,18 +9,37 @@ test("shopper completes discover, compare, consent, bank and payment", async ({ 
   await page.setViewportSize({ width: 1584, height: 1024 });
   await page.goto("/storefront?merchant=m_mysa");
   await expect(page.getByRole("heading", { name: "What does your skin need today?" })).toBeVisible();
-  await page.getByRole("button", { name: "Dryness" }).click();
+  // The shopper starts by asking, not by picking a chip.
+  await page
+    .getByRole("textbox", { name: "Ask about skincare products" })
+    .fill("I have dry sensitive skin, what should I use?");
+  await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.getByRole("heading", { name: "Grounded options for you" })).toBeVisible();
   await expect(page.locator(".product-card")).toHaveCount(3);
 
-  await page.locator(".product-card .text-action").nth(0).click();
-  await page.locator(".product-card .text-action").nth(1).click();
+  await page.locator(".product-card").nth(0).getByRole("button", { name: "Compare" }).click();
+  await page.locator(".product-card").nth(1).getByRole("button", { name: "Compare" }).click();
   await page.getByRole("button", { name: /Compare 2 products/ }).click();
   await expect(page.getByText("Built in code from current catalog rows · 0 model calls")).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: "test-results/shopper-products.png" });
 
-  await page.locator(".comparison-drawer .table-action").first().click();
+  // Choosing from the comparison puts the product in the cart; checkout is the cart's job.
+  await page.getByRole("button", { name: /^Choose / }).first().click();
+  await page.getByRole("button", { name: "Close comparison" }).click();
+
+  // Guest checkout stops for want of a shipping address, which is what an account is for.
+  await page.getByRole("button", { name: /^Checkout · S\$/ }).click();
+  await expect(page.getByText("Add a shipping address before checkout.")).toBeVisible();
+
+  // Signing in attaches the account to the session in progress - the basket survives.
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabel("Email").fill("demo@mysa.test");
+  await page.getByLabel("Password").fill("mysa-demo-password");
+  await page.getByRole("button", { name: "Sign in", exact: true }).last().click();
+  await expect(page.getByText("N. Shopper")).toBeVisible();
+
+  await page.getByRole("button", { name: /^Checkout · S\$/ }).click();
   await expect(page.getByRole("heading", { name: "Confirm this exact purchase" })).toBeVisible();
   await page.getByRole("button", { name: /Confirm & pay/ }).click();
   await expect(page.getByRole("heading", { name: /Approve S\$/ })).toBeVisible();
@@ -29,7 +48,9 @@ test("shopper completes discover, compare, consent, bank and payment", async ({ 
   await expect(page.getByText("Order confirmed")).toBeVisible();
   await expect(page.getByText("Simulated authorization · no real charge")).toBeVisible();
   await page.locator(".receipt-card").screenshot({ path: "test-results/shopper-receipt.png" });
-  expect(consoleErrors).toEqual([]);
+  // This test deliberately attempts a guest checkout, and the browser logs that rejected
+  // request as a console error. Everything else must still be clean.
+  expect(consoleErrors.filter((line) => !line.includes("409"))).toEqual([]);
 });
 
 test("merchant onboarding and both deployment options render", async ({ page }) => {
@@ -66,7 +87,10 @@ test("one-line merchant widget opens an isolated storefront without redirecting"
   await expect(
     commerceCanvas.getByRole("heading", { name: "What does your skin need today?" }),
   ).toBeVisible();
-  await commerceCanvas.getByRole("button", { name: "Dryness" }).click();
+  await commerceCanvas
+    .getByRole("textbox", { name: "Ask about skincare products" })
+    .fill("I have dry sensitive skin, what should I use?");
+  await commerceCanvas.getByRole("button", { name: "Send message" }).click();
   await expect(commerceCanvas.locator(".product-card")).toHaveCount(3);
   await expect(page).toHaveURL(/widget-demo\.html$/);
 });
