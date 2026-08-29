@@ -224,10 +224,42 @@ td.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-n
 .btn-row>*{flex:1}
 
 .cards{display:flex;gap:8px;overflow:hidden}
-.pcard{flex:1;border:1px solid var(--rule);background:var(--surface);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.pcard{flex:1;border:1px solid var(--rule);background:var(--surface);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0;position:relative}
+.pcard.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .pcard .nm{font-size:11.5px;font-weight:600;line-height:1.25}
 .pcard .pr{font-family:var(--f-mono);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
 .pcard .at{font-size:10px;color:var(--ink-3);line-height:1.35}
+.pcard .tick{position:absolute;top:5px;right:5px;width:14px;height:14px;border:1px solid var(--rule);background:var(--surface)}
+.pcard.sel .tick{border-color:var(--accent);background:var(--accent);color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center}
+
+/* ratings — deliberately NOT gold; gold stays reserved for human-decision moments */
+.stars{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.stars .s{font-size:11px;line-height:1;letter-spacing:0.5px;white-space:nowrap}
+.stars .s b{color:var(--ink);font-weight:400}
+.stars .s i{color:var(--rule);font-style:normal}
+.stars .n{font-family:var(--f-mono);font-size:10px;font-weight:600;font-variant-numeric:tabular-nums}
+.stars .c{font-family:var(--f-mono);font-size:9px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+
+/* hover / focus preview */
+.pop{border:1px solid var(--ink);background:var(--surface);padding:10px 11px;box-shadow:3px 3px 0 var(--surface-3)}
+.pop .h{font-size:11.5px;font-weight:600;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px}
+.pop dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0 0 7px;font-size:10.5px}
+.pop dt{color:var(--ink-3);font-family:var(--f-mono);font-size:9.5px;white-space:nowrap}
+.pop dd{margin:0;font-variant-numeric:tabular-nums}
+.pop .foot{border-top:1px dotted var(--rule);padding-top:6px;font-size:9.5px;color:var(--ink-3);font-family:var(--f-mono)}
+
+/* shipping block */
+.shipto{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;border:1px solid var(--rule);background:var(--surface);padding:8px 10px;font-size:11.5px;line-height:1.4}
+.shipto .who{font-weight:600;display:block}
+.shipto .ad{color:var(--ink-2)}
+.shipto .chg{color:var(--accent);font-size:10.5px;white-space:nowrap}
+
+/* bank step-up */
+.bankchip{display:inline-flex;align-self:flex-start;align-items:center;gap:5px;font-family:var(--f-mono);font-size:9.5px;letter-spacing:0.06em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);background:var(--accent-soft);padding:3px 8px;margin:0}
+.otp{display:flex;gap:5px;justify-content:center;margin:9px 0}
+.otp span{width:28px;height:34px;border:1px solid var(--rule);background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--f-mono);font-size:15px;font-weight:600}
+.otp span.f{border-color:var(--accent);color:var(--accent)}
+.otp span.cur{border-color:var(--ink);border-bottom-width:2px}
 
 .cmp{width:100%;border-collapse:collapse;font-size:11px;background:var(--surface);border:1px solid var(--rule)}
 .cmp th,.cmp td{padding:5px 7px;border-bottom:1px solid var(--rule-soft);text-align:left}
@@ -319,42 +351,54 @@ footer{margin-top:80px;border-top:1px solid var(--rule);padding-top:20px;font-fa
 <div class="wrap">
 
 <header class="mast">
-  <p class="eyebrow">LifeHack 2026 · Visa problem statement · Plan revision 2</p>
+  <p class="eyebrow">LifeHack 2026 · Visa problem statement · Plan revision 3</p>
   <h1>Agent-Ready Commerce</h1>
   <p class="lede">
     Wireframes for the two surfaces we ship — the shopper's conversation and the merchant's
-    90-second onboarding — plus the rebuilt agent architecture. The <strong>consent sheet (C5)</strong>
-    and the <strong>declined purchase (C8)</strong> are the two screens that win the rubric; everything
-    else exists to get a judge to them.
+    90-second onboarding — plus the rebuilt agent architecture. The <strong>consent sheet (C6)</strong>,
+    the <strong>bank approval (C7)</strong> and the <strong>declined purchase (C9)</strong> are the three
+    screens that win the rubric; everything else exists to get a judge to them.
   </p>
   <div class="meta">
-    <span><b>Supersedes</b> contracts v0.9</span>
+    <span><b>Supersedes</b> contracts v0.10</span>
     <span><b>Author</b> Claude Code / Aryan</span>
     <span><b>Status</b> proposal — Y4 freezes at the huddle</span>
-    <span><b>Plan cost</b> +3 person-hours</span>
+    <span><b>Plan cost</b> ~56 h against 55–65 available</span>
   </div>
 </header>
 
 <div class="amds">
   <div class="amd">
-    <p class="k">Amendment 1</p>
-    <h4>The shopper surface is specified</h4>
-    <p>Eight plates, C1–C8. The spend limit becomes a UI control in the first turn, which is also
-    how the Intent Mandate gets created — one gesture, two jobs.</p>
+    <p class="k">Revision 3 · a</p>
+    <h4>Star ratings on every option</h4>
+    <p>Out of five, with the rating <em>count</em> beside the average. Ratings are a catalog field
+    ingested from the merchant's feed and cached — never fetched at demo time, never generated by
+    a model.</p>
   </div>
   <div class="amd">
-    <p class="k">Amendment 2</p>
-    <h4>Onboarding drops from five screens to three</h4>
-    <p>One page, three sections, a live agent preview from the first keystroke. The persona screen
-    and the column-mapping screen are gone.</p>
+    <p class="k">Revision 3 · b</p>
+    <h4>Progressive disclosure on the cards</h4>
+    <p>Resting cards carry four things. Hover, focus or tap reveals up to four salient features.
+    The complete spec table appears only when the shopper asks to compare.</p>
   </div>
   <div class="amd">
-    <p class="k">Amendment 3</p>
-    <h4><code>agent/</code> becomes an orchestrator and five specialists</h4>
-    <p>Typed hops between them, a Guardian that re-grounds every model output against the database,
-    and no language model anywhere in the payment path.</p>
+    <p class="k">Revision 3 · c</p>
+    <h4>The bank authorises every purchase</h4>
+    <p>A mock issuer mints a single-use token bound to this exact cart, amount and merchant.
+    <code>/pay/authorize</code> refuses without one. This replaces the device passkey.</p>
+  </div>
+  <div class="amd">
+    <p class="k">Revision 3 · d</p>
+    <h4>Shipping address on the confirmation</h4>
+    <p>Ship-to first, the way every checkout page orders it — and folded into the signed cart hash,
+    so the agent cannot redirect the goods after consent.</p>
   </div>
 </div>
+
+<p class="note" style="margin-top:12px;font-size:12.5px">
+  Earlier: <b>revision 2</b> specified the shopper surface as a plate set, cut merchant onboarding
+  from five screens to three, and split <code>agent/</code> into an orchestrator plus five specialists.
+</p>
 
 <!-- ══════════════════ PART 1 ══════════════════ -->
 <section id="consumer">
@@ -369,14 +413,19 @@ footer{margin-top:80px;border-top:1px solid var(--rule);padding-top:20px;font-fa
   </div>
 
   <div class="col">
-    <h3>Four rules the surface has to obey</h3>
+    <h3>Six rules the surface has to obey</h3>
     <ul class="tight">
       <li><b>The limit is set before anything is searched.</b> A spend cap chosen in turn one is a
         natural UI gesture <em>and</em> the Intent Mandate. Consent stops being a modal we bolt on at
         the end and becomes the frame of the whole conversation.</li>
+      <li><b>Detail arrives when it's asked for.</b> Four things on a resting card, four more on
+        hover, everything on Compare. A shopper deciding between two headphones does not want a spec
+        sheet; a shopper comparing them wants nothing less.</li>
+      <li><b>Every fact on screen has a source.</b> Ratings, prices and attributes all come from the
+        merchant's catalog row. If it isn't in the database, it does not render.</li>
       <li><b>Money never appears without its scope.</b> Any screen showing a price also shows what
-        the agent is allowed to do with it. The gold band in C5 is the only gold on the page.</li>
-      <li><b>A decline is a fork, not a wall.</b> C8 offers two ways forward. A dead end in a demo
+        the agent is allowed to do with it. The gold band in C6 is the only gold on the page.</li>
+      <li><b>A decline is a fork, not a wall.</b> C9 offers two ways forward. A dead end in a demo
         reads as a bug; a recovery reads as a product.</li>
       <li><b>The Trust Panel is scenery until it matters.</b> It sits quiet on the right, then earns
         its place the moment a link turns red.</li>
@@ -448,160 +497,225 @@ footer{margin-top:80px;border-top:1px solid var(--rule);padding-top:20px;font-fa
     </figure>
 
     <figure class="plate">
-      <div class="plate-hd"><span class="plate-id">C3</span><span class="plate-nm">Discovery</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="plate-hd"><span class="plate-id">C3</span><span class="plate-nm">Discovery — cards stay minimal</span><span class="plate-tag mvp">MVP</span></div>
       <div class="screen">
         <div class="msg me">Something with good noise cancelling for flights</div>
         <div class="msg"><span class="who">Lumen assistant</span>Three that fit, all under your limit:</div>
         <div class="cards">
-          <div class="pcard">
+          <div class="pcard sel">
+            <span class="tick">✓</span>
             <div class="ph-img" style="height:38px"></div>
             <span class="nm">Aria One ANC</span>
             <span class="pr">S$129</span>
-            <span class="at">38 h · deep ANC</span>
+            <span class="stars"><span class="s"><b>★★★★</b><i>★</i></span><span class="n">4.6</span><span class="c">1,284</span></span>
           </div>
-          <div class="pcard">
+          <div class="pcard sel">
+            <span class="tick">✓</span>
             <div class="ph-img" style="height:38px"></div>
             <span class="nm">Kestrel Studio 40</span>
             <span class="pr">S$149</span>
-            <span class="at">45 h · deepest ANC</span>
+            <span class="stars"><span class="s"><b>★★★★</b><i>★</i></span><span class="n">4.8</span><span class="c">612</span></span>
           </div>
           <div class="pcard">
+            <span class="tick"></span>
             <div class="ph-img" style="height:38px"></div>
             <span class="nm">Bolt Air Buds</span>
             <span class="pr">S$89</span>
-            <span class="at">22 h · light ANC</span>
+            <span class="stars"><span class="s"><b>★★★★</b><i>★</i></span><span class="n">4.1</span><span class="c">3,907</span></span>
           </div>
         </div>
         <div class="btn-row">
-          <span class="btn ghost">Compare these<span class="cx">2</span></span>
-          <span class="btn">Choose one</span>
+          <span class="btn pri">Compare 2 selected<span class="cx">3</span></span>
+          <span class="btn ghost">Choose one</span>
         </div>
-        <p class="note mono-sm">3 of 46 in catalog · price ≤ S$150 applied from your limit<span class="cx">1</span></p>
+        <p class="note mono-sm">3 of 46 · price ≤ S$150 from your limit · ratings from merchant feed<span class="cx">1</span></p>
       </div>
       <figcaption><ol>
         <li>The limit silently becomes a search filter. The shopper is never shown something they
-          can't buy — that's the cheapest possible decline prevention.</li>
-        <li>Comparison is one tap, not a typed request. The rubric names comparison explicitly.</li>
+          can't buy — the cheapest possible decline prevention.</li>
+        <li>Four things per card and no more: image, name, price, rating. Rating <em>count</em> sits
+          beside the average, because 4.1 over 3,907 ratings is a different claim from 4.8 over 612.</li>
+        <li>Compare is a two-step: select, then compare. It reads as deliberate rather than as a
+          wall of specs the shopper didn't ask for.</li>
       </ol></figcaption>
     </figure>
 
     <figure class="plate">
-      <div class="plate-hd"><span class="plate-id">C4</span><span class="plate-nm">Comparison</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="plate-hd"><span class="plate-id">C4</span><span class="plate-nm">Hover preview — salient features only</span><span class="plate-tag mvp">MVP</span></div>
       <div class="screen">
-        <div class="msg"><span class="who">Lumen assistant</span>On the dimensions that matter for flights:</div>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div class="pcard" style="max-width:120px;flex:none">
+            <div class="ph-img" style="height:44px"></div>
+            <span class="nm">Kestrel Studio 40</span>
+            <span class="pr">S$149</span>
+            <span class="stars"><span class="s"><b>★★★★</b><i>★</i></span><span class="n">4.8</span></span>
+          </div>
+          <div class="pop" style="flex:1">
+            <div class="h"><span>Kestrel Studio 40</span><span class="stars"><span class="n">4.8</span><span class="c">612</span></span></div>
+            <dl>
+              <dt>battery</dt><dd>45 h</dd>
+              <dt>anc depth</dt><dd>−38 dB</dd>
+              <dt>weight</dt><dd>276 g</dd>
+              <dt>fit</dt><dd>over-ear, closed</dd>
+            </dl>
+            <p class="foot">4 of 9 attributes · compare for the rest<span class="cx">2</span></p>
+          </div>
+        </div>
+        <div style="flex:1"></div>
+        <p class="note">Opens on <b>hover</b>, on <b>keyboard focus</b>, and on <b>tap</b>. Esc closes it.<span class="cx">3</span></p>
+        <p class="note mono-sm">salient_dims from the electronics pack · already loaded with the card<span class="cx">1</span></p>
+      </div>
+      <figcaption><ol>
+        <li>No network call. The salient attributes ship with the card in the same
+          <code>product_cards</code> event, so the preview is instant and works in demo mode.</li>
+        <li>Capped at four. The pack declares <code>salient_dims</code>; everything else is deliberately
+          withheld until the shopper asks to compare.</li>
+        <li>Hover alone would strand touch and keyboard users, and a judge on a trackpad in a crowded
+          hall is exactly the person who'll fail to trigger it. Three ways in, one way out.</li>
+      </ol></figcaption>
+    </figure>
+
+    <figure class="plate">
+      <div class="plate-hd"><span class="plate-id">C5</span><span class="plate-nm">Comparison — the full detail, only here</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="screen">
+        <div class="msg"><span class="who">Lumen assistant</span>Everything on the two you picked:</div>
         <table class="cmp">
-          <thead><tr><th></th><th>Aria One</th><th>Kestrel 40</th><th>Bolt Air</th></tr></thead>
+          <thead><tr><th></th><th>Aria One ANC</th><th>Kestrel Studio 40</th></tr></thead>
           <tbody>
-            <tr><td>Battery</td><td>38 h</td><td class="pick">45 h</td><td>22 h</td></tr>
-            <tr><td>ANC depth</td><td>−32 dB</td><td class="pick">−38 dB</td><td>−19 dB</td></tr>
-            <tr><td>Weight</td><td class="pick">248 g</td><td>276 g</td><td>52 g</td></tr>
-            <tr><td>Price</td><td>S$129</td><td>S$149</td><td class="pick">S$89</td></tr>
+            <tr><td>Rating</td><td>4.6 <span class="c mono-sm">1,284</span></td><td class="pick">4.8 <span class="c mono-sm">612</span></td></tr>
+            <tr><td>Battery</td><td>38 h</td><td class="pick">45 h</td></tr>
+            <tr><td>ANC depth</td><td>−32 dB</td><td class="pick">−38 dB</td></tr>
+            <tr><td>Weight</td><td class="pick">248 g</td><td>276 g</td></tr>
+            <tr><td>Fit</td><td>over-ear</td><td>over-ear</td></tr>
+            <tr><td>Charge time</td><td class="pick">1.5 h</td><td>2 h</td></tr>
+            <tr><td>Warranty</td><td>1 yr</td><td class="pick">2 yr</td></tr>
+            <tr><td>Price</td><td class="pick">S$129</td><td>S$149</td></tr>
           </tbody>
         </table>
         <div class="msg">
-          For long flights I'd take the <b>Kestrel 40</b> — the deepest cancelling and it lasts a
-          return trip without charging. The Aria One saves you S$20 and 28&nbsp;g.<span class="cx">2</span>
+          For long flights I'd take the <b>Kestrel 40</b> — deepest cancelling, lasts a return trip,
+          and the better-reviewed of the two. The Aria One saves you S$20 and 28&nbsp;g.<span class="cx">2</span>
         </div>
-        <p class="note mono-sm">4 dimensions from the electronics pack · all values read from catalog<span class="cx">1</span></p>
+        <p class="note mono-sm">8 dimensions from the electronics pack · every value read from catalog<span class="cx">1</span></p>
       </div>
       <figcaption><ol>
-        <li>Dimensions come from the category pack, not from the model. Fashion would show fit and
-          fabric; food would show dietary and spice.</li>
-        <li>Every number here appears in the injected product rows. The Guardian rejects the message
-          if it doesn't — see Part three.</li>
+        <li>Reached only by clicking Compare. Dimensions come from the category pack, not the model —
+          fashion would show fit and fabric, food would show dietary and spice.</li>
+        <li>Every number here — the ratings included — appears in the injected product rows. The
+          Guardian rejects the message if it doesn't. See Part three.</li>
       </ol></figcaption>
     </figure>
 
     <figure class="plate wide">
-      <div class="plate-hd"><span class="plate-id">C5</span><span class="plate-nm">Consent sheet — the screen that wins Trust &amp; Safety</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="plate-hd"><span class="plate-id">C6</span><span class="plate-nm">Consent sheet — the screen that wins Trust &amp; Safety</span><span class="plate-tag mvp">MVP</span></div>
       <div class="screen split">
         <div class="pane">
           <div class="msg"><span class="who">Lumen assistant</span>Ready when you are — here's exactly what I'll do.</div>
           <div class="slip">
             <div class="ttl">Confirm this purchase</div>
+            <div class="shipto" style="margin-bottom:8px">
+              <span><span class="who" style="font-family:inherit;font-size:11.5px;letter-spacing:0;text-transform:none;color:var(--ink)">Aryan D.</span>
+                <span class="ad">14 Prince George's Park, #05-21, Singapore 118420</span></span>
+              <span class="chg">Change<span class="cx">1</span></span>
+            </div>
             <div class="row"><span class="k">Merchant</span><span class="v">Lumen Electronics</span></div>
             <div class="row"><span class="k">Item</span><span class="v">Kestrel Studio 40 × 1</span></div>
+            <div class="row"><span class="k">Delivery</span><span class="v">Standard · Tue 1 Sep</span></div>
             <div class="row"><span class="k">Card</span><span class="v">Visa •••• 4821</span></div>
             <div class="row tot"><span class="k">Total</span><span class="v">S$149.00</span></div>
           </div>
           <div class="scope">
-            <span class="lbl">What the agent may do<span class="cx">2</span></span>
-            Charge this card <b>once</b>, for <b>this cart</b>, at <b>this merchant</b>. Nothing else.
-            This permission expires in <b>4:52</b>.
+            <span class="lbl">What the agent may do<span class="cx">3</span></span>
+            Charge this card <b>once</b>, for <b>this cart</b>, at <b>this merchant</b>, shipping to
+            <b>this address</b>. Nothing else. This permission expires in <b>4:52</b>.
           </div>
           <div class="btn-row">
             <span class="btn ghost">Cancel</span>
-            <span class="btn pri">Confirm &amp; pay S$149.00<span class="cx">3</span></span>
+            <span class="btn pri">Confirm &amp; pay S$149.00<span class="cx">4</span></span>
           </div>
-          <p class="note">Why am I seeing this? · What can this agent do?</p>
+          <p class="note">Your bank will ask you to approve this next.<span class="cx">5</span></p>
         </div>
         <div class="rail">
-          <p class="lbl">Authorisation chain<span class="cx">4</span></p>
+          <p class="lbl">Authorisation chain<span class="cx">6</span></p>
           <div class="tstep ok"><span class="dot">✓</span><span class="t">Spend limit set<span class="sub">intent · S$150 · 15 min</span></span></div>
           <div class="tstep ok"><span class="dot">✓</span><span class="t">Agent identity<span class="sub">tag=agent-payer-auth</span></span></div>
-          <div class="tstep ok"><span class="dot">✓</span><span class="t">Cart signed<span class="sub">sha256:9f3c…&nbsp;· S$149</span></span></div>
+          <div class="tstep ok"><span class="dot">✓</span><span class="t">Cart + address signed<span class="sub">sha256:9f3c…&nbsp;· S$149</span></span></div>
           <div class="tstep ok"><span class="dot">✓</span><span class="t">Within limit<span class="sub">149 ≤ 150</span></span></div>
           <div class="tstep wait"><span class="dot">●</span><span class="t">You<span class="sub">waiting for confirmation</span></span></div>
+          <div class="tstep"><span class="dot">·</span><span class="t">Bank approval<span class="sub">required — not yet issued</span></span></div>
           <div class="tstep"><span class="dot">·</span><span class="t">Authorise<span class="sub">not yet requested</span></span></div>
         </div>
       </div>
       <figcaption><ol>
-        <li>Everything a shopper needs to say yes fits above the fold: who, what, which card, how much.
-          No scrolling, no expander.</li>
-        <li>The scope band is the whole pitch in three lines — <em>once, this cart, this merchant</em> —
-          and it is the only gold element in the product.</li>
-        <li>The amount is on the button. Nobody should have to look up to remember what they're agreeing to.</li>
-        <li>The rail shows five links green and one waiting. The shopper <em>is</em> the missing link,
-          and the picture says so before anyone explains it.</li>
+        <li>Ship-to sits first, the way every checkout page puts it first. One line, truncated, with
+          Change — it confirms without stealing the fold.</li>
+        <li>The address is <b>inside the signed cart hash</b>, so the agent cannot quietly redirect the
+          goods after consent. Mismatch is a decline, not a warning — see the scenarios table below.</li>
+        <li>The scope band is the whole pitch in four clauses, and it is the only gold in the product.</li>
+        <li>The amount is on the button. Nobody should have to look up to recall what they're agreeing to.</li>
+        <li>Warn before the handoff. An unannounced bank prompt reads as a phishing attempt.</li>
+        <li>Seven links: four green, one waiting on the shopper, two not yet reached. The shopper
+          <em>is</em> the missing link, and the picture says so before anyone explains it.</li>
       </ol></figcaption>
     </figure>
 
     <figure class="plate">
-      <div class="plate-hd"><span class="plate-id">C6</span><span class="plate-nm">Identity check</span><span class="plate-tag">Stretch → simulated</span></div>
+      <div class="plate-hd"><span class="plate-id">C7</span><span class="plate-nm">Bank approval — the issuer's token</span><span class="plate-tag mvp">MVP</span></div>
       <div class="screen">
-        <div style="flex:1"></div>
-        <div class="slip" style="text-align:center">
-          <div class="ttl">Confirm it's you</div>
-          <div style="width:44px;height:44px;border:1.5px solid var(--accent);border-radius:50%;margin:8px auto;display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:17px">◉</div>
-          <p class="note" style="margin:0">Touch ID · Lumen Electronics · S$149.00</p>
-          <p class="note" style="margin-top:8px;color:var(--accent)">Use device PIN instead<span class="cx">2</span></p>
+        <p class="bankchip">◆ Meridian Bank · Visa Secure</p>
+        <div class="slip">
+          <div class="ttl">Approve this payment</div>
+          <div class="row"><span class="k">To</span><span class="v">Lumen Electronics</span></div>
+          <div class="row"><span class="k">Amount</span><span class="v">S$149.00</span></div>
+          <div class="otp"><span class="f">4</span><span class="f">9</span><span class="f">2</span><span class="cur">|</span><span></span><span></span></div>
+          <p class="note" style="text-align:center;margin:0">Code sent to •••• 8821 · expires in <b>4:41</b><span class="cx">2</span></p>
         </div>
+        <p class="note" style="color:var(--accent)">Approve in the Meridian app instead →</p>
         <div style="flex:1"></div>
-        <p class="note mono-sm">passkey assertion → payment mandate<span class="cx">1</span></p>
+        <p class="note mono-sm">issuer token → payment mandate → /pay/authorize<span class="cx">1</span></p>
+        <p class="note">Lumen never sees this code. Neither does the agent.<span class="cx">3</span></p>
       </div>
       <figcaption><ol>
-        <li>The assertion is what fills <code>human_confirmation</code> in the Payment Mandate. Real
-          WebAuthn if T-22 lands; a simulated sheet with the same shape if not — the chain is identical either way.</li>
-        <li>Always offer the fallback. A borrowed demo laptop with no enrolled biometric must not
-          strand the pitch.</li>
+        <li>The token is minted by the <b>issuer</b>, not the merchant and not us — bound to this exact
+          cart hash, amount and merchant, single-use, 5-minute TTL. <code>/pay/authorize</code> refuses
+          without a valid one.</li>
+        <li>Real EMV 3-D Secure runs this as an embedded challenge frame, not a page redirect — which
+          is why the "no redirects" requirement survives contact with a bank. Say that out loud.</li>
+        <li>This replaces the device passkey (old plate C6). A passkey proves the <em>device</em> is
+          present; an issuer token proves the <em>bank</em> authenticated the cardholder for this amount.
+          For a Visa audience that is a strictly stronger claim.</li>
       </ol></figcaption>
     </figure>
 
     <figure class="plate">
-      <div class="plate-hd"><span class="plate-id">C7</span><span class="plate-nm">Receipt</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="plate-hd"><span class="plate-id">C8</span><span class="plate-nm">Receipt</span><span class="plate-tag mvp">MVP</span></div>
       <div class="screen">
         <div class="banner ok"><b>Paid — S$149.00</b>Lumen Electronics · Visa •••• 4821</div>
         <div class="slip">
           <div class="row"><span class="k">Order</span><span class="v">LUM-88213</span></div>
           <div class="row"><span class="k">Auth code</span><span class="v">7K2M91</span></div>
+          <div class="row"><span class="k">Verified by</span><span class="v">Meridian Bank<span class="cx">2</span></span></div>
+          <div class="row"><span class="k">Shipping to</span><span class="v">…#05-21, S118420</span></div>
           <div class="row"><span class="k">Arriving</span><span class="v">Tue 1 Sep</span></div>
         </div>
         <div class="msg">
           <span class="who">Lumen assistant</span>
-          Done — that's on its way. Anything else?<span class="cx">2</span>
+          Done — that's on its way. Anything else?<span class="cx">3</span>
         </div>
         <div style="flex:1"></div>
         <p class="note" style="color:var(--accent)">View the authorisation chain →<span class="cx">1</span></p>
       </div>
       <figcaption><ol>
         <li>The one place we invite a curious judge to open the full chain of signed mandates.</li>
+        <li>Naming the issuer on the receipt is what a shopper checks when something looks wrong,
+          and it closes the loop opened on C7.</li>
         <li>The thread keeps going. The agent didn't hand the shopper off anywhere — that <em>is</em>
           the "no redirects" requirement, made visible.</li>
       </ol></figcaption>
     </figure>
 
     <figure class="plate">
-      <div class="plate-hd"><span class="plate-id">C8</span><span class="plate-nm">Declined — the demo's money shot</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="plate-hd"><span class="plate-id">C9</span><span class="plate-nm">Declined — the demo's money shot</span><span class="plate-tag mvp">MVP</span></div>
       <div class="screen split">
         <div class="pane">
           <div class="msg me">Actually, get me the Kestrel Studio 60 instead</div>
@@ -620,9 +734,10 @@ footer{margin-top:80px;border-top:1px solid var(--rule);padding-top:20px;font-fa
           <p class="lbl">Authorisation chain</p>
           <div class="tstep ok"><span class="dot">✓</span><span class="t">Spend limit set<span class="sub">intent · S$150</span></span></div>
           <div class="tstep ok"><span class="dot">✓</span><span class="t">Agent identity<span class="sub">tag=agent-payer-auth</span></span></div>
-          <div class="tstep ok"><span class="dot">✓</span><span class="t">Cart signed<span class="sub">S$189.00</span></span></div>
+          <div class="tstep ok"><span class="dot">✓</span><span class="t">Cart + address signed<span class="sub">S$189.00</span></span></div>
           <div class="tstep fail"><span class="dot">✕</span><span class="t">Within limit<span class="sub">189 &gt; 150 — stopped here</span></span></div>
           <div class="tstep"><span class="dot">·</span><span class="t">You<span class="sub">never asked</span></span></div>
+          <div class="tstep"><span class="dot">·</span><span class="t">Bank approval<span class="sub">never requested</span></span></div>
           <div class="tstep"><span class="dot">·</span><span class="t">Authorise<span class="sub">never called</span></span></div>
         </div>
       </div>
@@ -631,11 +746,40 @@ footer{margin-top:80px;border-top:1px solid var(--rule);padding-top:20px;font-fa
           <code>payments/</code> refuses, and the refusal is what we're showing off.</li>
         <li>The machine code is on screen, small, beside the human sentence. Engineers in the judging
           panel look for it; shoppers ignore it.</li>
-        <li>Note the two dead links below the red one: the shopper was <em>never asked</em>, and the
-          network was <em>never called</em>. That's the sentence to say out loud to a Visa judge.</li>
+        <li>Note the three dead links below the red one: the shopper was <em>never asked</em>, the bank
+          was <em>never troubled</em>, and the network was <em>never called</em>. That's the sentence to
+          say out loud to a Visa judge.</li>
       </ol></figcaption>
     </figure>
 
+  </div>
+
+  <h3>Three refusals worth rehearsing</h3>
+  <p>
+    Each one is a real check in <code>payments/</code>, not a scripted branch. Rehearse all three;
+    lead with the first and keep the others for a judge who asks "but what if…".
+  </p>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>Provoke it by…</th><th class="mono">Decline code</th><th>What it proves</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Asking for something over the limit</b> — the S$189 model against a S$150 cap</td>
+          <td class="mono">AMOUNT_EXCEEDS_MANDATE</td>
+          <td>The spend cap is enforced by the payment layer, not by the model's good manners. Plate C9.</td>
+        </tr>
+        <tr>
+          <td><b>Replaying a bank token</b> — approve once, then try to pay a second time with the same code</td>
+          <td class="mono">BANK_TOKEN_REUSED</td>
+          <td>Issuer approval is single-use and cart-bound. A stolen token buys nothing.</td>
+        </tr>
+        <tr>
+          <td><b>Changing the cart after approval</b> — swap the item, or edit the shipping address, once the token is issued</td>
+          <td class="mono">BANK_TOKEN_CART_MISMATCH<br>SHIPPING_ADDRESS_MISMATCH</td>
+          <td>What the shopper approved is what gets bought and where it gets sent. The agent cannot redirect goods after consent.</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
@@ -1007,12 +1151,21 @@ row 33  duplicate sku KS-40  → kept first<span class="cx">3</span></div>
     <ul class="tight">
       <li><b>Schema.</b> The message parses into the declared type, or it never leaves.</li>
       <li><b>Grounding.</b> Every <code>sku</code> mentioned exists in this merchant's catalog; every
-        price and attribute matches the database row to the cent. One repair attempt, then a
-        deterministic fallback — a plain table built from the rows in code.</li>
+        price, attribute <b>and star rating</b> matches the database row to the cent and to the
+        decimal. One repair attempt, then a deterministic fallback — a plain table built from the
+        rows in code.</li>
       <li><b>Scope.</b> Products outside the session's category or merchant scope are stripped.</li>
       <li><b>Mandate.</b> Nothing proposes a cart above the Intent Mandate's cap, and nothing reaches
-        the payment executor without a cart mandate and a human confirmation.</li>
+        the payment executor without a cart mandate, a human confirmation <b>and a valid issuer
+        token</b>.</li>
     </ul>
+    <p>
+      Ratings deserve a line of their own: a star average is a <em>fact</em>, and a model that can
+      round 4.1 up to "4.5 stars" is a model that can talk someone into a purchase on invented
+      evidence. So ratings travel the same road as prices — read from the row, rendered by code,
+      never phrased by a model. A recommendation may say <em>"the better-reviewed of the two"</em>;
+      it may not say a number that isn't in the payload.
+    </p>
     <p>
       Every check emits a <code>TrustEvent</code> on the existing bus, which means the Trust Panel is
       already wired for this — Y4's <code>/trust/events</code> stream needs no contract change, only
@@ -1037,25 +1190,53 @@ row 33  duplicate sku KS-40  → kept first<span class="cx">3</span></div>
     <span class="num">Consequences</span>
     <h2>What changes on the board</h2>
     <p>
-      Net <b>+3 person-hours</b>, taking the plan from ~50 h to ~53 h against 55–65 h available. That
-      eats most of the buffer, so one more item goes on the cut list: the real WebAuthn passkey in C6
-      drops to a simulated sheet unless everything else is green by T+16.
+      Revision 3 adds <b>+3.75 h</b> of new work and pays for <b>+2.75 h</b> of it by cutting, so the
+      plan lands at <b>~56 h</b> against 55–65 available. That is over the comfortable line. Read the
+      trade below before agreeing to it — the honest summary is that we are buying a much stronger
+      Trust &amp; Safety story with our remaining slack, and after this the buffer is gone.
     </p>
   </div>
 
+  <h3>What revision 3 adds</h3>
   <div class="tbl-scroll">
     <table>
       <thead>
         <tr><th class="mono">ID</th><th>Change</th><th>Owner</th><th class="num">Est</th><th>Note</th></tr>
       </thead>
       <tbody>
-        <tr><td class="mono">T-20</td><td><b>Split</b> into T-20a Concierge + routing + SSE, T-20b Discovery + catalog tool, T-20c Comparison + grounded-claim check</td><td>Y3</td><td class="num">5.0</td><td>Was one 3 h task. Three smaller ones are also three testable ones.</td></tr>
-        <tr><td class="mono">T-25</td><td><b>New</b> — Guardian validator, four checks, emits <code>TrustEvent</code></td><td>Y3</td><td class="num">2.0</td><td>The whole anti-hallucination claim rests here. Not cuttable.</td></tr>
-        <tr><td class="mono">T-23</td><td><b>Cheaper</b> — category packs become data files, not prompt engineering</td><td>Y3</td><td class="num">1.0</td><td>Was 2.5 h. The architecture pays for itself here.</td></tr>
-        <tr><td class="mono">T-10</td><td><b>Grows</b> — absorbs the deterministic cart builder from <code>agent/</code></td><td>Y4</td><td class="num">3.5</td><td>Cart totals belong next to the money, not next to the model.</td></tr>
-        <tr><td class="mono">T-30</td><td><b>Respecified</b> against plates C1–C8; consent sheet and decline recovery are now explicit</td><td>Y2</td><td class="num">3.5</td><td>Same estimate, far less ambiguity.</td></tr>
-        <tr><td class="mono">T-32</td><td><b>Simplified</b> — five screens to three sections</td><td>Y2</td><td class="num">2.5</td><td>Was 3.0 h.</td></tr>
-        <tr><td class="mono">T-34</td><td><b>New</b> — live agent preview in the merchant console</td><td>Y2</td><td class="num">1.0</td><td>Reuses the widget from T-30. The "90 seconds" claim needs it.</td></tr>
+        <tr><td class="mono">T-14</td><td><b>New</b> — mock issuer ACS: mint a single-use token bound to cart hash + amount + merchant, 5-min TTL; <code>/pay/authorize</code> rejects without it</td><td>Y4</td><td class="num">2.0</td><td>Four new decline codes. Buys two of the three rehearsed refusals.</td></tr>
+        <tr><td class="mono">T-35</td><td><b>New</b> — plate C7 bank approval sheet + the ship-to block on C6</td><td>Y2</td><td class="num">1.0</td><td>Replaces the WebAuthn passkey UI that was already on the cut list.</td></tr>
+        <tr><td class="mono">T-43</td><td><b>New</b> — consumer addresses: model, default flag, <code>/consumer/{id}/addresses</code>; address folded into the signed cart hash</td><td>Aryan</td><td class="num">0.5</td><td>Cheap, and it makes the address tamper-evident rather than decorative.</td></tr>
+        <tr><td class="mono">T-40</td><td><b>Grows</b> — <code>rating_avg</code>, <code>rating_count</code>, <code>rating_source</code> on ingest, with an enrichment hook that runs at ingest and caches</td><td>Aryan</td><td class="num">+0.25</td><td>Never fetched at demo time. The hook is where a mentor-supplied ratings API would land.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>What pays for it</h3>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>Cut</th><th class="num">Saves</th><th>Why it's safe</th></tr></thead>
+      <tbody>
+        <tr><td><b>Real WebAuthn passkey</b> (old plate C6)</td><td class="num">1.5 h</td><td>Already first on the revision-2 cut list, and now genuinely redundant: an issuer token is a strictly stronger claim than a device passkey.</td></tr>
+        <tr><td><b>Cross-merchant search</b> (stretch S8)</td><td class="num">1.25 h</td><td>Third on the cut list. Multi-merchant data model stays, so it remains a config flag we can re-enable if we finish early.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Carried over from revision 2</h3>
+  <div class="tbl-scroll">
+    <table>
+      <thead>
+        <tr><th class="mono">ID</th><th>Change</th><th>Owner</th><th class="num">Est</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">T-20</td><td><b>Split</b> into T-20a Concierge + routing + SSE, T-20b Discovery + catalog tool, T-20c Comparison + grounded-claim check</td><td>Y3</td><td class="num">5.0</td></tr>
+        <tr><td class="mono">T-25</td><td><b>New</b> — Guardian validator, four checks, emits <code>TrustEvent</code>. Now also grounds ratings</td><td>Y3</td><td class="num">2.0</td></tr>
+        <tr><td class="mono">T-23</td><td><b>Cheaper</b> — category packs become data files; now also declare <code>salient_dims</code></td><td>Y3</td><td class="num">1.0</td></tr>
+        <tr><td class="mono">T-10</td><td><b>Grows</b> — absorbs the deterministic cart builder from <code>agent/</code></td><td>Y4</td><td class="num">3.5</td></tr>
+        <tr><td class="mono">T-30</td><td><b>Respecified</b> against plates C1–C9, now including stars and the hover preview</td><td>Y2</td><td class="num">3.5</td></tr>
+        <tr><td class="mono">T-32</td><td><b>Simplified</b> — five screens to three sections</td><td>Y2</td><td class="num">2.5</td></tr>
+        <tr><td class="mono">T-34</td><td><b>New</b> — live agent preview in the merchant console</td><td>Y2</td><td class="num">1.0</td></tr>
       </tbody>
     </table>
   </div>
@@ -1063,11 +1244,13 @@ row 33  duplicate sku KS-40  → kept first<span class="cx">3</span></div>
   <div class="callout warn">
     <span class="lbl">Decisions for the huddle</span>
     <p>
-      Y4 owns three calls before anyone writes agent code: does the <b>Guardian live in
-      <code>agent/</code></b> (proposed — one owner, one interface) <b>or in <code>payments/</code></b>
-      beside the other trust code; is the <b>cart builder</b> Y4's or Y3's; and does the category pack
-      get chosen by the merchant at onboarding only, or can the concierge switch packs mid-conversation
-      (proposed: <b>no</b> — a switch is a new session, which keeps the isolation guarantee absolute).
+      Y4 owns five calls before anyone writes code. From revision 2: does the <b>Guardian live in
+      <code>agent/</code></b> (proposed — one owner, one interface) or in <code>payments/</code>; is
+      the <b>cart builder</b> Y4's or Y3's; can the concierge <b>switch category packs</b>
+      mid-conversation (proposed: <b>no</b> — a switch is a new session). New in revision 3: does the
+      <b>issuer ACS live in <code>payments/</code></b> as a separate router (proposed — it must be
+      able to refuse <em>us</em>, so it should not share state with the authoriser); and do we accept
+      landing at <b>~56 h with no buffer</b>, or drop something further.
     </p>
   </div>
 </section>

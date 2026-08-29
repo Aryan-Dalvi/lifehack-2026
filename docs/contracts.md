@@ -1,12 +1,18 @@
 # Interface contracts — DRAFT until frozen by the Y4 at the first huddle
 
-**Status: DRAFT v0.10** — proposed by KICKOFF (Claude Code / Aryan, T+0:35), revised T+1:10 with
-the subagent split and the simplified merchant console. The Y4/architect freezes v1 at the first
-huddle. After freeze: changing anything here requires the Y4's OK + a message in the team chat + a
-bump of the version line. Parallel work touches other members' modules **only** through what is
-written here — that is the whole point of this file.
+**Status: DRAFT v0.11** — proposed by KICKOFF (Claude Code / Aryan, T+0:35), revised T+1:10
+(subagent split, simplified console) and T+1:40 (ratings, progressive disclosure, issuer
+authentication, shipping address). The Y4/architect freezes v1 at the first huddle. After freeze:
+changing anything here requires the Y4's OK + a message in the team chat + a bump of the version
+line. Parallel work touches other members' modules **only** through what is written here — that is
+the whole point of this file.
 
-Version: **v0.10 (unfrozen)** · Project: *Agent-Ready Commerce* (working name)
+Version: **v0.11 (unfrozen)** · Project: *Agent-Ready Commerce* (working name)
+
+**Changes from v0.10:** `Product` gains rating fields · new `Address` model and
+`/consumer/{id}/addresses` · **new mock issuer ACS at `/bank/*`, and `/pay/authorize` now requires
+a valid issuer token** · cart hash now covers the shipping address · four new bank decline codes ·
+category packs gain `salient_dims` · plates renumbered **C1–C9**.
 
 **Changes from v0.9:** `agent/` is now an orchestrator plus five specialists (see §Subagents) ·
 new internal `AgentMessage` envelope and Guardian validator · the cart builder moves from `agent/`
@@ -80,7 +86,43 @@ and really are verified at the edge.
   "image_url": "/static/products/lum-tv-55x.png",   // always local
   "category": "electronics",
   "attributes": { "screen_in": 55, "panel": "OLED", "hdr": true },
-  "stock": 12
+  "stock": 12,
+
+  // ratings — v0.11. A rating is a FACT: read from this row, rendered by code,
+  // never phrased by a model. Guardian check #2 grounds them like prices.
+  "rating_avg": 4.8,           // 0.0–5.0, one decimal, null if unrated
+  "rating_count": 612,         // always shown beside the average
+  "rating_source": "merchant_feed"   // merchant_feed | enrichment | none
+}
+```
+
+```jsonc
+// Address — v0.11. One consumer may have several; exactly one is `is_default`.
+{
+  "address_id": "adr_01J…",
+  "consumer_id": "usr_demo",
+  "recipient": "Aryan D.",
+  "lines": ["14 Prince George's Park", "#05-21"],
+  "postal_code": "118420",
+  "country": "SG",
+  "is_default": true
+}
+```
+
+```jsonc
+// IssuerToken — v0.11, minted by the mock ACS in payments/, NOT by the agent
+{
+  "bank_token": "btk_01J…",     // opaque; stands in for a 3-DS CAVV
+  "issuer": "Meridian Bank",
+  "eci": "05",                  // authenticated
+  "bound": {                    // the binding is the whole point
+    "cart_hash": "sha256:…",    // covers items, total AND shipping address
+    "amount_cents": 14900,
+    "merchant_id": "m_lumen"
+  },
+  "single_use": true,
+  "expires_at": "2026-08-29T12:08:11Z",   // 5 minutes
+  "status": "issued"            // issued | consumed | expired | revoked
 }
 ```
 
@@ -165,7 +207,7 @@ from T-12 onward; before that the middleware runs in log-only mode so nobody is 
 | POST | `/pay/tokens` | `{consumer_id, mandate_id, constraints{…}}` | `PaymentToken` | 400, 409 `MANDATE_NOT_VERIFIED` |
 | POST | `/pay/mandates` | `{type, parent_id?, session_id, payload, expires_at, signatures[]}` | `Mandate` | 400 `SIGNATURE_INVALID`, 409 `PARENT_MISMATCH` |
 | GET | `/pay/mandates/{id}/chain` | — | `{links:[{mandate_id,type,verified:bool,failed_check?}], verified:bool}` | 404 |
-| POST | `/pay/authorize` | `{token_id, payment_mandate_id, amount_cents, currency, merchant_id}` | `{status:"approved", transaction_id, auth_code, amount_cents}` **or** `{status:"declined", decline_code, reason}` | 400 · **never 5xx for a business decline** |
+| POST | `/pay/authorize` | `{token_id, payment_mandate_id, amount_cents, currency, merchant_id, `**`bank_token`**`}` | `{status:"approved", transaction_id, auth_code, eci, issuer, amount_cents}` **or** `{status:"declined", decline_code, reason}` | 400 · **never 5xx for a business decline** |
 | POST | `/pay/capture` | `{transaction_id}` | `{status:"captured", captured_at}` | 404, 409 `NOT_AUTHORIZED` |
 | GET | `/pay/receipt/{transaction_id}` | — | `{transaction_id, merchant, items[], total_cents, currency, last4, auth_code, at}` | 404 |
 | GET | `/trust/events?session_id=` | SSE | stream of `TrustEvent` | 404 |
@@ -176,7 +218,51 @@ signature is a hard reject — that distinction is part of the pitch.*
 **Decline codes (closed set — Y2 renders these, Y3 handles them, don't invent new ones):**
 `AMOUNT_EXCEEDS_MANDATE` · `MANDATE_EXPIRED` · `MERCHANT_MISMATCH` · `CART_HASH_MISMATCH` ·
 `TOKEN_REUSED` · `TOKEN_REVOKED` · `SIGNATURE_INVALID` · `NONCE_REPLAY` · `HUMAN_NOT_PRESENT` ·
-`INSUFFICIENT_FUNDS` (simulated, for realism).
+`INSUFFICIENT_FUNDS` (simulated, for realism) · **v0.11:** `BANK_TOKEN_MISSING` ·
+`BANK_TOKEN_EXPIRED` · `BANK_TOKEN_REUSED` · `BANK_TOKEN_CART_MISMATCH` · `BANK_AUTH_DECLINED` ·
+`SHIPPING_ADDRESS_MISMATCH`.
+
+### `bank/` — mock issuer ACS (new in v0.11) — owner Y4
+
+Stands in for the card issuer's Access Control Server. Models the **Visa Secure / EMV 3-D Secure**
+step-up: the bank, not the merchant and not the agent, authenticates the cardholder for one specific
+transaction and mints a token bound to it.
+
+> **Keep this router's state separate from the authoriser's.** The ACS must be able to refuse *us* —
+> if it shares a store with `/pay/authorize`, the demo's most interesting refusals become
+> self-inflicted and stop proving anything.
+
+| Method | Path | Request | Response | Errors |
+|---|---|---|---|---|
+| POST | `/bank/challenge` | `{consumer_id, cart_hash, amount_cents, currency, merchant_id}` | `{challenge_id, method:"otp"\|"app", masked_target:"•••• 8821", expires_at}` | 400, 404 |
+| POST | `/bank/verify` | `{challenge_id, code}` | `{status:"approved", bank_token, eci, issuer, expires_at}` **or** `{status:"declined", decline_code}` | 400, 404, 429 (after 3 wrong codes) |
+| GET | `/bank/token/{bank_token}` | — | `IssuerToken` (status only; never the binding secrets) | 404 |
+
+**Rules `/pay/authorize` enforces on the token** — each one is a rehearsable demo refusal:
+
+| Condition | Decline code |
+|---|---|
+| No `bank_token` supplied | `BANK_TOKEN_MISSING` |
+| Past `expires_at` (5 min TTL) | `BANK_TOKEN_EXPIRED` |
+| `status == consumed` — replayed on a second purchase | `BANK_TOKEN_REUSED` |
+| `bound.cart_hash` ≠ the cart being authorised | `BANK_TOKEN_CART_MISMATCH` |
+| `bound.amount_cents` or `bound.merchant_id` differ | `BANK_TOKEN_CART_MISMATCH` |
+| Shipping address in the cart ≠ the one in the signed hash | `SHIPPING_ADDRESS_MISMATCH` |
+
+**Demo mode:** with `DEMO_MODE=1` the ACS accepts a fixed code (`492 118`) and still enforces every
+binding rule above. The refusals must be real even when the network is off.
+
+### `consumer/` — profile + addresses (new in v0.11) — owner Aryan
+
+| Method | Path | Request | Response | Errors |
+|---|---|---|---|---|
+| GET | `/consumer/{id}/addresses` | — | `{addresses:[Address], default_address_id}` | 404 |
+| PUT | `/consumer/{id}/addresses/{aid}/default` | — | `{default_address_id}` | 404 |
+
+**The shipping address is part of the signed cart.** `cart_hash` is computed over
+`{items, total_cents, currency, merchant_id, shipping_address_id, shipping_address_fingerprint}`.
+An agent that changes where the goods go after the shopper consented produces a different hash, and
+the issuer token no longer matches it. That is the property, and it is worth saying out loud.
 
 ### `agent/` — owner Y3
 
@@ -244,19 +330,24 @@ the context at all. Instructing one agent to "stay in category" is a request; no
 categories is a guarantee.
 
 - Packs are **data files**: `agent/packs/<category>.json` → `{ system, attribute_schema,
-  comparison_dimensions, guardrails, few_shot }`. A fourth category costs a JSON file.
+  salient_dims, comparison_dimensions, guardrails, few_shot }`. A fourth category costs a JSON file.
+- **`salient_dims`** (new in v0.11) — **max 4** attribute keys, the ones shown in the hover preview
+  (plate C4). `comparison_dimensions` is the full set, shown only on Compare (plate C5). Electronics
+  might surface battery / ANC / weight / fit; fashion, fit / fabric / care / origin.
 - **A category switch is a new session**, not a re-prompt (proposed — Y4 to confirm). This keeps
   the isolation guarantee absolute and costs nothing.
 
 ### Guardian checks — run on every hop, in this order
 
 1. **Schema** — the message parses into its declared type, or it never leaves.
-2. **Grounding** — every `sku` mentioned exists in this merchant's catalog; every price and
-   attribute matches the DB row **to the cent**. One repair attempt, then a deterministic fallback
-   (a plain table built from the rows, in code).
+2. **Grounding** — every `sku` mentioned exists in this merchant's catalog; every price, attribute
+   **and star rating** matches the DB row to the cent and to the decimal. One repair attempt, then a
+   deterministic fallback (a plain table built from the rows, in code).
+   *A model may say "the better-reviewed of the two"; it may not say a number that isn't in the
+   payload.*
 3. **Scope** — products outside the session's category or merchant scope are stripped.
 4. **Mandate** — nothing proposes a cart above the Intent Mandate's cap; nothing reaches the payment
-   executor without a cart mandate *and* a human confirmation.
+   executor without a cart mandate, a human confirmation **and a valid issuer token**.
 
 Every check emits a `TrustEvent` on the existing bus — **no change to `/trust/events`**, only more
 event sources. Failures use the existing decline-code set where one fits, plus:
@@ -307,3 +398,7 @@ trust code; rejected because it would make Y3 wait on Y4 for every agent test.
 5. **New in v0.10:** cart builder — Y4's `payments/` (proposed) or Y3's `agent/`?
 6. **New in v0.10:** may the concierge switch category packs mid-conversation?
    (Proposed: **no** — a switch is a new session.)
+7. **New in v0.11:** does the mock issuer ACS live in `payments/` as its own router with its own
+   store (proposed — it must be able to refuse *us*), or as a separate top-level module?
+8. **New in v0.11:** do we accept landing at **~56 h with no buffer**, or drop something further?
+   This is a scope call, so by `team.md` it's a majority vote, tie to Y4 — not Y4's alone.
