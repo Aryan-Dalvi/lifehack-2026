@@ -30,7 +30,9 @@ test("shopper completes discover, compare, consent, bank and payment", async ({ 
 
   // Guest checkout stops for want of a shipping address, which is what an account is for.
   await page.getByRole("button", { name: /^Checkout · S\$/ }).click();
-  await expect(page.getByText("Add a shipping address before checkout.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Add a shipping address" })).toBeVisible();
+  await expect(page.getByText(/Sign in first, using the account menu/)).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
 
   // Signing in attaches the account to the session in progress - the basket survives.
   await page.getByRole("button", { name: "Sign in" }).click();
@@ -71,7 +73,23 @@ test("merchant onboarding and both deployment options render", async ({ page }) 
   await expect(page.getByRole("heading", { name: "Hosted storefront" })).toBeVisible();
   await expect(page.getByText("Fixed for Phase 0")).toBeVisible();
   await expect(page.getByRole("link", { name: "Open hosted storefront QR code" })).toBeVisible();
+  const template = page.getByRole("link", { name: /Download the Excel template/ });
+  await expect(template).toBeVisible();
+  expect((await template.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+
+  await expect(page.getByLabel("Choose brand accent color")).toBeVisible();
+  await page.getByRole("button", { name: "Use Ocean accent" }).click();
+  await expect(page.getByLabel("Brand accent hex value")).toHaveValue("#255B78");
+  await expect(page.locator(".preview-window")).toHaveCSS("--merchant-accent", "#255B78");
   await page.screenshot({ path: "test-results/merchant-admin.png" });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const width = await page.evaluate(() => ({
+    scroll: document.documentElement.scrollWidth,
+    client: document.documentElement.clientWidth,
+  }));
+  expect(width.scroll).toBeLessThanOrEqual(width.client);
+  await page.screenshot({ path: "test-results/merchant-admin-mobile.png", fullPage: true });
   expect(consoleErrors).toEqual([]);
 });
 

@@ -2,6 +2,7 @@ import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, Do
 import { QRCodeSVG } from "qrcode.react";
 import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { api, getMerchantKey, money, setMerchantKey } from "../../api";
+import { MERCHANT_ACCENT_PRESETS, isValidAccent, merchantThemeStyle, normalizeAccent } from "../../theme";
 import { StagedImage } from "./StagedImage";
 import type { Product } from "../../types";
 
@@ -393,6 +394,8 @@ export function MerchantAdmin() {
   const publishMode = upload?.skipped ? "upsert" : "replace";
   const publishPlan = upload?.approval.modes[publishMode];
   const approvalBlocked = Boolean(upload?.approval_required && (!reviewComplete || !publishPlan?.allowed));
+  const accentValid = isValidAccent(config.accent_color);
+  const publishBlocked = approvalBlocked || !accentValid;
 
   return (
     <div className="admin-shell">
@@ -423,7 +426,39 @@ export function MerchantAdmin() {
                 <label>Merchant name<input value={config.name} onChange={(event) => setConfig({ ...config, name: event.target.value })} /></label>
                 <label>Category<input value="Skincare" readOnly aria-readonly="true" /><small>Fixed for Phase 0</small></label>
                 <label>Currency<span className="select-field">SGD <ChevronDown size={15} /></span></label>
-                <label>Accent color<span className="color-field"><i style={{ background: config.accent_color }} /><input value={config.accent_color} onChange={(event) => setConfig({ ...config, accent_color: event.target.value })} /></span></label>
+                <label className="accent-control">Brand accent
+                  <span className={`color-field ${accentValid ? "" : "is-invalid"}`}>
+                    <input
+                      className="color-picker"
+                      type="color"
+                      aria-label="Choose brand accent color"
+                      value={normalizeAccent(config.accent_color)}
+                      onChange={(event) => setConfig({ ...config, accent_color: event.target.value.toUpperCase() })}
+                    />
+                    <input
+                      className="color-value"
+                      aria-label="Brand accent hex value"
+                      aria-invalid={!accentValid}
+                      maxLength={7}
+                      value={config.accent_color}
+                      onChange={(event) => setConfig({ ...config, accent_color: event.target.value.toUpperCase() })}
+                    />
+                  </span>
+                  <span className="color-presets" aria-label="Brand accent presets">
+                    {MERCHANT_ACCENT_PRESETS.map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        className={normalizeAccent(config.accent_color) === preset.value ? "active" : ""}
+                        style={{ background: preset.value }}
+                        aria-label={`Use ${preset.label} accent`}
+                        title={preset.label}
+                        onClick={() => setConfig({ ...config, accent_color: preset.value })}
+                      />
+                    ))}
+                  </span>
+                  {!accentValid ? <small className="color-error" role="alert">Use a six-digit colour such as #435744.</small> : null}
+                </label>
               </div>
               <fieldset className="size-control">
                 <legend>Merchant setup</legend>
@@ -437,12 +472,15 @@ export function MerchantAdmin() {
           <section className="setup-section">
             <div className="section-number">2</div>
             <div className="section-content">
-              <div className="section-heading">
-                <FileSpreadsheet size={20} /><h2>Your catalog</h2>
-                <a className="template-link" href="/api/catalog/template" download>
-                  <Download size={14} /> Download the Excel template
-                </a>
-              </div>
+              <div className="section-heading"><FileSpreadsheet size={20} /><h2>Your catalog</h2></div>
+              <a className="template-callout" href="/api/catalog/template" download>
+                <span className="template-callout-icon"><Download size={22} /></span>
+                <span>
+                  <strong>Download the Excel template</strong>
+                  <small>Recommended · includes every required skincare catalog column</small>
+                </span>
+                <ArrowRight size={19} />
+              </a>
               <label className={`dropzone ${uploading ? "is-uploading" : ""}`}>
                 <input type="file" accept=".csv,.xlsx,.json" onChange={(event) => void uploadCatalog(event)} disabled={uploading} />
                 {uploading ? <LoaderCircle className="spin" size={30} /> : <CloudUpload size={32} />}
@@ -577,13 +615,13 @@ export function MerchantAdmin() {
           {error ? <div className="inline-error" role="alert">{error}</div> : null}
           <footer className="publish-bar">
             <div>{published ? <Check size={18} /> : <RefreshCw size={18} />}<span><strong>{published ? "Your agent is live" : "Ready to publish"}</strong><small>{productCount} products ready · skincare pack active · simulated payments</small></span></div>
-            <button type="button" onClick={() => void publish()} disabled={publishing || approvalBlocked}>{publishing ? "Publishing…" : approvalBlocked ? "Complete catalog review" : published ? "Republish changes" : "Publish agent"}<ArrowRight size={17} /></button>
+            <button type="button" onClick={() => void publish()} disabled={publishing || publishBlocked}>{publishing ? "Publishing…" : !accentValid ? "Choose a valid accent" : approvalBlocked ? "Complete catalog review" : published ? "Republish changes" : "Publish agent"}<ArrowRight size={17} /></button>
           </footer>
         </section>
 
         <aside className="live-preview" id="preview">
           <header><span>Live preview ({config.name} agent)</span><strong><i /> Connected</strong></header>
-          <div className="preview-window">
+          <div className="preview-window" style={merchantThemeStyle(config.accent_color)}>
             <div className="preview-top"><strong>{config.name}</strong><span>Your skincare, personalized.</span></div>
             <div className="preview-message"><i>{config.name.trim().charAt(0).toUpperCase()}</i><span>Hi! I’m your skincare assistant. What does your skin need today?</span></div>
             <div className="preview-chips"><button>Dryness</button><button>Sensitive skin</button><button>Build a routine</button></div>

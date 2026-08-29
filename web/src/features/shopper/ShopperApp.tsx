@@ -1,6 +1,7 @@
 import { ArrowRight, CircleDollarSign, LayoutGrid, LoaderCircle, Send, ShieldCheck, ShoppingBag, Sparkles, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, money, setSessionToken } from "../../api";
+import { DEFAULT_MERCHANT_ACCENT, merchantThemeStyle } from "../../theme";
 import type { CartPreview, Comparison, Consent, Product, Receipt, Routine, TrustEvent, TurnEvent } from "../../types";
 import { type Account, AccountMenu } from "./AccountMenu";
 import { AddressPrompt } from "./AddressPrompt";
@@ -20,6 +21,7 @@ type Decline = {
   total_cents?: number;
   cap_cents?: number;
 };
+type MerchantTheme = { name: string; accent_color: string };
 
 const initialMessage: ChatMessage = {
   id: "welcome",
@@ -63,6 +65,10 @@ export function ShopperApp() {
   const [addressPromptOpen, setAddressPromptOpen] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
   const [addressBusy, setAddressBusy] = useState(false);
+  const [merchantTheme, setMerchantTheme] = useState<MerchantTheme>({
+    name: "Mysa Skin",
+    accent_color: DEFAULT_MERCHANT_ACCENT,
+  });
   const idempotencyKey = useRef(crypto.randomUUID());
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -80,7 +86,7 @@ export function ShopperApp() {
     // Identity is never sent in the body: the server reads it from the consumer token, or
     // treats the session as anonymous.
     setSessionToken(null);
-    api<{ session_id: string; session_token: string; greeting: string; anonymous: boolean }>(
+    api<{ session_id: string; session_token: string; greeting: string; anonymous: boolean; merchant: MerchantTheme }>(
       "/agent/session",
       {
         method: "POST",
@@ -93,6 +99,7 @@ export function ShopperApp() {
         setSessionToken(payload.session_token);
         setSessionId(payload.session_id);
         setAnonymous(payload.anonymous);
+        setMerchantTheme(payload.merchant);
         return loadTrust(payload.session_id);
       })
       .catch((requestError: Error) => active && setError(requestError.message));
@@ -418,10 +425,10 @@ export function ShopperApp() {
   };
 
   return (
-    <div className={`shopper-shell ${embedded ? "shopper-shell--embedded" : ""}`}>
+    <div className={`shopper-shell ${embedded ? "shopper-shell--embedded" : ""}`} style={merchantThemeStyle(merchantTheme.accent_color)}>
       <header className="shopper-header">
         <a className="brand" href="/storefront?merchant=m_mysa">
-          <span>Mysa Skin</span>
+          <span>{merchantTheme.name}</span>
           <small>Powered by Sway</small>
         </a>
         <div className="shopper-header-actions">

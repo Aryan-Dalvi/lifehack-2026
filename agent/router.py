@@ -150,6 +150,10 @@ def create_session(
         "session_token": session_token,
         "consumer_id": consumer_id,
         "anonymous": signed_in is None,
+        "merchant": {
+            "name": merchant["name"],
+            "accent_color": merchant["accent_color"],
+        },
         "intent_mandate_id": intent["mandate_id"],
         "category_pack_id": PACK["id"],
         "greeting": PACK["greeting"],

@@ -54,7 +54,7 @@ class ConfigUpdate(BaseModel):
     name: str | None = None
     size: str | None = None
     currency: str | None = None
-    accent_color: str | None = None
+    accent_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     persona: str | None = None
     policies: dict[str, Any] | None = None
     status: str | None = None

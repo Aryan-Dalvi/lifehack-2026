@@ -66,6 +66,34 @@ def test_a_key_identifies_its_own_store(client: TestClient, seeded_key: str) -> 
     assert keyed(first["api_key"]).get("/merchant/me").json()["name"] == "Aurora Skin"
 
 
+def test_brand_accent_is_validated_and_returned_to_the_storefront(client: TestClient) -> None:
+    merchant = onboard(client, "Aurora Skin")
+    api = keyed(merchant["api_key"])
+
+    invalid = api.put(
+        f"/merchant/{merchant['merchant_id']}/config",
+        json={"accent_color": "friendly blue"},
+    )
+    assert invalid.status_code == 422
+
+    updated = api.put(
+        f"/merchant/{merchant['merchant_id']}/config",
+        json={"accent_color": "#255B78"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["accent_color"] == "#255B78"
+
+    session = client.post(
+        "/agent/session",
+        json={"merchant_id": merchant["merchant_id"], "category": "skincare"},
+    )
+    assert session.status_code == 200
+    assert session.json()["merchant"] == {
+        "name": "Aurora Skin",
+        "accent_color": "#255B78",
+    }
+
+
 def test_me_refuses_a_missing_or_wrong_key(client: TestClient) -> None:
     onboard(client, "Aurora Skin")
     assert TestClient(app).get("/merchant/me").status_code == 401
