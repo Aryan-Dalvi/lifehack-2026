@@ -113,9 +113,12 @@ settings icon, its footer, and every task that is fixed there.
 
 ## Styling
 
-`web/src/features/merchant/dashboard.css`, scoped under `.crm-shell` with its own palette. The
-storefront is a warm sage brand aimed at shoppers; this is a dense back-office tool, and neither
-borrows the other's tokens. Nothing here leaks into the storefront or the setup page.
+`web/src/features/merchant/dashboard.css` stays scoped under `.crm-shell`, but aliases the same
+tokens used by merchant onboarding: warm paper and white surfaces, sage navigation and data marks,
+coral primary actions, serif section headings, thin neutral borders and compact radii. The CRM is
+denser than setup because it carries tables and charts, but it now reads as the next screen in the
+same merchant journey rather than a separate purple product. Nothing leaks into the storefront or
+setup page.
 
 ## Tests
 
