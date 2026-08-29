@@ -13,9 +13,6 @@ and authoring the shared planning docs. Routine per-module work belongs to the C
 ## Session start ritual (always, before anything else)
 
 1. `git pull` (if a remote exists), then read `docs/HANDOFF.md`, `git log -15`, and `docs/tasks.md`.
-2. Run `date` and state the current **T+ time** (T0 = problem-statement release, ~11:00 Sat; the
-   Devpost form locks at **T+24 = 11:00 Sun**).
-3. Say which window you are ("Claude Code / Aryan") in your first reply.
 
 ## Trigger protocol
 
@@ -24,7 +21,6 @@ instruction → run the KICKOFF protocol automatically.**
 
 | Keyword (or slash command) | Behaviour file | What it does |
 |---|---|---|
-| `KICKOFF` / `/lifehack-kickoff` | `prompts/kickoff.md` | Break down the PS → brief, tasks, timeline, contracts draft, research, coverage matrix |
 | `RESEARCH <topic>` | (inline) | Focused research memo → `docs/research/<topic>.md`, with sources |
 | `TEST <target>` / `/lifehack-test` | `prompts/test.md` | Base + edge case testing of a deliverable, run for real, feedback with severity |
 | `STATUS` / `/lifehack-status` | `prompts/status.md` | Progress vs timeline, coverage re-check, risk flags, proposed cuts |
