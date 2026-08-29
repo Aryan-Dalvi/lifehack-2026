@@ -5,9 +5,9 @@
 > commit, push. The Decision log is the only append-only section.
 
 ## Snapshot
-- **When:** **T+2:35** (Sat 29 Aug 2026, 13:35 SGT) · **Author:** Claude Code / Aryan
+- **When:** **T+3:47** (Sat 29 Aug 2026, 14:47 SGT) · **Author:** Claude Code / Aryan
 - **Deadline:** Devpost locks **T+24 = 11:00 Sun**. Judging 12:00–14:30. Closing 15:00 (all must attend).
-- **Head:** `71bbff2` on `main`, pushed, working tree clean. No other branches.
+- **Head:** `e379802` on `main`, 1 commit ahead of `origin/main` (not yet pushed this refresh).
 
 ## Project one-liner
 **Agent-Ready Commerce** — for the **Visa** PS *"Conversational Commerce Agents for Every Merchant."*
@@ -16,78 +16,83 @@ agent onto their site that takes a customer from discovery to a completed, **in-
 payment, with every purchase carrying a verifiable chain of human and issuer consent.
 
 ## Direction & why
-Direction **A** in `docs/brief.md` §4 — *recommended by KICKOFF, still pending huddle confirmation.*
-The only candidate that hits all four "Expected Submissions" head-on and splits into four clean
-parallel modules.
-
-**Rejected:** Direction B, a cross-merchant category concierge (higher ceiling, needs basket
-splitting and multi-merchant settlement — absorbed the cheap 80% into A instead, then cut it in
-rev 3); Direction C, voice-first for hawker SMEs (charming, thin, and voice in a loud MPH during
-walking judging is a liability).
-
-**The wedge:** ChatGPT deprecated Instant Checkout in March 2026 and the industry fell back to
-*discovery + redirect*, because in-conversation payment is a **trust** problem. The PS explicitly
-demands "no redirects" — so we ship the trust artifact that removes the need for one.
+Direction **A** in `docs/brief.md` §4 (unchanged, still the standing recommendation). See that
+file for the full rejection notes on Direction B (cross-merchant concierge) and C (voice-first).
+`docs/architecture-flowchart.md` (added T+3:04) narrows the MVP to a single skincare vertical and
+is the current detailed decision-aid — it **has not yet been reconciled** into `contracts.md` or
+approved at a huddle (see State, below).
 
 ## Stack & repo map
-Proposed; **Y4 freezes at the huddle.** Full detail: `docs/contracts.md` **v0.11 (unfrozen)**.
+Proposed; **still unfrozen** — see State. Full detail: `docs/contracts.md` v0.11.
 
 **One process, five routers, three modules.** `uvicorn app.main:app` mounts `agent`, `merchant`,
 `consumer`, `pay`, `bank` on **:8000**; Vite/React/Tailwind on **:5173**; SQLite single file.
-Chosen so a cold start takes seconds across 2.5 h of walking-format judging.
 
 | Directory | Owns | Owner |
 |---|---|---|
-| `payments/` | mock Visa stack, cart builder, AP2 mandate chain, TAP (RFC 9421) verification, trust bus, **mock issuer ACS `/bank/*` with its own store** | Y4 |
+| `payments/` | mock Visa stack, cart builder, AP2 mandate chain, TAP (RFC 9421) verification, trust bus, mock issuer ACS `/bank/*` with its own store | Y4 |
 | `agent/` | Concierge + Discovery + Comparison specialists, **Guardian**, packs as data, signing, `DEMO_MODE` | Y3 |
 | `web/` | chat widget (plates C1–C9), Trust Panel, 3-section merchant console (M1–M3), live preview | Y2 |
-| `merchant/` | catalog ingest incl. ratings, registry, search, config + snippet, **consumer addresses `/consumer/*`** | Aryan |
+| `merchant/` | catalog ingest incl. ratings, registry, search, config + snippet, consumer addresses `/consumer/*` | Aryan |
 | `app/`, `seed/`, `demo/`, `docs/`, `Makefile` | entrypoint, seed data, ops | Aryan |
 
 **No deployed URL** — local only, by design. Published wireframes:
 https://claude.ai/code/artifact/f798d544-e897-4572-8421-925f2cb32a0a
 
-### Doc map — read in this order
-`event.md` (PS + rubric) → `brief.md` (direction, MVP, cut list) → `ux.md` + `wireframes.html`
-(the two surfaces) → `contracts.md` (types and endpoints — **authoritative**) →
-`agent-workflow.md` (22 steps, inputs/outputs/tools) → `tasks.md` (the board) →
-`timeline.md` (checkpoints and slip rules) → `coverage.md` (requirement → task).
+### Doc map — **stale, needs a pass**
+`README.md`, `AGENTS.md`, and this file's old doc map pointed to `docs/event.md`, `docs/team.md`,
+`docs/tasks.md`, `docs/timeline.md`, `docs/agent-workflow.md` — **all deleted in the last hour (see
+State)**. `README.md` in particular still tells a new window to read files that no longer exist.
+Until the team re-establishes a doc map, read what's actually on disk: `brief.md` → `contracts.md`
+→ `architecture-flowchart.md` → `ux.md` + `wireframes.html` → `coverage.md` → `ai-budget.md`.
 
 ## State
 
-> ⚠️ **Read this before anything else.** The documentation is far ahead of the code. Do not mistake
-> one for the other.
+> ⚠️ **Read this before anything else.** Two things changed since the last handoff (T+2:35): a
+> detailed architecture doc was added, and most of the operational tracking layer was deleted by
+> teammates in real time. Neither is explained in a commit message — flag it at the next sync.
 
-- **Done:** planning only. KICKOFF + revisions 2 and 3 — `brief.md`, `research/initial.md`,
-  `tasks.md`, `contracts.md` v0.11, `timeline.md`, `coverage.md`, `ux.md`, `wireframes.html`,
-  `agent-workflow.md`. PS and the official 5-line rubric transcribed into `event.md`.
-- **In progress:** *nothing.* No branches besides `main`. Working tree clean, everything pushed.
-- **NO CODE EXISTS.** The repo contains `docs/`, `prompts/`, `samples/`, `.env.example` and the
-  PS PDF. There is no `app/`, `agent/`, `payments/`, `merchant/`, `web/`, `seed/` or `Makefile`.
+- **Done:** original KICKOFF planning (`brief.md`, `research/initial.md`, `contracts.md` v0.11,
+  `coverage.md`, `ux.md`, `wireframes.html`) plus a new, detailed MVP architecture decision aid,
+  `docs/architecture-flowchart.md` (added T+3:04 by Nam Nguyen), which narrows the MVP to a single
+  skincare-shopper vertical with a reduced two-call LLM topology. **This is not yet reconciled with
+  `contracts.md` v0.11** — §1 of that file lists explicit contract deltas it needs (decoupling
+  session creation from budget entry, a `PUT /agent/session/{id}/limit` op, removing the category
+  selector, etc.) that have not been ported.
+- **Removed in the last hour, cause unstated:** between T+3:15 and T+3:42, two authors (Nam Nguyen,
+  Aryan) deleted `docs/tasks.md` (the task board), `docs/team.md` (the roster), `docs/timeline.md`,
+  `docs/event.md` (the transcribed PS + judging criteria), `docs/agent-workflow.md` (the 22-step
+  spec), `.claude/skills/lifehack-kickoff/`, and `samples/`. No commit message says why. **This may
+  be a deliberate pivot** (e.g. consolidating onto `architecture-flowchart.md` as the new source of
+  truth) **or accidental scope creep during a cleanup pass** — the next window should get a
+  human confirmation before treating it as settled. Practical effect: **the task-claim mechanism
+  CLAUDE.md describes ("claim = write your name in `docs/tasks.md` and commit") has no file to
+  operate on right now**, and the PS's official judging criteria (previously in `event.md`) exist
+  only in `Visa Problem Statement.pdf`.
+- **In progress:** nothing. No branches besides `main`. Working tree clean except this handoff.
+- **NO CODE EXISTS.** The repo still contains only `docs/`, `prompts/`, `.claude/`, `.env.example`,
+  and the PS PDF. There is no `app/`, `agent/`, `payments/`, `merchant/`, `web/`, `seed/` or `Makefile`.
 - **Blocked / not started:**
-  - **T-01 huddle** — no evidence it happened. `team.md` has 4 unfilled rows; the board has 0 claims.
-    By the team's own protocol ("claiming = write your name and commit immediately"), no commit
-    means no claim. *If the huddle did happen offline, the board is lying to every other window and
-    must be updated now.*
-  - **T-02 scaffold** — not started. **Blocks all four module lanes.**
-  - **T-04 OpenAI key** — not obtained. Blocks every `agent/` task.
-  - `contracts.md` is still **v0.11 unfrozen**. Eight open questions await the huddle.
+  - **Huddle** — still no evidence it happened, and the one artifact that would prove it
+    (`team.md`) is now gone rather than filled, so this can no longer even be checked from the repo.
+  - **Scaffold** — not started. Blocks all four module lanes.
+  - **OpenAI key** — not confirmed obtained. Blocks every `agent/` task.
+  - `contracts.md` is still **v0.11 unfrozen**, and now also out of sync with
+    `architecture-flowchart.md`'s recommendations.
 
-### Schedule reality at T+2:35
+### Schedule reality at T+3:47
 
-| Timeline said | Actual |
+| Timeline said (original plan) | Actual |
 |---|---|
 | T+0:40–1:10 huddle, contracts frozen | not evidenced |
 | T+1:10–2:10 scaffold + seed data | not started |
-| **T+2:10 all four modules building in parallel** | **nothing building** |
-| T+4:00 checkpoint 1, `main` runs | at risk |
-| T+8:00 walking skeleton | at risk but recoverable |
+| T+2:10 all four modules building in parallel | nothing building |
+| T+4:00 checkpoint 1, `main` runs | at risk — 15 min away with zero code |
 
-**The build is ~1.5 h behind.** If the team has genuinely been idle since T0, roughly **8
-person-hours** of the budget are already gone, taking available capacity from 55–65 h to about
-**47–57 h against a ~56 h plan**. The revision-3 scope question stops being theoretical here: the
-team should expect to cut, and `brief.md` §5 already names what goes first. Recoverable — the
-critical path is one 1-hour scaffold task — but only if the huddle happens immediately.
+The build is now **~2.5 h behind** a plan that had no buffer to begin with. The last 70 minutes
+were spent adding a detailed architecture doc and deleting the tracking layer, not writing code or
+running a huddle. This is the second consecutive handoff to record this gap — escalate verbally,
+not just in this file.
 
 ## Decision log
 - 2026-08-29 · Workspace created; dual-AI protocol (CLAUDE.md/AGENTS.md + prompts/) adopted.
@@ -128,7 +133,6 @@ critical path is one 1-hour scaffold task — but only if the huddle happens imm
 - 2026-08-29 T+1:45 · The **shipping address is inside the signed `cart_hash`**, so an agent cannot
   redirect goods after consent — `SHIPPING_ADDRESS_MISMATCH`. Three refusals are now rehearsable:
   over-limit, replayed bank token, cart-or-address edited after approval.
-
 - 2026-08-29 T+2:35 · **`docs/agent-workflow.md` added** — the flow as 22 steps across 6 phases,
   each with exact input, output, typed tool list, Guardian checks, failure codes and budgets.
   Pins two things that were only implied: Discovery/Comparison use **forced tool choice with strict
@@ -143,6 +147,20 @@ critical path is one 1-hour scaffold task — but only if the huddle happens imm
   All 35 tasks `todo`, `team.md` still has 4 `_fill_` placeholders, only branch is `main`. Planning
   is ~2 h ahead of the build; the build is ~1.5 h behind the timeline. Recorded here because the
   next window must not mistake a well-documented plan for progress.
+- 2026-08-29 T+3:04 (Nam Nguyen) · **`docs/architecture-flowchart.md` added** — a detailed MVP
+  decision aid narrowing the visible category to skincare-only, reducing the LLM topology to one
+  required + one optional call, and formalizing the optional/versioned session spending-limit as a
+  superseding Intent Mandate. Explicitly marked as a draft team decision aid, not a frozen contract;
+  lists its own contract deltas still owed to `contracts.md` and a huddle freeze checklist (§16).
+- 2026-08-29 T+3:15–3:42 (Aryan, Nam Nguyen) · **Cleanup pass deleted `samples/`,
+  `docs/timeline.md`, `.claude/skills/lifehack-kickoff/`, `docs/agent-workflow.md`,
+  `docs/event.md`, `docs/tasks.md`, `docs/team.md`.** No commit message states a reason. Net effect:
+  the repo now has no task board, no team roster, no transcribed judging criteria, and no
+  step-by-step agent spec. `README.md`/`AGENTS.md` still reference several of these paths and are
+  now stale. **Flagged, not reversed** — this may be intentional; get it confirmed verbally before
+  the next huddle so the next window isn't rebuilding files someone meant to retire.
+- 2026-08-29 T+3:47 (Claude Code / Aryan) · Removed redundant `docs/research/.gitkeep` (dir was
+  already non-empty). Refreshed this handoff to record the architecture doc and the deletions above.
 
 ## How to run & test
 
@@ -150,8 +168,9 @@ critical path is one 1-hour scaffold task — but only if the huddle happens imm
 tries to verify a "known-good demo path" right now will find none — that is expected, not a
 broken clone.
 
-After **T-02** lands (target: 1 h from whenever it starts), this section must be replaced with the
-real commands. The scaffold's own DoD is that these three work from a clean clone:
+Once a scaffold lands, this section must be replaced with the real commands. The intended DoD
+(from the now-deleted task board, still valid as a target) was for these three to work from a
+clean clone:
 
 ```bash
 make dev      # uvicorn app.main:app on :8000  +  vite on :5173
@@ -159,61 +178,66 @@ make reset    # drop + reseed SQLite in under 5 s
 make keys     # generate local ed25519 signing keys (gitignored)
 ```
 
-Known-good demo path once the skeleton exists (`docs/agent-workflow.md` has the step detail):
-set a spend limit → "good ANC for flights" → compare two → confirm → bank code `492118` in
-`DEMO_MODE` → receipt. Then the three rehearsed refusals.
+Known-good demo path once the skeleton exists: set a spend limit → describe a skincare need →
+compare two → confirm → issuer/bank challenge in `DEMO_MODE` → receipt. Then the rehearsed
+refusals (over-cap, replayed bank token, cart/address edited after approval).
 
 ## Env & secrets
 Names only; values live in each machine's local `.env`, mirrored by name into `.env.example`, and
 are **never committed, never printed into docs, never logged**.
 
-`OPENAI_API_KEY` (team's $50 grant — value via the team group chat only) · `OPENAI_MODEL` ·
-`DEMO_MODE` · `DATABASE_URL` · `AGENT_PRIVATE_KEY` · `AGENT_KID` · `PLATFORM_PRIVATE_KEY` ·
-`TRUST_REGISTRY_PATH` · `API_BASE_URL` · `VITE_API_BASE` · `SIGNATURE_ENFORCE`.
+`.env.example` currently declares only `OPENAI_API_KEY` (team's $50 grant — value via the team
+group chat only). The earlier plan also called for `OPENAI_MODEL`, `DEMO_MODE`, `DATABASE_URL`,
+`AGENT_PRIVATE_KEY`, `AGENT_KID`, `PLATFORM_PRIVATE_KEY`, `TRUST_REGISTRY_PATH`, `API_BASE_URL`,
+`VITE_API_BASE`, `SIGNATURE_ENFORCE` — none of these have been added back to `.env.example` yet;
+add them as the scaffold lands.
 
-Signing keys are generated locally by `make keys` and gitignored.
+Signing keys are intended to be generated locally by `make keys` and gitignored (not yet built).
 
 ## API credit spend
-- **$0 of $50 spent.** No API calls have been made — **the key has not been obtained yet (T-04).**
-- **Demo-day reserve (~$25): not at risk from spend.** It is at risk from *never getting the key* —
-  T-04 is now on the critical path for the whole `agent/` lane.
-- Budget once building: ≤$10 dev, ~$25 held for judging, ~$15 buffer. Per `agent-workflow.md`, a
-  full demo run should cost **≈$0.004** (3 model calls; cart and payment make none), against the
-  <$0.05 target in T-24 — roughly 10× headroom. Verify against the real meter at T-24.
+- **$0 of $50 spent.** No API calls have been made — the key's current status is unconfirmed in
+  the repo (the file that would have tracked this, `docs/team.md`/`tasks.md`, is deleted).
+- **Demo-day reserve (~$25): not at risk from spend.** It is at risk from *never getting the key
+  onto all four machines* — this is still on the critical path for the whole `agent/` lane.
+- Budget once building: ≤$10 dev, ~$25 held for judging, ~$15 buffer (from the original plan).
+  A full demo run was estimated at **≈$0.004** (per the now-deleted `agent-workflow.md`); verify
+  against the real meter once building starts.
 
 ## Next 3 actions
 
 Ordered. Nothing below item 1 can start until item 1 finishes.
 
-1. **RUN THE HUDDLE — now, 20 minutes, not 30.** Owner: **Aryan**, human-only, no AI.
-   Fill `docs/team.md` *first* (it is still blank and it is risk #1 — every owner on the board is a
-   role-archetype guess). Then: confirm Direction A, confirm the stack, pick the demo category,
-   have **Y4 freeze `contracts.md` v1** against the eight open questions, and get every member to
-   write their name on two rows and **commit the claim**. One of those eight questions is a *team
-   vote, not Y4's call*: whether to accept ~56 h with no buffer, or cut now.
-2. **T-02 scaffold** — Owner: **Aryan**, executor **Aryan-Claude** (strongest model, thinking on).
-   1 h. Single FastAPI app mounting five routers, Vite/React/Tailwind, SQLite, `make dev` /
-   `make reset` / `make keys`, `.env.example`. **This blocks all four module lanes** — start it the
-   moment the huddle ends, and run T-03 seed data (Aryan-Codex) in parallel.
-3. **T-04 OpenAI key onto all four machines** — Owner: **Aryan**, human-only. Chase the on-site org
-   staff. Blocks every `agent/` task. Can be done *during* the huddle by whoever is least needed.
+1. **Get a human sync on what just happened to the docs — before anything else.** Owner: **Aryan**,
+   human-only. Confirm with Nam Nguyen (and the rest of the team) whether deleting the task board,
+   team roster, event transcript, and agent-workflow spec was deliberate, and if so what replaces
+   them (is `architecture-flowchart.md` now the single source of truth? is task-claiming moving off
+   `docs/tasks.md` entirely?). Without this, every other window is guessing.
+2. **Run the huddle** — confirm Direction A, reconcile `architecture-flowchart.md`'s deltas into
+   `contracts.md`, have the architect (Y4) freeze contracts v1, and re-establish however the team
+   wants to track task ownership now that `tasks.md`/`team.md` are gone. Owner: **Aryan**,
+   human-only, no AI.
+3. **Scaffold** — single FastAPI app mounting the five routers, Vite/React/Tailwind, SQLite,
+   `make dev` / `make reset` / `make keys`, restore/extend `.env.example`. Owner: **Aryan**,
+   executor **Aryan-Claude**. Still ~1 h. Blocks all four module lanes — start the moment the
+   huddle produces a frozen contract to build against.
 
-Immediately after: all four members start T-10 / T-20a / T-30 / T-40 in parallel, and Aryan sets a
-timer for **checkpoint 1**.
+Immediately after: all four members start their module lanes in parallel, and Aryan sets a timer
+for **checkpoint 1**.
 
 ## Open questions
 
-- **`docs/team.md` is still empty.** Highest-impact unknown in the whole plan (`brief.md` §6 risk 1).
-  Fill it in the first five minutes of the huddle and re-allocate the board on the spot.
-- **Eight contract questions** await freeze (`contracts.md` §Open contract questions). Rev 2 added
-  three (Guardian's home module, cart builder's home, mid-conversation pack switching), rev 3 added
-  two (where the issuer ACS lives; **whether the team accepts ~56 h with no buffer** — a scope call,
-  so by `team.md` it is a majority vote with the tie to Y4).
-- **Three mentor questions** in `brief.md` §7 — chiefly: is any Visa sandbox, TAP endpoint or MCP
-  server reachable on-site today? If yes, T-10/T-12/T-14 change from "mock" to "integrate".
-- Whether a **ratings source** is available from the Visa mentors. It plugs into the ingest-time
-  enrichment hook (assumption A6) without touching anything downstream.
-- Whether the organisers publish **event-level judging criteria** beyond the PS's own five lines —
-  check the official Telegram channel at every checkpoint.
-- **`brief.md` §5 stretch numbering is stale** (S6 passkey cut, S8 cross-merchant cut).
-  `tasks.md` is authoritative. Reconcile at the next `STATUS`.
+- **Why was the tracking layer deleted, and what (if anything) replaces it?** Highest-impact
+  unknown right now — see State and Decision log above. Resolve verbally before the huddle.
+- **Has the huddle happened offline?** The repo can no longer answer this on its own now that
+  `team.md` is gone — ask directly rather than inferring from git history.
+- **`architecture-flowchart.md` vs `contracts.md` v0.11**: the flowchart doc lists its own contract
+  deltas (§1, §16 freeze checklist) that haven't been ported. Someone (Y4) needs to either port them
+  or explicitly reject them at the huddle.
+- **README.md and AGENTS.md are stale** — both still point to `docs/event.md`, `docs/team.md`,
+  `samples/`, and the `docs/tasks.md` claim-by-commit workflow, all of which no longer exist.
+  Needs a pass once the team confirms the new doc structure.
+- Whether a **Visa sandbox, TAP endpoint, or ratings API** is reachable on-site today — still
+  unanswered; check with mentors.
+- Whether the organisers have published **event-level judging criteria** beyond the PS's own text —
+  previously tracked in the now-deleted `docs/event.md`; the source PDF (`Visa Problem
+  Statement.pdf`) is the only copy left in-repo. Re-transcribe if the team wants it back.
