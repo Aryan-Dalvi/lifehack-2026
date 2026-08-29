@@ -65,13 +65,40 @@ test("merchant onboarding and both deployment options render", async ({ page }) 
   await page.addInitScript((key) => {
     window.localStorage.setItem("sway.merchantKey", key);
   }, process.env.MERCHANT_KEY ?? "");
-  await page.goto("/admin");
+  await page.goto("/admin/setup");
   await expect(page.getByRole("heading", { name: "Make your catalog conversational" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Website widget" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Hosted storefront" })).toBeVisible();
   await expect(page.getByText("Fixed for Phase 0")).toBeVisible();
   await expect(page.getByRole("link", { name: "Open hosted storefront QR code" })).toBeVisible();
   await page.screenshot({ path: "test-results/merchant-admin.png" });
+  expect(consoleErrors).toEqual([]);
+});
+
+test("a published merchant lands on the CRM dashboard at /admin", async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+
+  await page.setViewportSize({ width: 1584, height: 1024 });
+  await page.addInitScript((key) => {
+    window.localStorage.setItem("sway.merchantKey", key);
+  }, process.env.MERCHANT_KEY ?? "");
+  await page.goto("/admin");
+
+  // The three KPI cards, the trend, the task rail and the customer table: the whole point
+  // of finishing onboarding is that this is what the merchant opens next.
+  await expect(page.getByRole("heading", { name: "Revenue analytics" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Priority tasks" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Manage customers" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Customers", exact: true })).toBeVisible();
+
+  // Ask it to summarise something, and the answer must arrive with its own figures.
+  await page.getByRole("button", { name: "Revenue summary" }).click();
+  await expect(page.getByRole("heading", { name: "Revenue and forecast" })).toBeVisible();
+
+  await page.screenshot({ path: "test-results/merchant-dashboard.png" });
   expect(consoleErrors).toEqual([]);
 });
 

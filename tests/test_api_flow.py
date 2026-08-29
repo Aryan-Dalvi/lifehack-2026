@@ -167,7 +167,12 @@ def test_discover_compare_consent_bank_tap_pay_and_idempotency(client: TestClien
     assert conflicting_reuse.json()["detail"]["error"]["code"] == "IDEMPOTENCY_MISMATCH"
 
     with connect() as connection:
-        assert connection.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 1
+        # Scoped to this session: the database also carries the demo merchant's seeded
+        # trading history, and the claim here is about what this flow created.
+        orders = connection.execute(
+            "SELECT COUNT(*) FROM orders WHERE session_id=?", (session_id,)
+        ).fetchone()[0]
+        assert orders == 1
 
 
 def test_choosing_a_second_product_adds_to_the_same_cart(client: TestClient) -> None:
@@ -395,7 +400,10 @@ def test_over_limit_stops_before_bank_and_creates_no_order(client: TestClient) -
     assert decline["bank_contacted"] is False
     assert decline["order_created"] is False
     with connect() as connection:
-        assert connection.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 0
+        orders = connection.execute(
+            "SELECT COUNT(*) FROM orders WHERE session_id=?", (session_id,)
+        ).fetchone()[0]
+        assert orders == 0
 
 
 def test_tap_nonce_replay_is_rejected(client: TestClient) -> None:
@@ -444,7 +452,11 @@ def test_payment_mandate_rejects_token_from_another_cart(client: TestClient) -> 
     assert substituted.status_code == 409
     assert substituted.json()["detail"]["error"]["code"] == "PAYMENT_CHAIN_MISMATCH"
     with connect() as connection:
-        assert connection.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 0
+        orders = connection.execute(
+            "SELECT COUNT(*) FROM orders WHERE session_id IN (?,?)",
+            (first_session, second_session),
+        ).fetchone()[0]
+        assert orders == 0
 
 
 def test_catalog_upload_keeps_valid_rows_and_reports_invalid_ones(client: TestClient) -> None:

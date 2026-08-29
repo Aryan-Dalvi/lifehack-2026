@@ -45,7 +45,7 @@ from merchant.catalog_mapping import (
     resolve_mappings,
 )
 from merchant.catalog_pipeline import SourceRow, _descriptive_fields
-from merchant.catalog_template import COLUMNS, build_template
+from merchant.catalog_template import COLUMNS
 from seed.reset import MERCHANT_KEY_FILE, seed
 
 PNG = (
