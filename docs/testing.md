@@ -430,3 +430,82 @@ The first throttle was one global limit keyed by IP, which would have accumulate
 test suite and could have turned away judges sharing a conference network. Split: tight on
 password guessing per account, loose on sign-ups per client. `tests/conftest.py` clears the
 buckets between tests, since the limiter is process-global and the suite shares a process.
+
+---
+
+## 2026-08-30 (T+~17) — Shopper UX pass: browsing, card capture, emailed receipt, merchant logo
+
+**Target:** the shopper storefront end to end, plus the merchant branding step of onboarding.
+Nine reported faults, picked up from a Codex window that ran out of quota mid-change (its
+backend `categories` route and two unwired React components were on disk, uncommitted, and the
+app did not compile against them).
+**Run by:** Aryan / Claude Code window.
+**Environment:** local `uvicorn app.main:app --port 8001` + `vite` on `:5174`, driven by
+Playwright against the real stack. `DEMO_MODE=0`, live OpenAI key from `.env`, so the agent's
+routing and phrasing were the real model, not the deterministic fallback. Backend suite run
+separately with `DEMO_MODE=1`.
+
+**Result: green.** 177 pytest (160 on `HEAD` before this pass; +17 new in
+`tests/test_shopper_experience.py`), 14 Playwright specs (+7 new across
+`shopper-browsing.spec.ts` and `merchant-logo.spec.ts`), Ruff clean, `tsc -b` clean,
+`vite build` clean. Three existing suites were amended where this work changed their subject:
+the checkout helper in `test_api_flow.py` now adds a card, and the route-authorization and
+multi-merchant guardrails were told about the public logo route and the new session field.
+
+> A second API was already listening on `:8000` from an earlier session, running stale code.
+> Rather than kill someone else's process, `web/vite.config.ts` now reads `API_PROXY_TARGET`
+> and `WEB_PORT`, so a second stack comes up beside the first. Worth knowing: **a `uvicorn`
+> started without `--reload` will happily serve yesterday's code and produce test failures
+> that look like application bugs.** Two of this pass' "flakes" were exactly that.
+
+### What was wrong, and what it does now
+
+| # | Reported | Now |
+|---|---|---|
+| 1 | Asking to compare in the chat did nothing | `compare` is a route the UI renders: the `comparison` event was reaching the browser and being dropped on the floor. "Compare these", with nothing named, compares what is on screen |
+| 2 | No way to browse by category | `categories` route → a `category_table` event → a table of the merchant's live range, each row opening that category. Built from catalog rows, 0 model calls |
+| 3 | Products named in chat were only text | The answer routes flag their cards `inline`; the card appears under the message that names it, and the name itself is bold |
+| 4 | Hovering a product covered the whole card | The hover overlay is gone — markup and its 1 KB of CSS. It sat on top of the card it described, so title, price and both buttons were unreachable while the pointer was on it |
+| 5 | No way to see one product in full | Clicking a card (or its image, or Enter on the focused card) opens a detail dialog with every catalog attribute, and can add to the basket |
+| 6 | The trust strip sat on the chat input | It was `position: fixed; left: 24px; bottom: 14px`. Now it is in the composer's own column, in flow, under the input. Checked by measuring both boxes at 1584 / 1180 / 390 px |
+| 7 | No receipt outside the tab | The shopper names a receipt address on the same screen they approve the charge; `app/mailer.py` renders and delivers it. SMTP when configured, a written outbox otherwise — and the UI says which one ran |
+| 8 | Checkout never asked for a card | It does now, and refuses to build a cart preview without one. `CARD_REQUIRED`, handled the way `ADDRESS_REQUIRED` already was |
+| 9 | Every storefront wore the seeded shop's name | A merchant uploads a logo in onboarding step 1; the storefront header, and the live preview beside the form, use it |
+
+### The card, and what is kept of it
+
+Luhn plus a brand pattern plus an expiry check, in `payments/cards.py`. What survives the call
+is the brand, expiry, holder name and last four digits. The number is validated in memory and
+dropped — never written, never logged, never returned. `test_the_card_number_is_never_stored_anywhere`
+walks **every table in the database** after a completed purchase looking for those digits,
+which is the only version of that assertion worth having.
+
+The four digits then flow through the preview, the payment token, the authorization call and
+the receipt, replacing a `"4821"` constant that appeared in five places. The receipt also names
+the merchant that was actually paid, rather than `"Mysa Skin"` hard-coded — which was wrong for
+every merchant who signed up after the seed.
+
+### A real bug found while testing, and fixed
+
+Asking about a product **by name** on a fresh session returned a red `422` in the chat:
+
+    tell me about the Gentle Cloud Cleanser
+    → UNGROUNDED_CLAIM  "The interpreter selected a product not shown."
+
+`validate_interpretation` required every selected SKU to be already on screen. A shopper naming
+a product in the shop they are standing in is a fair question, not an ungrounded claim. The
+allowed set is now this merchant's own catalog, passed in by the caller — so the tenancy
+property the guard actually exists for is unchanged, and a SKU from another shop is still
+refused (now as `OUT_OF_SCOPE_PRODUCT`, which is what it always was).
+
+### Notes for whoever picks this up
+
+- **The receipt email is not sent anywhere by default.** With no `SMTP_HOST` the mailer writes
+  `var/outbox/<order_id>.html` and reports `status: "simulated"`, and the receipt card on screen
+  says so in words. Set `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` to send for
+  real. Do not demo this as "we email receipts" without checking which channel is live.
+- Two e2e assertions pinned `.product-card` to exactly 3. The routine the agent plans is
+  model-authored and two verified steps is a legitimate answer, so both now assert a floor.
+  A test that fails on a correct answer costs more than it catches.
+- The bolding assertion judges the rule, not the model's wording: whatever the agent says, a
+  product it names must be bold and must have its card attached. Phrasing changes between runs.

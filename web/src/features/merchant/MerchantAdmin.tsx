@@ -1,4 +1,4 @@
-import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, Download, ExternalLink, FileSpreadsheet, Images, Link2, LoaderCircle, LockKeyhole, LogOut, RefreshCw, Sparkles, Store, TriangleAlert } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, CircleAlert, Clipboard, CloudUpload, Download, ExternalLink, FileSpreadsheet, Image as ImageIcon, Images, Link2, LoaderCircle, LockKeyhole, LogOut, RefreshCw, Sparkles, Store, TriangleAlert, Upload } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import { api, getMerchantKey, money, setMerchantKey } from "../../api";
@@ -42,6 +42,7 @@ type MerchantConfig = {
   category: "skincare";
   currency: string;
   accent_color: string;
+  logo_url: string | null;
   status: "draft" | "published";
   hosted_url: string;
   embed_snippet: string;
@@ -127,6 +128,7 @@ export function MerchantAdmin({ onNavigate }: { onNavigate?: (path: string) => v
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [imageReport, setImageReport] = useState<ImageReport | null>(null);
   const [loadingReview, setLoadingReview] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -237,6 +239,41 @@ export function MerchantAdmin({ onNavigate }: { onNavigate?: (path: string) => v
     } finally {
       setUploadingImages(false);
       event.target.value = "";
+    }
+  };
+
+  const uploadLogo = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !config) return;
+    setUploadingLogo(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const result = await api<{ logo_url: string }>(`/merchant/${config.merchant_id}/logo`, {
+        method: "POST",
+        body: form,
+      });
+      setConfig({ ...config, logo_url: result.logo_url });
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "That logo could not be uploaded.");
+    } finally {
+      setUploadingLogo(false);
+      event.target.value = "";
+    }
+  };
+
+  const removeLogo = async () => {
+    if (!config) return;
+    setUploadingLogo(true);
+    setError(null);
+    try {
+      await api(`/merchant/${config.merchant_id}/logo`, { method: "DELETE" });
+      setConfig({ ...config, logo_url: null });
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "The logo could not be removed.");
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -464,6 +501,40 @@ export function MerchantAdmin({ onNavigate }: { onNavigate?: (path: string) => v
                   {!accentValid ? <small className="color-error" role="alert">Use a six-digit colour such as #435744.</small> : null}
                 </label>
               </div>
+              <div className="logo-control">
+                <span className="logo-control-label">Store logo</span>
+                <div className="logo-row">
+                  <div className={`logo-preview ${config.logo_url ? "" : "logo-preview--empty"}`}>
+                    {config.logo_url ? (
+                      <img src={config.logo_url} alt={`${config.name} logo`} />
+                    ) : (
+                      <ImageIcon size={20} />
+                    )}
+                  </div>
+                  <div className="logo-actions">
+                    <label className="logo-upload">
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/gif"
+                        onChange={(event) => void uploadLogo(event)}
+                        disabled={uploadingLogo}
+                      />
+                      {uploadingLogo ? <LoaderCircle className="spin" size={14} /> : <Upload size={14} />}
+                      {config.logo_url ? "Replace logo" : "Upload logo"}
+                    </label>
+                    {config.logo_url ? (
+                      <button type="button" className="text-link" onClick={() => void removeLogo()} disabled={uploadingLogo}>
+                        Remove
+                      </button>
+                    ) : null}
+                    <small>
+                      PNG, JPEG or GIF up to 512 KB. Shown top left of your storefront in place of
+                      your store name.
+                    </small>
+                  </div>
+                </div>
+              </div>
+
               <fieldset className="size-control">
                 <legend>Merchant setup</legend>
                 <button type="button" className={config.size === "sme" ? "active" : ""} onClick={() => setConfig({ ...config, size: "sme" })}>Small business</button>
@@ -626,7 +697,14 @@ export function MerchantAdmin({ onNavigate }: { onNavigate?: (path: string) => v
         <aside className="live-preview" id="preview">
           <header><span>Live preview ({config.name} agent)</span><strong><i /> Connected</strong></header>
           <div className="preview-window" style={merchantThemeStyle(config.accent_color)}>
-            <div className="preview-top"><strong>{config.name}</strong><span>Your skincare, personalized.</span></div>
+            <div className="preview-top">
+              {config.logo_url ? (
+                <img className="preview-logo" src={config.logo_url} alt={config.name} />
+              ) : (
+                <strong>{config.name}</strong>
+              )}
+              <span>Your skincare, personalized.</span>
+            </div>
             <div className="preview-message"><i>{config.name.trim().charAt(0).toUpperCase()}</i><span>Hi! I’m your skincare assistant. What does your skin need today?</span></div>
             <div className="preview-chips"><button>Dryness</button><button>Sensitive skin</button><button>Build a routine</button></div>
             <p>Top catalog matches</p>

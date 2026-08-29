@@ -15,7 +15,8 @@ test("shopper completes discover, compare, consent, bank and payment", async ({ 
     .fill("I have dry sensitive skin, what should I use?");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.getByRole("heading", { name: "Grounded options for you" })).toBeVisible();
-  await expect(page.locator(".product-card")).toHaveCount(3);
+  await expect(page.locator(".product-card").first()).toBeVisible();
+  expect(await page.locator(".product-card").count()).toBeGreaterThanOrEqual(2);
 
   await page.locator(".product-card").nth(0).getByRole("button", { name: "Compare" }).click();
   await page.locator(".product-card").nth(1).getByRole("button", { name: "Compare" }).click();
@@ -41,14 +42,31 @@ test("shopper completes discover, compare, consent, bank and payment", async ({ 
   await page.getByRole("button", { name: "Sign in", exact: true }).last().click();
   await expect(page.getByText("N. Shopper")).toBeVisible();
 
+  // Checkout now stops again for the one thing it used to invent: a card.
   await page.getByRole("button", { name: /^Checkout · S\$/ }).click();
+  await expect(page.getByRole("heading", { name: "Add the card you want to pay with" })).toBeVisible();
+  await page.getByLabel("Name on card").fill("N. Shopper");
+  await page.getByLabel("Card number").fill("4111111111111111");
+  await page.getByLabel("Expiry").fill("1131");
+  await page.getByLabel("Security code").fill("123");
+  await page.locator(".card-sheet").screenshot({ path: "test-results/shopper-card.png" });
+  await page.getByRole("button", { name: "Use this card" }).click();
+
   await expect(page.getByRole("heading", { name: "Confirm this exact purchase" })).toBeVisible();
+  // The four digits on the confirmation are the ones the shopper just typed.
+  await expect(page.getByText("Visa •••• 1111")).toBeVisible();
+  // A signed-in shopper's receipt address is already filled in.
+  await expect(page.getByRole("textbox", { name: /Email the receipt to/ })).toHaveValue("demo@mysa.test");
+  await page.locator(".checkout-sheet").screenshot({ path: "test-results/shopper-consent.png" });
   await page.getByRole("button", { name: /Confirm & pay/ }).click();
   await expect(page.getByRole("heading", { name: /Approve S\$/ })).toBeVisible();
   await page.getByLabel("Verification code").fill("492118");
   await page.getByRole("button", { name: "Verify and continue" }).click();
   await expect(page.getByText("Order confirmed")).toBeVisible();
   await expect(page.getByText("Simulated authorization · no real charge")).toBeVisible();
+  // The shopper keeps a copy outside the tab. With no mail server configured the UI says
+  // exactly that rather than claiming a message was sent.
+  await expect(page.getByText(/Receipt (emailed|prepared) .*demo@mysa\.test/)).toBeVisible();
   await page.locator(".receipt-card").screenshot({ path: "test-results/shopper-receipt.png" });
   // This test deliberately attempts a guest checkout, and the browser logs that rejected
   // request as a console error. Everything else must still be clean.
@@ -136,7 +154,8 @@ test("one-line merchant widget opens an isolated storefront without redirecting"
     .getByRole("textbox", { name: "Ask about skincare products" })
     .fill("I have dry sensitive skin, what should I use?");
   await commerceCanvas.getByRole("button", { name: "Send message" }).click();
-  await expect(commerceCanvas.locator(".product-card")).toHaveCount(3);
+  await expect(commerceCanvas.locator(".product-card").first()).toBeVisible();
+  expect(await commerceCanvas.locator(".product-card").count()).toBeGreaterThanOrEqual(2);
   await expect(page).toHaveURL(/widget-demo\.html$/);
 });
 

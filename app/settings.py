@@ -54,6 +54,19 @@ class Settings:
     web_base_url: str = os.getenv("WEB_BASE_URL", "http://localhost:5173")
     merchant_hard_ceiling_cents: int = int(os.getenv("MERCHANT_HARD_CEILING_CENTS", "50000"))
 
+    # Receipt email. With no SMTP host configured the mailer writes to a local outbox
+    # instead of sending, so a demo machine with no mail server still shows the shopper
+    # exactly what would have landed in their inbox.
+    smtp_host: str | None = os.getenv("SMTP_HOST") or None
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username: str | None = os.getenv("SMTP_USERNAME") or None
+    smtp_password: str | None = os.getenv("SMTP_PASSWORD") or None
+    smtp_starttls: bool = os.getenv("SMTP_STARTTLS", "1") != "0"
+    smtp_timeout_seconds: float = float(os.getenv("SMTP_TIMEOUT_SECONDS", "10"))
+    receipt_from_email: str = os.getenv("RECEIPT_FROM_EMAIL", "receipts@sway.demo")
+    receipt_from_name: str = os.getenv("RECEIPT_FROM_NAME", "Sway Receipts")
+    receipt_outbox_path: Path = Path(os.getenv("RECEIPT_OUTBOX_PATH", ROOT / "var" / "outbox"))
+
     # "simulator" (default, always safe) or "visa" (real VisaNet Connect sandbox call).
     # Never default this to "visa" — an unreachable or misconfigured sandbox must never
     # silently become the payment path the demo runs on.

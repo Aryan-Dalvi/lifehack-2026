@@ -10,6 +10,7 @@ ALLOWED_ROUTES = {
     "answer",
     "search",
     "recommend",
+    "categories",
     "compare",
     "product_detail",
     "cart",
@@ -30,6 +31,7 @@ def validate_interpretation(
     *,
     merchant_id: str,
     visible_skus: list[str],
+    catalog_skus: list[str] | None = None,
 ) -> dict[str, Any]:
     route = value.get("route")
     if route not in ALLOWED_ROUTES:
@@ -56,8 +58,15 @@ def validate_interpretation(
         query["category"] = "skincare"
         value["catalog_query"] = query
     selected = value.get("selected_skus") or []
-    if any(sku not in visible_skus for sku in selected):
-        raise api_error(422, "UNGROUNDED_CLAIM", "The interpreter selected a product not shown.")
+    # A shopper may name a product that is not on screen - "tell me about the Gentle Cloud
+    # Cleanser" on a fresh session - and that is a fair question about this shop. What must
+    # never be allowed is a SKU from outside this merchant, so the allowed set is this
+    # merchant's own catalog, scoped by the caller, rather than only what is displayed.
+    grounded = set(visible_skus) | set(catalog_skus or [])
+    if any(sku not in grounded for sku in selected):
+        raise api_error(
+            422, "OUT_OF_SCOPE_PRODUCT", "The interpreter selected a product from another shop."
+        )
     return value
 
 

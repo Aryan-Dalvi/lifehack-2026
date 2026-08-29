@@ -467,6 +467,18 @@ wheels = [
 ]
 
 [[package]]
+name = "joserfc"
+version = "1.7.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/19/94/80fea1514b7c6d7d37804d3fe9ca81455f633347fc98731bd71ffe1faa17/joserfc-1.7.5.tar.gz", hash = "sha256:d5ff536e658e17664f8c1b1ab60dc4aa62aa973fcef1edd33cc44bda45d6f5ea", size = 234990, upload-time = "2026-08-29T13:05:42.057Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/67/c5/82addfd375e5ee6520644e0553e4aadde92d668c4fc99cc716d337fe7bb3/joserfc-1.7.5-py3-none-any.whl", hash = "sha256:add2c2c84e8373b084d526a8b53daba5d7a513a118cd2dcd9fc9f979d0922159", size = 71269, upload-time = "2026-08-29T13:05:40.718Z" },
+]
+
+[[package]]
 name = "openai"
 version = "3.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -792,6 +804,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "joserfc" },
     { name = "openai" },
     { name = "openpyxl" },
     { name = "python-multipart" },
@@ -809,6 +822,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=45.0.0" },
     { name = "fastapi", specifier = ">=0.116.0" },
     { name = "httpx", specifier = ">=0.28.0" },
+    { name = "joserfc", specifier = ">=1.0.0" },
     { name = "openai", specifier = ">=1.99.0" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },

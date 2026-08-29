@@ -11,6 +11,7 @@ type Props = {
   onClose: () => void;
   onToggleCompare: (sku: string) => void;
   onChoose: (sku: string) => void;
+  onOpenDetails: (product: Product) => void;
   onCompare: () => void;
 };
 
@@ -22,6 +23,7 @@ export function ProductsModal({
   onClose,
   onToggleCompare,
   onChoose,
+  onOpenDetails,
   onCompare,
 }: Props) {
   useEffect(() => {
@@ -63,6 +65,7 @@ export function ProductsModal({
                 quantityInCart={basketSkus.find((line) => line.sku === product.sku)?.quantity ?? 0}
                 onToggleCompare={onToggleCompare}
                 onChoose={onChoose}
+                onOpenDetails={onOpenDetails}
               />
             ))}
           </div>

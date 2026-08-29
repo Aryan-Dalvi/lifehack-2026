@@ -46,6 +46,16 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
     ("GET", "/catalog/template"): "a blank workbook; the shape of a catalog, no merchant data",
     ("GET", "/catalog/product/{sku}"): "public storefront; merchant_id is required and scopes it",
     ("GET", "/bank/token/{bank_token}"): "issuer simulator; the bank token is itself the secret",
+    (
+        "GET",
+        "/merchant/{merchant_id}/logo",
+    ): "a brand mark loaded by an <img> on the storefront, which cannot send a key; the "
+    "bytes carry no shopper, catalog or account data",
+}
+
+# Merchant-scoped routes that are deliberately not key-checked, for the reason given.
+PUBLIC_MERCHANT_ROUTES: dict[tuple[str, str], str] = {
+    ("GET", "/merchant/{merchant_id}/logo"): "see PUBLIC_ROUTES: a public brand mark",
 }
 
 
@@ -107,7 +117,9 @@ def test_every_merchant_route_uses_the_merchant_key() -> None:
     offenders = [
         f"{method} {path}"
         for method, path, guards in _routes()
-        if path.startswith("/merchant/{merchant_id}") and "assert_merchant" not in guards
+        if path.startswith("/merchant/{merchant_id}")
+        and "assert_merchant" not in guards
+        and (method, path) not in PUBLIC_MERCHANT_ROUTES
     ]
     assert not offenders, "Merchant routes missing assert_merchant:\n  " + "\n  ".join(offenders)
 

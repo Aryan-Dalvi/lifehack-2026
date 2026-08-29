@@ -91,6 +91,7 @@ def test_brand_accent_is_validated_and_returned_to_the_storefront(client: TestCl
     assert session.json()["merchant"] == {
         "name": "Aurora Skin",
         "accent_color": "#255B78",
+        "logo_url": None,
     }
 
 

@@ -1,5 +1,4 @@
 import { Check, ShoppingBag, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
 import { money } from "../../api";
 import type { Product } from "../../types";
 
@@ -10,49 +9,32 @@ type Props = {
   quantityInCart?: number;
   onToggleCompare: (sku: string) => void;
   onChoose: (sku: string) => void;
+  onOpenDetails: (product: Product) => void;
 };
 
-function attributeSummary(product: Product): Array<[string, string]> {
-  const attributes = product.attributes;
-  return [
-    ["Best for", attributes.skin_types?.join(", ") ?? "See catalog"],
-    ["Fragrance", attributes.fragrance_free ? "Fragrance-free" : "See ingredients"],
-    ["Texture", attributes.texture ?? "Not specified"],
-    ["Key ingredients", attributes.ingredients?.slice(0, 3).join(", ") ?? "See catalog"],
-  ];
-}
-
-export function ProductCard({ product, selected, disabled, quantityInCart = 0, onToggleCompare, onChoose }: Props) {
+export function ProductCard({ product, selected, disabled, quantityInCart = 0, onToggleCompare, onChoose, onOpenDetails }: Props) {
   const atStockLimit = quantityInCart >= product.stock;
-  const [previewOpen, setPreviewOpen] = useState(false);
-
-  useEffect(() => {
-    if (!previewOpen) return;
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPreviewOpen(false);
-    };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, [previewOpen]);
 
   return (
     <article
       className={`product-card ${selected ? "product-card--selected" : ""}`}
       tabIndex={0}
-      aria-describedby={`${product.sku}-details`}
-      onMouseEnter={() => setPreviewOpen(true)}
-      onMouseLeave={() => setPreviewOpen(false)}
-      onFocus={() => setPreviewOpen(true)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setPreviewOpen(false);
+      aria-label={`View details for ${product.title}`}
+      onClick={(event) => {
+        if (!(event.target as HTMLElement).closest("button")) onOpenDetails(product);
+      }}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onOpenDetails(product);
+        }
       }}
     >
       <button
         className="product-visual"
         type="button"
-        aria-label={`Preview details for ${product.title}`}
-        aria-expanded={previewOpen}
-        onClick={() => setPreviewOpen((value) => !value)}
+        aria-label={`View details for ${product.title}`}
+        onClick={() => onOpenDetails(product)}
       >
         <img src={product.image_url ?? ""} alt="" loading="lazy" />
       </button>
@@ -91,22 +73,6 @@ export function ProductCard({ product, selected, disabled, quantityInCart = 0, o
         </button>
       </div>
 
-      <div
-        id={`${product.sku}-details`}
-        className={`product-preview ${previewOpen ? "product-preview--open" : ""}`}
-        aria-hidden={!previewOpen}
-      >
-        <p>Catalog details</p>
-        <dl>
-          {attributeSummary(product).map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
-        <span>4 key facts · compare for the full table</span>
-      </div>
     </article>
   );
 }
