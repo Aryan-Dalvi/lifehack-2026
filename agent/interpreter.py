@@ -20,7 +20,15 @@ INTERPRETATION_SCHEMA = {
     "properties": {
         "route": {
             "type": "string",
-            "enum": ["clarify", "search", "compare", "product_detail", "cart", "unsupported"],
+            "enum": [
+                "clarify",
+                "search",
+                "recommend",
+                "compare",
+                "product_detail",
+                "cart",
+                "unsupported",
+            ],
         },
         "missing_required_fields": {"type": "array", "items": {"type": "string"}},
         "clarification": {"type": ["string", "null"]},
@@ -65,6 +73,7 @@ INTERPRETATION_SCHEMA = {
         },
         "selected_skus": {"type": "array", "items": {"type": "string"}},
         "quantity": {"type": ["integer", "null"], "minimum": 1, "maximum": 10},
+        "wants_usage_detail": {"type": "boolean"},
     },
     "required": [
         "route",
@@ -73,8 +82,22 @@ INTERPRETATION_SCHEMA = {
         "catalog_query",
         "selected_skus",
         "quantity",
+        "wants_usage_detail",
     ],
 }
+
+USAGE_DETAIL_TERMS = (
+    "how do i use",
+    "how to use",
+    "how should i use",
+    "how do i apply",
+    "how to apply",
+    "how often",
+    "walk me through",
+    "explain",
+    "instructions",
+    "in what order",
+)
 
 
 MEDICAL_TERMS = {
@@ -100,6 +123,7 @@ def deterministic_interpret(
     visible_skus: list[str],
 ) -> dict[str, Any]:
     text = " ".join(message.lower().strip().split())
+    wants_usage_detail = any(term in text for term in USAGE_DETAIL_TERMS)
     if not text:
         return {
             "route": "clarify",
@@ -108,6 +132,7 @@ def deterministic_interpret(
             "catalog_query": None,
             "selected_skus": [],
             "quantity": None,
+            "wants_usage_detail": wants_usage_detail,
         }
     if any(term in text for term in MEDICAL_TERMS):
         return {
@@ -120,6 +145,7 @@ def deterministic_interpret(
             "catalog_query": None,
             "selected_skus": [],
             "quantity": None,
+            "wants_usage_detail": wants_usage_detail,
         }
     if "compare" in text and len(visible_skus) >= 2:
         selected = [sku for sku in visible_skus if sku.lower() in text]
@@ -130,6 +156,7 @@ def deterministic_interpret(
             "catalog_query": None,
             "selected_skus": selected or visible_skus[:3],
             "quantity": None,
+            "wants_usage_detail": wants_usage_detail,
         }
 
     routine_steps = {
@@ -168,10 +195,32 @@ def deterministic_interpret(
             "catalog_query": None,
             "selected_skus": [],
             "quantity": None,
+            "wants_usage_detail": wants_usage_detail,
         }
+    wants_routine = any(
+        term in text
+        for term in (
+            "routine",
+            "morning",
+            "night",
+            "evening",
+            "am and pm",
+            "step",
+            "steps",
+            "order",
+            "when do i",
+            "when should i",
+            "how do i use",
+            "how should i use",
+            "which one should i use",
+        )
+    )
+    # A routine has to span every step, so a single-step filter cannot apply to it.
+    if wants_routine:
+        routine_step = None
     search_terms = [routine_step or "", *concerns, *skin_types]
     return {
-        "route": "search",
+        "route": "recommend" if wants_routine else "search",
         "missing_required_fields": [],
         "clarification": None,
         "catalog_query": {
@@ -191,6 +240,7 @@ def deterministic_interpret(
         },
         "selected_skus": [],
         "quantity": None,
+        "wants_usage_detail": wants_usage_detail,
     }
 
 
@@ -221,24 +271,40 @@ async def interpret(
         "profile_preferences": profile,
     }
     client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=8.0, max_retries=0)
+    text_options: dict[str, Any] = {
+        "format": {
+            "type": "json_schema",
+            "name": "commerce_interpretation",
+            "strict": True,
+            "schema": INTERPRETATION_SCHEMA,
+        },
+    }
+    if settings.openai_model.startswith("gpt-5"):
+        text_options["verbosity"] = "low"
     try:
         response = await client.responses.create(
             model=settings.openai_model,
             instructions=(
                 "You are Sway's skincare Commerce Interpreter. Return only the requested structured "
-                "decision. Ask a focused clarification when required information is missing. Never "
-                "diagnose, invent products, widen merchant scope, or treat a search budget as payment consent."
+                "decision.\n"
+                "Routes: 'search' when the shopper wants to see products matching a need. "
+                "'recommend' when they want a routine, an order of use, morning/night guidance, or "
+                "advice on which product to use when — set catalog_query so the routine can be built "
+                "from real stock, and leave routine_step null so every step of the routine is covered. "
+                "'compare' when they want visible products weighed against each other. "
+                "'clarify' ONLY when you genuinely cannot act without more information.\n"
+                "Prefer acting over asking: if the shopper has given a skin type or a concern, that is "
+                "enough to search or recommend. Never ask the same question twice. Never diagnose, "
+                "invent products, widen merchant scope, or treat a search budget as payment consent.\n"
+                "Set wants_usage_detail true ONLY when the shopper is asking how to use, apply or "
+                "order the products (for example 'how do I use these', 'how often', 'walk me "
+                "through it'). Asking for a routine alone is not a request for usage detail. "
+                "A 'how do I use these' question is route 'recommend' with wants_usage_detail "
+                "true — it is NOT 'compare', which is only for weighing products against "
+                "each other."
             ),
             input=json.dumps(state),
-            text={
-                "format": {
-                    "type": "json_schema",
-                    "name": "commerce_interpretation",
-                    "strict": True,
-                    "schema": INTERPRETATION_SCHEMA,
-                },
-                "verbosity": "low",
-            },
+            text=text_options,
             max_output_tokens=500,
             store=False,
         )

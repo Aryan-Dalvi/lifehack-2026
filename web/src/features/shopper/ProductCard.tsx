@@ -7,6 +7,7 @@ type Props = {
   product: Product;
   selected: boolean;
   disabled?: boolean;
+  quantityInCart?: number;
   onToggleCompare: (sku: string) => void;
   onChoose: (sku: string) => void;
 };
@@ -21,7 +22,8 @@ function attributeSummary(product: Product): Array<[string, string]> {
   ];
 }
 
-export function ProductCard({ product, selected, disabled, onToggleCompare, onChoose }: Props) {
+export function ProductCard({ product, selected, disabled, quantityInCart = 0, onToggleCompare, onChoose }: Props) {
+  const atStockLimit = quantityInCart >= product.stock;
   const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
@@ -45,17 +47,6 @@ export function ProductCard({ product, selected, disabled, onToggleCompare, onCh
         if (!event.currentTarget.contains(event.relatedTarget)) setPreviewOpen(false);
       }}
     >
-      <button
-        className={`compare-toggle ${selected ? "compare-toggle--selected" : ""}`}
-        type="button"
-        aria-pressed={selected}
-        aria-label={`${selected ? "Remove" : "Add"} ${product.title} ${selected ? "from" : "to"} comparison`}
-        disabled={disabled && !selected}
-        onClick={() => onToggleCompare(product.sku)}
-      >
-        {selected ? <Check size={14} strokeWidth={2.4} /> : null}
-      </button>
-
       <button
         className="product-visual"
         type="button"
@@ -89,8 +80,14 @@ export function ProductCard({ product, selected, disabled, onToggleCompare, onCh
           {selected ? <Check size={15} /> : <Sparkles size={15} />}
           {selected ? "Selected" : "Compare"}
         </button>
-        <button type="button" className="choose-action" onClick={() => onChoose(product.sku)}>
-          <ShoppingBag size={15} /> Choose
+        <button
+          type="button"
+          className={`choose-action ${quantityInCart > 0 ? "choose-action--in-cart" : ""}`}
+          disabled={atStockLimit}
+          onClick={() => onChoose(product.sku)}
+        >
+          <ShoppingBag size={15} />
+          {atStockLimit ? "Out of stock" : quantityInCart > 0 ? `In cart · ${quantityInCart}` : "Add to cart"}
         </button>
       </div>
 

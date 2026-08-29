@@ -95,6 +95,25 @@ export type TrustEvent = {
   detail: Record<string, unknown>;
 };
 
+export type RoutineStep = {
+  step: string;
+  label: string;
+  order: number;
+  when: string[];
+  sku: string;
+  title: string;
+  advice: string | null;
+  alternatives: number;
+};
+
+export type Routine = {
+  steps: RoutineStep[];
+  missing_steps: Array<{ step: string; label: string }>;
+  usage_detail: boolean;
+  plan_source: "catalog_database";
+  phrasing_source: string;
+};
+
 export type Comparison = {
   products: Product[];
   dimensions: Array<{

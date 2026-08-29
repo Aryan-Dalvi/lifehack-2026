@@ -4,7 +4,15 @@ from typing import Any
 
 from app.errors import api_error
 
-ALLOWED_ROUTES = {"clarify", "search", "compare", "product_detail", "cart", "unsupported"}
+ALLOWED_ROUTES = {
+    "clarify",
+    "search",
+    "recommend",
+    "compare",
+    "product_detail",
+    "cart",
+    "unsupported",
+}
 ALLOWED_FILTERS = {
     "routine_step",
     "skin_types",
@@ -49,6 +57,72 @@ def validate_interpretation(
     if any(sku not in visible_skus for sku in selected):
         raise api_error(422, "UNGROUNDED_CLAIM", "The interpreter selected a product not shown.")
     return value
+
+
+MEDICAL_CLAIM_TERMS = {
+    "cure",
+    "cures",
+    "heals",
+    "diagnose",
+    "diagnosis",
+    "prescription",
+    "eczema",
+    "psoriasis",
+    "dermatitis",
+    "rosacea",
+    "clinically proven",
+    "medical grade",
+    "medical-grade",
+}
+
+MAX_SUMMARY_CHARS = 400
+MAX_ADVICE_CHARS = 240
+
+
+def validate_recommendation(
+    value: dict[str, Any],
+    *,
+    allowed_skus: list[str],
+) -> tuple[dict[str, Any], list[str]]:
+    """Strip anything the phraser was not entitled to say.
+
+    Returns the safe recommendation plus the list of violations that were dropped.
+    Prose is never trusted enough to fail the turn: an ungrounded or unsafe line is
+    removed and the deterministic routine plan carries the answer on its own.
+    """
+    violations: list[str] = []
+    allowed = set(allowed_skus)
+
+    summary = value.get("summary")
+    if not isinstance(summary, str) or not summary.strip() or len(summary) > MAX_SUMMARY_CHARS:
+        summary = ""
+        violations.append("SCHEMA_REJECTED")
+    elif any(term in summary.lower() for term in MEDICAL_CLAIM_TERMS):
+        summary = ""
+        violations.append("MEDICAL_CLAIM")
+
+    safe_steps = []
+    for step in value.get("steps") or []:
+        if not isinstance(step, dict):
+            violations.append("SCHEMA_REJECTED")
+            continue
+        sku = step.get("sku")
+        advice = step.get("advice")
+        if sku not in allowed:
+            violations.append("UNGROUNDED_CLAIM")
+            continue
+        if not isinstance(advice, str) or not advice.strip():
+            violations.append("SCHEMA_REJECTED")
+            continue
+        if len(advice) > MAX_ADVICE_CHARS:
+            violations.append("SCHEMA_REJECTED")
+            continue
+        if any(term in advice.lower() for term in MEDICAL_CLAIM_TERMS):
+            violations.append("MEDICAL_CLAIM")
+            continue
+        safe_steps.append({"sku": sku, "advice": advice.strip()})
+
+    return {"summary": summary.strip(), "steps": safe_steps}, violations
 
 
 def validate_products(products: list[dict[str, Any]], merchant_id: str) -> list[dict[str, Any]]:

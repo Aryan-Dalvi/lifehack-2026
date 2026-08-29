@@ -8,6 +8,32 @@
     "buy": ["visible_sku", "quantity"]
   },
   "salient_dims": ["skin_types", "fragrance_free", "texture", "ingredients"],
+  "routine_usage": {
+    "cleanser": {
+      "order": 1,
+      "when": ["morning", "night"],
+      "label": "Cleanse",
+      "usage_hint": "Massage a small amount onto damp skin, then rinse with lukewarm water. Use it both morning and night."
+    },
+    "serum": {
+      "order": 2,
+      "when": ["morning", "night"],
+      "label": "Treat",
+      "usage_hint": "Pat a few drops onto clean skin and let it absorb before you moisturise."
+    },
+    "moisturiser": {
+      "order": 3,
+      "when": ["morning", "night"],
+      "label": "Moisturise",
+      "usage_hint": "Smooth over face and neck as the last step, while skin is still slightly damp."
+    },
+    "sunscreen": {
+      "order": 4,
+      "when": ["morning"],
+      "label": "Protect",
+      "usage_hint": "Apply as the final morning step, after moisturiser. Not needed at night."
+    }
+  },
   "comparison_dimensions": [
     {"key": "price_cents", "label": "Price"},
     {"key": "rating", "label": "Rating"},

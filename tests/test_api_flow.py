@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
+from agent.guardian import validate_recommendation
 from app.db import connect, init_databases
 from app.main import app
 from payments.tap import canonical_json, sign_tap_request
@@ -31,6 +34,19 @@ def create_session(client: TestClient, budget_cents: int | None = None) -> str:
     return response.json()["session_id"]
 
 
+def confirm_cart(client: TestClient, session_id: str, cart: dict) -> dict:
+    consent_response = client.post(
+        "/agent/confirm",
+        json={
+            "session_id": session_id,
+            "cart_id": cart["cart_id"],
+            "confirmation": {"method": "click"},
+        },
+    )
+    assert consent_response.status_code == 200, consent_response.text
+    return {"cart": cart, "consent": consent_response.json()}
+
+
 def build_consented_cart(client: TestClient, session_id: str) -> dict:
     cart_response = client.post(
         "/agent/action",
@@ -42,17 +58,7 @@ def build_consented_cart(client: TestClient, session_id: str) -> dict:
         },
     )
     assert cart_response.status_code == 200, cart_response.text
-    cart = cart_response.json()["data"]
-    consent_response = client.post(
-        "/agent/confirm",
-        json={
-            "session_id": session_id,
-            "cart_id": cart["cart_id"],
-            "confirmation": {"method": "click"},
-        },
-    )
-    assert consent_response.status_code == 200, consent_response.text
-    return {"cart": cart, "consent": consent_response.json()}
+    return confirm_cart(client, session_id, cart_response.json()["data"])
 
 
 def issue_bank_token(client: TestClient, session_id: str, consent: dict) -> str:
@@ -154,6 +160,171 @@ def test_discover_compare_consent_bank_tap_pay_and_idempotency(client: TestClien
 
     with connect() as connection:
         assert connection.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 1
+
+
+def test_choosing_a_second_product_adds_to_the_same_cart(client: TestClient) -> None:
+    session_id = create_session(client)
+
+    first = client.post(
+        "/agent/action",
+        json={"session_id": session_id, "action": "select", "sku": "MYSA-CLN-101", "quantity": 1},
+    )
+    assert first.status_code == 200, first.text
+
+    combined = client.post(
+        "/agent/action",
+        json={
+            "session_id": session_id,
+            "action": "select",
+            "items": [
+                {"sku": "MYSA-CLN-101", "quantity": 1},
+                {"sku": "MYSA-MST-120", "quantity": 2},
+            ],
+        },
+    )
+    assert combined.status_code == 200, combined.text
+    cart = combined.json()["data"]
+    assert cart["status"] == "preview"
+    assert [item["sku"] for item in cart["items"]] == ["MYSA-CLN-101", "MYSA-MST-120"]
+    assert cart["items"][1]["quantity"] == 2
+    expected_total = cart["items"][0]["unit_price_cents"] + cart["items"][1]["unit_price_cents"] * 2
+    assert cart["total_cents"] == expected_total
+
+    checkout = confirm_cart(client, session_id, cart)
+    bank_token = issue_bank_token(client, session_id, checkout["consent"])
+    approved = client.post(
+        "/agent/pay",
+        json={
+            "session_id": session_id,
+            "cart_id": checkout["consent"]["cart_id"],
+            "payment_mandate_id": checkout["consent"]["payment_mandate_id"],
+            "token_id": checkout["consent"]["token_id"],
+            "bank_token": bank_token,
+        },
+        headers={"Idempotency-Key": "multi-item-1"},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved"
+    assert len(approved.json()["receipt"]["items"]) == 2
+
+
+def test_routine_plan_is_ordered_and_grounded_without_a_model(client: TestClient) -> None:
+    session_id = create_session(client)
+    response = client.post(
+        "/agent/turn",
+        json={
+            "session_id": session_id,
+            "text": "i have dry skin, suggest a morning and night routine and the steps",
+        },
+    )
+    assert response.status_code == 200, response.text
+    events = response.json()["events"]
+    routine = next(event["data"] for event in events if event["type"] == "routine")
+
+    assert routine["plan_source"] == "catalog_database"
+    # DEMO_MODE is on under test, so the plan must stand up with no model call at all.
+    assert routine["phrasing_source"] == "deterministic_plan"
+
+    orders = [step["order"] for step in routine["steps"]]
+    assert orders == sorted(orders), "routine steps must be in pack order"
+    assert len({step["step"] for step in routine["steps"]}) == len(routine["steps"])
+
+    with connect() as connection:
+        for step in routine["steps"]:
+            row = connection.execute(
+                "SELECT title, attributes_json FROM products WHERE sku=?", (step["sku"],)
+            ).fetchone()
+            assert row is not None, f"{step['sku']} is not a real catalog product"
+            assert step["title"] == row["title"]
+            assert step["step"] == json.loads(row["attributes_json"])["routine_step"]
+
+    sunscreen = [step for step in routine["steps"] if step["step"] == "sunscreen"]
+    assert all(step["when"] == ["morning"] for step in sunscreen), "sunscreen is morning-only"
+
+
+def test_routine_is_simple_until_usage_detail_is_asked_for(client: TestClient) -> None:
+    session_id = create_session(client)
+    plain = client.post(
+        "/agent/turn",
+        json={"session_id": session_id, "text": "dry skin, what routine should i use morning and night"},
+    )
+    routine = next(
+        event["data"] for event in plain.json()["events"] if event["type"] == "routine"
+    )
+    assert routine["steps"], "expected a routine"
+    assert routine["usage_detail"] is False
+    assert all(step["advice"] is None for step in routine["steps"]), (
+        "usage advice should not appear until the shopper asks for it"
+    )
+
+    asked = client.post(
+        "/agent/turn",
+        json={"session_id": session_id, "text": "how do i use these products"},
+    )
+    detailed = next(
+        event["data"] for event in asked.json()["events"] if event["type"] == "routine"
+    )
+    assert detailed["usage_detail"] is True
+    for step in detailed["steps"]:
+        assert step["advice"], f"{step['sku']} was shown with no usage guidance"
+
+
+def test_usage_question_reuses_visible_products_instead_of_dead_ending(client: TestClient) -> None:
+    session_id = create_session(client)
+    first = client.post(
+        "/agent/turn",
+        json={"session_id": session_id, "text": "dry sensitive skin morning and night routine"},
+    )
+    shown = next(
+        event["data"]["products"]
+        for event in first.json()["events"]
+        if event["type"] == "product_cards"
+    )
+    assert shown
+
+    # A phrase with no catalog terms in it: the search behind it can legitimately
+    # return nothing, and the shopper must still get an answer about what is on screen.
+    follow_up = client.post(
+        "/agent/turn",
+        json={"session_id": session_id, "text": "how do i use these products"},
+    )
+    assert follow_up.status_code == 200, follow_up.text
+    types = [event["type"] for event in follow_up.json()["events"]]
+    assert "routine" in types, f"usage question dead-ended with {types}"
+    routine = next(
+        event["data"] for event in follow_up.json()["events"] if event["type"] == "routine"
+    )
+    assert all(step["advice"] for step in routine["steps"])
+
+
+def test_guardian_drops_ungrounded_and_medical_recommendation_lines() -> None:
+    safe, violations = validate_recommendation(
+        {
+            "summary": "A gentle routine for dry skin.",
+            "steps": [
+                {"sku": "MYSA-CLN-101", "advice": "Use morning and night on damp skin."},
+                {"sku": "NOT-A-REAL-SKU", "advice": "Apply this invented product first."},
+                {"sku": "MYSA-MST-120", "advice": "This cures eczema overnight."},
+            ],
+        },
+        allowed_skus=["MYSA-CLN-101", "MYSA-MST-120"],
+    )
+    assert [step["sku"] for step in safe["steps"]] == ["MYSA-CLN-101"]
+    assert set(violations) == {"UNGROUNDED_CLAIM", "MEDICAL_CLAIM"}
+    assert safe["summary"] == "A gentle routine for dry skin."
+
+
+def test_guardian_drops_a_medical_summary_but_keeps_valid_steps() -> None:
+    safe, violations = validate_recommendation(
+        {
+            "summary": "This routine will cure your rosacea.",
+            "steps": [{"sku": "MYSA-CLN-101", "advice": "Cleanse morning and night."}],
+        },
+        allowed_skus=["MYSA-CLN-101"],
+    )
+    assert safe["summary"] == ""
+    assert violations == ["MEDICAL_CLAIM"]
+    assert len(safe["steps"]) == 1
 
 
 def test_optional_limit_can_be_added_changed_and_cleared(client: TestClient) -> None:
