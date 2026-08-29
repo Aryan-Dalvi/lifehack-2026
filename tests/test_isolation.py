@@ -9,10 +9,12 @@ someone else and resolve their shipping address into a cart.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
-from app.db import init_databases
+from app.db import init_databases, transaction, utc_now
 from app.main import app
 from seed.reset import MERCHANT_KEY_FILE, seed
 from tests.conftest import SessionAwareClient
@@ -35,30 +37,43 @@ def merchant_a_key() -> str:
 
 @pytest.fixture()
 def rival(client: TestClient) -> dict:
-    """A second merchant with a product of its own, to be isolated from."""
+    """A second merchant with a product of its own, to be isolated from.
+
+    The product is written straight to the catalog rather than pushed through the cleaning
+    pipeline: what is under test here is whether merchant A can reach merchant B's rows, not
+    how rows get there, and going through the pipeline would tie these tests to its schema.
+    """
     created = client.post("/merchant/onboard", json={"name": "Rival Skin Co", "size": "sme"})
     assert created.status_code == 200, created.text
     body = created.json()
-    ingest = client.post(
-        f"/merchant/{body['merchant_id']}/catalog",
-        json={
-            "products": [
-                {
-                    "sku": RIVAL_SKU,
-                    "title": "Rival Secret Serum",
-                    "description": "confidential",
-                    "price": 99.00,
-                    "stock": 5,
-                    "routine_step": "serum",
-                    "skin_types": "dry",
-                    "concerns": "dryness",
-                    "ingredients": "rival peptide|trade secret",
-                }
-            ]
-        },
-        headers={"X-Merchant-Key": body["api_key"]},
-    )
-    assert ingest.json()["ingested"] == 1, ingest.text
+    now = utc_now()
+    with transaction() as connection:
+        connection.execute(
+            "INSERT INTO products(sku,merchant_id,title,description,price_cents,currency,"
+            "image_url,category,attributes_json,stock,rating_avg,rating_count,rating_source,"
+            "created_at,updated_at) VALUES (?,?,?,?,?,'SGD',NULL,'skincare',?,?,?,?, "
+            "'merchant_feed',?,?)",
+            (
+                RIVAL_SKU,
+                body["merchant_id"],
+                "Rival Secret Serum",
+                "confidential",
+                9900,
+                json.dumps(
+                    {
+                        "routine_step": "serum",
+                        "skin_types": ["dry"],
+                        "concerns": ["dryness"],
+                        "ingredients": ["rival peptide", "trade secret"],
+                    }
+                ),
+                5,
+                4.9,
+                11,
+                now,
+                now,
+            ),
+        )
     return body
 
 

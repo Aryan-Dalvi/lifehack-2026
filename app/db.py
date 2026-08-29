@@ -93,6 +93,102 @@ CREATE TABLE IF NOT EXISTS products (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS catalog_sources (
+    upload_id TEXT PRIMARY KEY,
+    merchant_id TEXT NOT NULL REFERENCES merchants(merchant_id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    source_format TEXT NOT NULL CHECK (source_format IN ('csv', 'xlsx', 'json')),
+    source_sha256 TEXT NOT NULL,
+    raw_bytes BLOB NOT NULL,
+    byte_count INTEGER NOT NULL CHECK (byte_count >= 0),
+    row_count INTEGER NOT NULL CHECK (row_count >= 0),
+    source_metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS catalog_source_rows (
+    upload_id TEXT NOT NULL REFERENCES catalog_sources(upload_id) ON DELETE CASCADE,
+    source_record_id TEXT NOT NULL,
+    row_number INTEGER NOT NULL CHECK (row_number >= 1),
+    sheet_name TEXT,
+    raw_row_json TEXT NOT NULL,
+    raw_row_sha256 TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (upload_id, source_record_id)
+);
+
+CREATE TABLE IF NOT EXISTS catalog_clean_runs (
+    run_id TEXT PRIMARY KEY,
+    upload_id TEXT NOT NULL REFERENCES catalog_sources(upload_id) ON DELETE CASCADE,
+    merchant_id TEXT NOT NULL REFERENCES merchants(merchant_id) ON DELETE CASCADE,
+    schema_version TEXT NOT NULL,
+    parser_version TEXT NOT NULL,
+    cleaner_version TEXT NOT NULL,
+    taxonomy_version TEXT NOT NULL,
+    prompt_hash TEXT NOT NULL,
+    model_name TEXT NOT NULL,
+    classifier_source TEXT NOT NULL DEFAULT 'pending',
+    status TEXT NOT NULL CHECK (status IN ('cleaning', 'review_ready', 'published', 'failed')),
+    mapping_json TEXT NOT NULL DEFAULT '{}',
+    taxonomy_json TEXT NOT NULL DEFAULT '{}',
+    summary_json TEXT NOT NULL DEFAULT '{}',
+    preview_hash TEXT,
+    publish_mode TEXT CHECK (publish_mode IN ('replace', 'upsert')),
+    publication_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    completed_at TEXT,
+    approved_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS catalog_clean_rows (
+    run_id TEXT NOT NULL REFERENCES catalog_clean_runs(run_id) ON DELETE CASCADE,
+    upload_id TEXT NOT NULL,
+    source_record_id TEXT NOT NULL,
+    row_number INTEGER NOT NULL CHECK (row_number >= 1),
+    status TEXT NOT NULL CHECK (status IN ('ready', 'review_required', 'rejected')),
+    locked_facts_json TEXT,
+    classification_json TEXT NOT NULL DEFAULT '{}',
+    canonical_json TEXT,
+    issues_json TEXT NOT NULL DEFAULT '[]',
+    classifier_source TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, source_record_id),
+    FOREIGN KEY (upload_id, source_record_id)
+        REFERENCES catalog_source_rows(upload_id, source_record_id)
+);
+
+CREATE TRIGGER IF NOT EXISTS catalog_sources_immutable
+BEFORE UPDATE ON catalog_sources
+BEGIN
+    SELECT RAISE(ABORT, 'catalog source records are immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS catalog_sources_no_delete
+BEFORE DELETE ON catalog_sources
+BEGIN
+    SELECT RAISE(ABORT, 'catalog source records cannot be deleted');
+END;
+
+CREATE TRIGGER IF NOT EXISTS catalog_source_rows_immutable
+BEFORE UPDATE ON catalog_source_rows
+BEGIN
+    SELECT RAISE(ABORT, 'catalog source rows are immutable');
+END;
+
+
+CREATE TRIGGER IF NOT EXISTS catalog_source_rows_no_delete
+BEFORE DELETE ON catalog_source_rows
+BEGIN
+    SELECT RAISE(ABORT, 'catalog source rows cannot be deleted');
+END;
+
+CREATE TRIGGER IF NOT EXISTS catalog_source_rows_closed_after_staging
+BEFORE INSERT ON catalog_source_rows
+WHEN EXISTS (SELECT 1 FROM catalog_clean_runs WHERE upload_id=NEW.upload_id)
+BEGIN
+    SELECT RAISE(ABORT, 'catalog source staging is closed');
+END;
+
 CREATE TABLE IF NOT EXISTS addresses (
     address_id TEXT PRIMARY KEY,
     consumer_id TEXT NOT NULL,

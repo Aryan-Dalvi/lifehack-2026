@@ -17,12 +17,48 @@ type MerchantConfig = {
 };
 
 type UploadResult = {
+  upload_id: string;
+  status: "review_ready" | "published";
+  preview_hash: string;
+  approval_required: boolean;
+  ready: number;
   ingested: number;
   skipped: number;
-  errors: Array<{ row: number; reason: string }>;
-  source: { filename: string; format: string };
+  errors: Array<{ row: number; reason: string; status: "review_required" | "rejected" }>;
+  source: { filename: string; format: string; sha256: string; row_count: number };
   mappings: Record<string, string>;
   partial_success: boolean;
+  summary: { input_rows: number; ready: number; review_required: number; rejected: number; fallback_rows: number };
+  classifier: { source: string; model: string; prompt_hash: string };
+  approval: {
+    base_catalog_hash: string;
+    reviewed_row_count_required: number;
+    modes: Record<"replace" | "upsert", {
+      allowed: boolean;
+      blocked_reason: string | null;
+      approval_token: string;
+      publish_count: number;
+      publish_skus: string[];
+      removal_count: number;
+      removal_skus: string[];
+      held_count: number;
+    }>;
+  };
+  pagination: { offset: number; limit: number; returned: number; total: number; next_offset: number | null };
+  preview_truncated: boolean;
+  products: Array<{
+    row: number;
+    status: "ready" | "review_required" | "rejected";
+    canonical: { title: string; attributes: { product_type: string | null; categories: string[] } } | null;
+    classification: {
+      assignments: Array<{
+        axis: string;
+        proposed_label: string;
+        is_primary: boolean;
+        evidence: Array<{ column: string; raw_excerpt: string }>;
+      }>;
+    };
+  }>;
 };
 
 const defaultMappings = {
@@ -39,6 +75,7 @@ export function MerchantAdmin() {
   const [products, setProducts] = useState<Product[]>([]);
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [loadingReview, setLoadingReview] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [copied, setCopied] = useState<"snippet" | "url" | null>(null);
@@ -73,10 +110,8 @@ export function MerchantAdmin() {
     const form = new FormData();
     form.append("file", file);
     try {
-      const result = await api<UploadResult>(`/merchant/${config.merchant_id}/catalog`, { method: "POST", body: form });
+      const result = await api<UploadResult>(`/merchant/${config.merchant_id}/catalog/uploads`, { method: "POST", body: form });
       setUpload(result);
-      const catalog = await api<{ results: Product[] }>(`/catalog/search?merchant_id=${config.merchant_id}&category=skincare&limit=5`);
-      setProducts(catalog.results);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "The catalog could not be uploaded.");
     } finally {
@@ -85,11 +120,48 @@ export function MerchantAdmin() {
     }
   };
 
+  const loadMoreReview = async () => {
+    if (!config || !upload?.pagination.next_offset) return;
+    setLoadingReview(true);
+    setError(null);
+    try {
+      const nextPage = await api<UploadResult>(
+        `/merchant/${config.merchant_id}/catalog/uploads/${upload.upload_id}?offset=${upload.pagination.next_offset}&limit=100`,
+      );
+      setUpload((current) => current ? {
+        ...nextPage,
+        products: [...current.products, ...nextPage.products],
+        errors: [...current.errors, ...nextPage.errors],
+      } : nextPage);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "The next review page could not be loaded.");
+    } finally {
+      setLoadingReview(false);
+    }
+  };
+
   const publish = async () => {
     if (!config) return;
     setPublishing(true);
     setError(null);
     try {
+      if (upload?.approval_required) {
+        const mode = upload.skipped ? "upsert" : "replace";
+        const plan = upload.approval.modes[mode];
+        if (upload.products.length !== upload.approval.reviewed_row_count_required) {
+          throw new Error("Load and review every catalog row before publishing.");
+        }
+        if (!plan.allowed) throw new Error(plan.blocked_reason ?? "This approval plan is blocked.");
+        await api(`/merchant/${config.merchant_id}/catalog/uploads/${upload.upload_id}/approve`, {
+          method: "POST",
+          body: JSON.stringify({
+            approval_token: plan.approval_token,
+            reviewed_row_count: upload.products.length,
+            mode,
+          }),
+        });
+        setUpload({ ...upload, status: "published", approval_required: false });
+      }
       const next = await api<MerchantConfig>(`/merchant/${config.merchant_id}/config`, {
         method: "PUT",
         body: JSON.stringify({
@@ -101,6 +173,8 @@ export function MerchantAdmin() {
       });
       setConfig(next);
       setPublished(true);
+      const catalog = await api<{ results: Product[] }>(`/catalog/search?merchant_id=${config.merchant_id}&category=skincare&limit=5`);
+      setProducts(catalog.results);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "The agent could not be published.");
     } finally {
@@ -150,8 +224,12 @@ export function MerchantAdmin() {
   }
 
   const mappings = upload?.mappings ?? defaultMappings;
-  const productCount = upload?.ingested ?? 6;
+  const productCount = upload?.ready ?? 6;
   const issueCount = upload?.skipped ?? 0;
+  const reviewComplete = !upload || upload.products.length === upload.approval.reviewed_row_count_required;
+  const publishMode = upload?.skipped ? "upsert" : "replace";
+  const publishPlan = upload?.approval.modes[publishMode];
+  const approvalBlocked = Boolean(upload?.approval_required && (!reviewComplete || !publishPlan?.allowed));
 
   return (
     <div className="admin-shell">
@@ -197,13 +275,13 @@ export function MerchantAdmin() {
               <label className={`dropzone ${uploading ? "is-uploading" : ""}`}>
                 <input type="file" accept=".csv,.xlsx,.json" onChange={(event) => void uploadCatalog(event)} disabled={uploading} />
                 {uploading ? <LoaderCircle className="spin" size={30} /> : <CloudUpload size={32} />}
-                <span>{uploading ? "Validating every row…" : "Drag and drop your file here"}<small>CSV, XLSX or JSON · maximum 5 MB</small></span>
+                <span>{uploading ? "Cleaning and categorizing every row…" : "Drag and drop your file here"}<small>CSV, XLSX or JSON · maximum 5 MB</small></span>
                 <strong>{uploading ? "Working" : "Browse files"}</strong>
               </label>
               <div className="file-row">
                 <FileSpreadsheet size={19} />
                 <span>{upload?.source.filename ?? "mysa-products.xlsx"}<small>{upload ? `${upload.source.format.toUpperCase()} catalog` : "Seed catalog · ready to replace"}</small></span>
-                <div><Check size={15} /> Catalog available</div>
+                <div><Check size={15} /> {upload?.approval_required ? "Preview ready" : "Catalog available"}</div>
                 <label className="replace-file">Replace file<input type="file" accept=".csv,.xlsx,.json" onChange={(event) => void uploadCatalog(event)} /></label>
               </div>
 
@@ -219,8 +297,30 @@ export function MerchantAdmin() {
                   <span className={issueCount ? "issue-count" : "quiet-count"}><CircleAlert size={14} /> {issueCount} {issueCount === 1 ? "needs" : "need"} review</span>
                 </header>
                 {upload?.errors.length ? (
-                  <table><thead><tr><th>Row</th><th>Issue</th><th>Result</th></tr></thead><tbody>{upload.errors.slice(0, 4).map((issue) => <tr key={`${issue.row}-${issue.reason}`}><td>{issue.row}</td><td>{issue.reason}</td><td>Skipped safely</td></tr>)}</tbody></table>
-                ) : <div className="all-clear"><Check size={16} /> Required skincare facts, prices and stock are ready.</div>}
+                  <div className="review-table-scroll"><table><thead><tr><th>Row</th><th>Issue</th><th>Result</th></tr></thead><tbody>{upload.errors.map((issue) => <tr key={`${issue.row}-${issue.reason}`}><td>{issue.row}</td><td>{issue.reason}</td><td>Held from publish</td></tr>)}</tbody></table></div>
+                ) : <div className="all-clear"><Check size={16} /> Every row was cleaned, categorized and grounded in merchant data.</div>}
+                {upload ? <small>Classifier: {upload.classifier.source.replaceAll("_", " ")} ({upload.classifier.model}) · changes stay in preview until you approve and publish.</small> : null}
+                {upload ? (
+                  <div className="classification-preview">
+                    <strong>Agent category preview · {upload.products.length}/{upload.pagination.total} rows reviewed</strong>
+                    <div className="review-table-scroll"><table>
+                        <thead><tr><th>Product</th><th>Proposed categories</th><th>Source evidence</th><th>Status</th></tr></thead>
+                        <tbody>{upload.products.map((product) => {
+                          const assignments = product.classification.assignments.filter((assignment) => assignment.axis === "product_type" || assignment.axis === "skin_type" || assignment.axis === "concern");
+                          const evidence = assignments.flatMap((assignment) => assignment.evidence.map((item) => `${item.column}: “${item.raw_excerpt}”`));
+                          return <tr key={product.row}><td>{product.canonical?.title ?? `Row ${product.row}`}</td><td>{assignments.map((assignment) => assignment.proposed_label).join(", ") || "Needs review"}</td><td>{evidence.slice(0, 2).join(" · ") || "No accepted evidence"}</td><td>{product.status.replace("_", " ")}</td></tr>;
+                        })}</tbody>
+                      </table></div>
+                    {upload.pagination.next_offset !== null ? <button className="load-review" type="button" onClick={() => void loadMoreReview()} disabled={loadingReview}>{loadingReview ? "Loading…" : `Load next ${Math.min(100, upload.pagination.total - upload.products.length)} rows`}</button> : null}
+                    <div className="approval-plan">
+                      <strong>{publishMode === "replace" ? "Replacement plan" : "Safe partial update"}</strong>
+                      <span>{publishMode === "replace"
+                        ? `${publishPlan?.publish_count ?? 0} products will publish; ${publishPlan?.removal_count ?? 0} existing products will be removed${publishPlan?.removal_skus.length ? ` (${publishPlan.removal_skus.join(", ")})` : ""}.`
+                        : `${publishPlan?.publish_count ?? 0} ready products will update or be added; ${publishPlan?.held_count ?? 0} held rows and every other live product remain unchanged.`}</span>
+                      {!reviewComplete ? <small>Load every remaining page to enable approval.</small> : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           </section>
@@ -247,7 +347,7 @@ export function MerchantAdmin() {
           {error ? <div className="inline-error" role="alert">{error}</div> : null}
           <footer className="publish-bar">
             <div>{published ? <Check size={18} /> : <RefreshCw size={18} />}<span><strong>{published ? "Your agent is live" : "Ready to publish"}</strong><small>{productCount} products ready · skincare pack active · simulated payments</small></span></div>
-            <button type="button" onClick={() => void publish()} disabled={publishing}>{publishing ? "Publishing…" : published ? "Republish changes" : "Publish agent"}<ArrowRight size={17} /></button>
+            <button type="button" onClick={() => void publish()} disabled={publishing || approvalBlocked}>{publishing ? "Publishing…" : approvalBlocked ? "Complete catalog review" : published ? "Republish changes" : "Publish agent"}<ArrowRight size={17} /></button>
           </footer>
         </section>
 
