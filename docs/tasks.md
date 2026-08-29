@@ -11,18 +11,23 @@
 
 ## Totals
 
-**≈50 person-hours planned** against ~55–65 available. That is tight, not comfortable: the cut list
-in `brief.md` §5 exists for a reason, and the first three cuts are already identified. Anything
-added to this board must displace something.
+**≈53 person-hours planned** (revision 2, +3 h) against ~55–65 available. That is tight, not
+comfortable: the cut list in `brief.md` §5 exists for a reason, and revision 2 adds one more item to
+it — **real WebAuthn in C6 drops to a simulated sheet unless everything else is green by T+16.**
+Anything further added to this board must displace something.
 
-| Lane | Planned |
-|---|---|
-| Shared / setup | 3.75 h |
-| `payments/` (Y4) | 11 h |
-| `agent/` (Y3) | 10 h |
-| `web/` (Y2) | 10.5 h |
-| `merchant/` (Aryan) | 5.5 h |
-| Integration, test, demo, submission (Aryan) | 9.25 h |
+| Lane | Planned | Δ rev 2 |
+|---|---|---|
+| Shared / setup | 3.75 h | — |
+| `payments/` (Y4) | 11.5 h | +0.5 (absorbs the cart builder) |
+| `agent/` (Y3) | 12.0 h | +2.0 (subagent split + Guardian, minus cheaper packs) |
+| `web/` (Y2) | 11.0 h | +0.5 (live preview, minus a simpler console) |
+| `merchant/` (Aryan) | 5.5 h | — |
+| Integration, test, demo, submission (Aryan) | 9.25 h | — |
+
+> **Revision 2 (T+1:10)** applied the three plan changes: consumer UX specified (plates C1–C8),
+> merchant onboarding simplified to three sections, and `agent/` split into an orchestrator plus
+> five specialists. Surfaces: `docs/ux.md` + `docs/wireframes.html`. Contracts: `contracts.md` v0.10.
 
 ---
 
@@ -41,20 +46,27 @@ The hardest and highest-scoring module. Two of five rubric lines live here.
 
 | ID | Task | Owner | Est (h) | Timebox (T+) | Depends on | Executor | Status | DoD |
 |---|---|---|---|---|---|---|---|---|
-| T-10 | **Mock Visa token vault + authorize/capture**: issue agent-bound network tokens with constraints (max amount, merchant lock, single-use, expiry); `/pay/authorize`, `/pay/capture`, `/pay/receipt` | Y4 | 3.0 | 2:10 → 6:00 | T-02 | own-Codex (high) | todo | Base: valid cart → `approved` + auth code + receipt. Edge: expired token, wrong merchant, reused single-use token, amount over cap, unknown token → correct decline code each, never a 500 |
+| T-10 | **Mock Visa token vault + authorize/capture + cart builder**: agent-bound network tokens with constraints (max amount, merchant lock, single-use, expiry); `/pay/authorize`, `/pay/capture`, `/pay/receipt`; **deterministic cart builder — totals re-read from the DB, never carried over from the model** (moved here from `agent/` in rev 2) | Y4 | 3.5 | 2:10 → 6:00 | T-02 | own-Codex (high) | todo | Base: valid cart → `approved` + auth code + receipt. Edge: expired token, wrong merchant, reused single-use token, amount over cap, unknown token → correct decline code each, never a 500. Cart total must disagree with a tampered client total and win |
 | T-11 | **Mandate chain** (AP2-shaped): Intent → Cart → Payment, ed25519-signed, canonical JSON, parent linkage, `/pay/mandates`, `/pay/mandates/{id}/chain` with per-link verification status | Y4 | 3.0 | 5:00 → 9:00 | T-10 | own-Codex (high) | todo | Base: 3-link chain verifies. Edge: tampered cart total → `CART_HASH_MISMATCH`; orphan payment mandate → rejected; expired intent → `MANDATE_EXPIRED`; chain endpoint reports *which* link failed |
 | T-12 | **TAP-shaped HTTP signatures**: RFC 9421 `Signature` / `Signature-Input` over `@authority @path created keyid expires alg nonce tag`; `tag` ∈ `agent-browser-auth` \| `agent-payer-auth`; agent registry of public keys; verifying middleware on `/merchant/*` and `/pay/*`; nonce replay cache | Y4 | 3.0 | 9:00 → 14:00 | T-11 | own-Codex (high) → escalate to Aryan-Claude if stuck >45 min | todo | Base: signed request passes, unsigned rejected 401. Edge: replayed nonce, expired `created`/`expires`, wrong `tag` for a payment route, unknown `keyid`, tampered path → distinct errors. **Hard timebox — fall back to HMAC envelopes with identical field shape rather than overrun** |
 | T-13 | **Safeguard rules + `/trust/events` SSE**: emit a verification event per step (signature ok, mandate link verified, constraint checked, decision) for the Trust Panel; assemble the scripted decline scenario | Y4 | 2.0 | 14:00 → 17:00 | T-12, T-31 | own-Codex (med) | todo | Base: a normal purchase emits ≥6 ordered events. Edge: the over-cap purchase emits a `declined` event with `AMOUNT_EXCEEDS_MANDATE` and the panel shows exactly where the chain broke. Reconnect after refresh works |
 
-## `agent/` — LLM orchestration · **Y3 (backend/core)**
+## `agent/` — orchestrator + specialists · **Y3 (backend/core)**
+
+Restructured in rev 2. Contracts: `contracts.md` §Subagents. Diagrams: `wireframes.html` Part 3.
+**The rule that makes it work:** facts travel through code, only phrasing travels through a model,
+and there is no model at all from the cart downward.
 
 | ID | Task | Owner | Est (h) | Timebox (T+) | Depends on | Executor | Status | DoD |
 |---|---|---|---|---|---|---|---|---|
-| T-20 | **Tool-calling agent loop**: OpenAI mini-tier, streaming; tools `search_catalog`, `get_product`, `compare_products`, `propose_cart`, `request_confirmation`, `execute_payment`; session state | Y3 | 3.0 | 2:10 → 6:00 | T-02, T-04, T-41 | own-Codex (high) | todo | Base: "running shoes under $150" → 3 grounded cards ≤3 turns. Edge: no results, out-of-category request, budget of $0, ambiguous query, LLM returns malformed tool args → graceful message, never a crash or a hallucinated SKU |
-| T-21 | **`DEMO_MODE=1` deterministic fallback**: scripted agent covering the full demo script with zero API calls; automatic failover on API error/timeout | Y3 | 1.5 | 6:00 → 8:00 | T-20 | own-Codex (med) | todo | Judging-critical. With the network **off**, the whole demo script still runs end to end. Failover from live mode is invisible to the audience |
-| T-22 | **Agent-side signing**: build + sign the Intent Mandate from the conversation (category, budget cap, expiry), sign every outbound call per TAP with the right `tag` | Y3 | 2.0 | 9:00 → 12:00 | T-12 | own-Codex (high) | todo | Base: browse calls carry `agent-browser-auth`, pay calls `agent-payer-auth`, all verify. Edge: agent attempts payment without an intent mandate → blocked client-side *and* server-side |
-| T-23 | **Category packs**: prompt + attribute schema + comparison dimensions + guardrails, 2–3 categories, selected per merchant config | Y3 | 2.5 | 12:00 → 16:00 | T-20, T-42 | own-Codex (med) | todo | Base: switching a merchant's category visibly changes how the agent compares (specs vs sizing vs dietary). Edge: unknown category falls back to a generic pack without erroring |
-| T-24 | **Cost control**: cheapest viable model, prompt caching, `max_tokens` caps, per-session token budget + running spend log | Y3 | 1.0 | 16:00 → 17:00 | T-20 | own-Codex (low) | todo | A full demo run costs **<$0.05**; spend estimate appears in `STATUS`; a runaway loop is capped, not infinite |
+| T-20a | **Concierge + session + SSE**: orchestrator that routes a turn and holds the transcript — **never sees product rows, prices or the card**; `/agent/session`, `/agent/message` streaming | Y3 | 2.0 | 2:10 → 5:00 | T-02, T-04 | own-Codex (high) | todo | Base: a turn routes to the right specialist and streams back. Edge: off-topic turn, empty message, mid-stream disconnect, two turns in flight → no crash, no leaked internals |
+| T-20b | **Discovery specialist + catalog tool**: scoped brief in, **`CatalogQuery` object out and nothing else**; binds to `/catalog/search` | Y3 | 1.5 | 5:00 → 7:00 | T-20a, T-41 | own-Codex (high) | todo | Base: "good ANC for flights" → 3 grounded cards ≤3 turns. Edge: no results, budget of $0, ambiguous query, model emits prose instead of a query → schema rejects, one repair, then a keyword fallback. **Never a hallucinated SKU** |
+| T-20c | **Comparison specialist**: ≤5 rows injected verbatim + the pack's dimensions → comparison table + one recommendation, every claim citing a `sku` | Y3 | 1.5 | 7:00 → 9:00 | T-20b | own-Codex (high) | todo | Base: plate C4 renders from real rows. Edge: 1 product only, products missing an attribute, a claim citing an attribute not in the payload → Guardian rejects → deterministic table |
+| T-25 | **Guardian validator** (new in rev 2): schema · grounding vs DB to the cent · scope strip · mandate cap; repair-once then deterministic fallback; emits `TrustEvent` on Y4's bus | Y3 | 2.0 | 9:00 → 12:00 | T-20c, T-13 | own-Codex (high) | todo | **The whole anti-hallucination claim rests here — not cuttable.** Base: a clean turn passes all four checks. Edge: invented SKU, price off by one cent, wrong-category product, cart above the cap → each refused with the right code (`UNGROUNDED_CLAIM`, `OUT_OF_SCOPE_PRODUCT`, `SCHEMA_REJECTED`) and a trust event |
+| T-21 | **`DEMO_MODE=1` deterministic fallback**: scripted run covering the full demo script with zero API calls; automatic failover on API error/timeout | Y3 | 1.5 | 12:00 → 14:00 | T-20a | own-Codex (med) | todo | Judging-critical. With the network **off**, the whole demo script still runs end to end. Failover from live mode is invisible to the audience |
+| T-22 | **Agent-side signing**: build + sign the Intent Mandate when the shopper sets the spend limit (plate C2), sign every outbound call per TAP with the right `tag` | Y3 | 2.0 | 12:00 → 15:00 | T-12 | own-Codex (high) | todo | Base: browse calls carry `agent-browser-auth`, pay calls `agent-payer-auth`, all verify. Edge: payment attempted with no intent mandate → blocked client-side *and* server-side |
+| T-23 | **Category packs as data**: `agent/packs/<category>.json` — system prompt, attribute schema, comparison dimensions, guardrails, few-shot. 2 packs minimum | Y3 | 1.0 | 15:00 → 16:00 | T-20c, T-42 | own-Codex (med) | todo | Was 2.5 h — the architecture pays for itself here. Base: switching a merchant's category visibly changes the comparison dimensions. Edge: unknown category → generic pack, no error. **A third pack must cost only a file** |
+| T-24 | **Cost control**: cheapest viable model per specialist (concierge nano, discovery/comparison mini), prompt caching, `max_tokens` caps, running spend log | Y3 | 0.5 | 16:00 → 17:00 | T-20c | own-Codex (low) | todo | A full demo run costs **<$0.05** — verify with the real meter, not an estimate; spend appears in `STATUS`; a runaway loop is capped |
 
 ## `web/` — chat widget, trust panel, merchant console · **Y2 (frontend/UX)**
 
@@ -62,9 +74,15 @@ UX is a whole rubric line. This module *is* the demo surface.
 
 | ID | Task | Owner | Est (h) | Timebox (T+) | Depends on | Executor | Status | DoD |
 |---|---|---|---|---|---|---|---|---|
-| T-30 | **Chat widget**: streaming messages, product cards, comparison view, cart card, **transaction preview** sheet, Confirm button, receipt | Y2 | 3.5 | 2:10 → 7:00 | T-02 | own-Codex (high) | todo | Base: full happy path clickable against mocked API. Edge: long product titles, 0 results, network error, double-click Confirm (must not double-charge), mid-stream disconnect |
-| T-31 | **Trust Panel**: live mandate chain, signature verification badges, constraint checks, decline visualisation — legible from 1.5 m away (walking judging) | Y2 | 2.5 | 9:00 → 13:00 | T-30, T-13 | own-Codex (high) | todo | Base: purchase renders the chain step by step in real time. Edge: the declined run makes the broken link **obvious without narration**. Readable on a laptop screen at arm's length by a standing judge |
-| T-32 | **Merchant console**: onboarding wizard (upload CSV / paste JSON feed URL / connect API), category + persona config, **embed snippet generator with copy button**, merchant-size preset (SME vs large) | Y2 | 3.0 | 13:00 → 18:00 | T-40, T-42 | own-Codex (high) | todo | Base: CSV upload → agent live on that merchant in **<90 s**, on stage, no code. Edge: malformed CSV → per-row errors, not a stack trace; empty catalog; duplicate SKUs |
+Surfaces are now specified plate by plate in `docs/ux.md` + `docs/wireframes.html`. Build to the
+plates; layout is fixed, visual design (colour, type, imagery, motion) is Y2's call.
+
+| ID | Task | Owner | Est (h) | Timebox (T+) | Depends on | Executor | Status | DoD |
+|---|---|---|---|---|---|---|---|---|
+| T-30 | **Chat widget — plates C1–C5, C7**: greeting + **spend-limit control**, product cards, comparison table, **consent sheet with scope band**, receipt in-thread | Y2 | 3.5 | 2:10 → 7:00 | T-02 | own-Codex (high) | todo | Base: full happy path clickable against a mocked API, matching plates C2–C5, C7. Edge: long titles, 0 results, network error, **double-click Confirm must not double-charge**, mid-stream disconnect. Amount must appear on the Confirm button |
+| T-31 | **Trust Panel + plate C8** (decline recovery): live chain, verification badges, constraint checks, the broken-link state and its two recovery actions | Y2 | 2.5 | 9:00 → 13:00 | T-30, T-13 | own-Codex (high) | todo | Base: a purchase renders the chain step by step in real time. Edge: the declined run makes the broken link **obvious without narration**, and shows the two dead steps below it (*never asked* / *never called*). Readable at 1.5 m by a standing judge |
+| T-32 | **Merchant console — plates M1–M3, simplified**: one page, three sections (shop / catalog / go live). Auto-mapped columns as chips, per-row error list, copy-snippet button, SME-vs-large toggle. **No wizard state, no mapping screen, no persona screen** | Y2 | 2.5 | 13:00 → 17:00 | T-40, T-42 | own-Codex (high) | todo | Base: CSV upload → agent live on that merchant in **<90 s**, on stage, no code. Edge: malformed CSV → per-row errors and **partial success**, not a stack trace; empty catalog; duplicate SKUs |
+| T-34 | **Live agent preview in the console** (new in rev 2): the real widget against the just-uploaded catalog, running from section one | Y2 | 1.0 | 17:00 → 18:00 | T-30, T-32 | own-Codex (med) | todo | Reuses T-30's widget — no second implementation. Base: preview re-renders as the shop is configured. The "90 seconds" claim is not credible without this |
 | T-33 | **Demo-day polish**: Reset button, keyboard-driveable, responsive, ≤5 s cold start, no console errors, favicon/title | Y2 | 1.5 | 18:00 → 20:00 | all web | own-Codex (med) | todo | Ten consecutive demo runs with no reload-and-pray. Reset returns to a pristine state in one click |
 
 ## `merchant/` — catalog + discovery service · **Aryan (Y1)**

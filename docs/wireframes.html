@@ -1,0 +1,1080 @@
+<title>Agent-Ready Commerce</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --paper:#F1F3F6;
+  --surface:#FFFFFF;
+  --surface-2:#E7EAF0;
+  --surface-3:#DDE2EA;
+  --ink:#12161F;
+  --ink-2:#4A5262;
+  --ink-3:#7B8494;
+  --rule:#C6CDD9;
+  --rule-soft:#DCE1E9;
+  --accent:#1434CB;
+  --accent-soft:#E2E7FB;
+  --gold:#96600A;
+  --gold-soft:#FAEFD6;
+  --ok:#0B6E4F;
+  --ok-soft:#DBEFE6;
+  --stop:#AB2318;
+  --stop-soft:#F8E2E0;
+
+  --f-disp:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono","SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1117;
+    --surface:#161A22;
+    --surface-2:#1E232E;
+    --surface-3:#272D3A;
+    --ink:#E6EAF2;
+    --ink-2:#A6AFC0;
+    --ink-3:#737D8F;
+    --rule:#2E3542;
+    --rule-soft:#232935;
+    --accent:#8AA4FF;
+    --accent-soft:#1A2340;
+    --gold:#E0AE5F;
+    --gold-soft:#312611;
+    --ok:#5DC79C;
+    --ok-soft:#122B22;
+    --stop:#F0857B;
+    --stop-soft:#2E1614;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1117;
+  --surface:#161A22;
+  --surface-2:#1E232E;
+  --surface-3:#272D3A;
+  --ink:#E6EAF2;
+  --ink-2:#A6AFC0;
+  --ink-3:#737D8F;
+  --rule:#2E3542;
+  --rule-soft:#232935;
+  --accent:#8AA4FF;
+  --accent-soft:#1A2340;
+  --gold:#E0AE5F;
+  --gold-soft:#312611;
+  --ok:#5DC79C;
+  --ok-soft:#122B22;
+  --stop:#F0857B;
+  --stop-soft:#2E1614;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:16px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px 96px}
+.col{max-width:68ch}
+
+h1,h2,h3,h4{font-family:var(--f-disp);text-wrap:balance;margin:0}
+h1{font-size:clamp(34px,5.2vw,58px);font-weight:700;letter-spacing:-0.025em;line-height:1.02}
+h2{font-size:clamp(24px,3vw,32px);font-weight:600;letter-spacing:-0.018em;line-height:1.12}
+h3{font-size:19px;font-weight:600;letter-spacing:-0.008em}
+h4{font-size:15px;font-weight:600}
+p{margin:0 0 1em}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.eyebrow{
+  font-family:var(--f-mono);font-size:11px;font-weight:500;
+  letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-3);
+  margin:0 0 14px;
+}
+
+/* ── masthead ─────────────────────────────────────── */
+header.mast{border-bottom:1px solid var(--rule);padding:56px 0 34px;margin-bottom:44px}
+.mast .lede{font-size:19px;line-height:1.55;color:var(--ink-2);margin-top:20px;max-width:62ch}
+.mast .lede strong{color:var(--ink);font-weight:600}
+.meta{
+  display:flex;flex-wrap:wrap;gap:0 28px;margin-top:26px;
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);
+}
+.meta b{color:var(--ink-2);font-weight:500}
+
+/* ── sections ─────────────────────────────────────── */
+section{margin-top:76px;scroll-margin-top:20px}
+.sec-hd{border-top:2px solid var(--ink);padding-top:14px;margin-bottom:30px}
+.sec-hd .num{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:0.14em;
+  text-transform:uppercase;color:var(--accent);display:block;margin-bottom:8px;
+}
+.sec-hd p{color:var(--ink-2);margin:12px 0 0;max-width:66ch}
+
+/* ── amendment cards ──────────────────────────────── */
+.amds{display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:34px}
+.amd{background:var(--surface);padding:22px 20px}
+.amd .k{font-family:var(--f-mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-3);margin-bottom:10px}
+.amd h4{margin-bottom:7px}
+.amd p{font-size:14.5px;line-height:1.55;color:var(--ink-2);margin:0}
+
+/* ── generic tables ───────────────────────────────── */
+.tbl-scroll{overflow-x:auto;margin:26px 0;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;font-size:14px;background:var(--surface)}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+thead th{
+  font-family:var(--f-mono);font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--ink-3);background:var(--surface-2);border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td.mono,th.mono,.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+td.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ── plates ───────────────────────────────────────── */
+.plates{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:26px;margin-top:32px}
+.plate{margin:0;border:1px solid var(--rule);background:var(--surface);display:flex;flex-direction:column}
+.plate.wide{grid-column:1/-1}
+.plate-hd{
+  display:flex;align-items:baseline;gap:10px;padding:9px 14px;
+  border-bottom:1px solid var(--rule);background:var(--surface-2);
+}
+.plate-id{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:0.08em;color:var(--accent)}
+.plate-nm{font-family:var(--f-disp);font-size:13.5px;font-weight:600;letter-spacing:-0.005em}
+.plate-tag{
+  margin-left:auto;font-family:var(--f-mono);font-size:9.5px;letter-spacing:0.1em;
+  text-transform:uppercase;color:var(--ink-3);border:1px solid var(--rule);padding:1px 6px;
+}
+.plate-tag.mvp{color:var(--accent);border-color:var(--accent)}
+.plate figcaption{
+  border-top:1px solid var(--rule-soft);padding:13px 14px;font-size:13px;line-height:1.5;color:var(--ink-2);
+}
+.plate figcaption ol{margin:0;padding-left:0;list-style:none;counter-reset:cx}
+.plate figcaption li{position:relative;padding-left:22px;margin-bottom:5px}
+.plate figcaption li:last-child{margin-bottom:0}
+.plate figcaption li::before{
+  counter-increment:cx;content:counter(cx);
+  position:absolute;left:0;top:2px;width:15px;height:15px;border-radius:50%;
+  background:var(--ink);color:var(--paper);font-family:var(--f-mono);font-size:9.5px;
+  font-weight:600;display:flex;align-items:center;justify-content:center;
+}
+
+/* ── the wireframe canvas ─────────────────────────── */
+.screen{background:var(--paper);padding:16px;flex:1;display:flex;flex-direction:column;gap:10px}
+.screen.split{flex-direction:row;align-items:stretch;padding:0;gap:0}
+.screen .pane{flex:1;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.screen .rail{
+  width:216px;flex:none;border-left:1px dashed var(--rule);background:var(--surface-2);
+  padding:14px 13px;display:flex;flex-direction:column;gap:9px;
+}
+@media (max-width:560px){
+  .screen.split{flex-direction:column}
+  .screen .rail{width:auto;border-left:0;border-top:1px dashed var(--rule)}
+}
+
+.cx{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:15px;height:15px;border-radius:50%;background:var(--ink);color:var(--paper);
+  font-family:var(--f-mono);font-size:9.5px;font-weight:600;font-style:normal;
+  vertical-align:2px;margin-left:5px;flex:none;
+}
+
+.bar{display:block;height:7px;border-radius:2px;background:var(--surface-3)}
+.bar.w40{width:40%}.bar.w55{width:55%}.bar.w70{width:70%}.bar.w85{width:85%}
+.ph-img{
+  border:1px solid var(--rule);background:
+    linear-gradient(to top right,transparent calc(50% - 0.5px),var(--rule) 50%,transparent calc(50% + 0.5px)),
+    linear-gradient(to top left,transparent calc(50% - 0.5px),var(--rule) 50%,transparent calc(50% + 0.5px)),
+    var(--surface-2);
+  height:54px;
+}
+
+.msg{
+  border:1px solid var(--rule);background:var(--surface);padding:9px 11px;
+  font-size:12.5px;line-height:1.45;max-width:92%;
+}
+.msg.me{align-self:flex-end;background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.msg .who{
+  display:block;font-family:var(--f-mono);font-size:9px;letter-spacing:0.1em;
+  text-transform:uppercase;color:var(--ink-3);margin-bottom:4px;
+}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  font-size:11px;border:1px solid var(--rule);border-radius:999px;padding:3px 9px;
+  color:var(--ink-2);background:var(--surface);white-space:nowrap;
+}
+.chip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+
+.field{border:1px solid var(--rule);background:var(--surface);padding:7px 10px;font-size:12px;color:var(--ink-3);display:flex;justify-content:space-between;gap:8px;align-items:center}
+.field .val{color:var(--ink);font-family:var(--f-mono);font-size:12px}
+.lbl{font-family:var(--f-mono);font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-3)}
+
+.btn{
+  border:1px solid var(--ink);background:var(--ink);color:var(--paper);
+  font-family:var(--f-body);font-size:12.5px;font-weight:600;padding:8px 12px;text-align:center;
+}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.ghost{background:transparent;color:var(--ink-2);border-color:var(--rule)}
+.btn.gold{background:var(--gold-soft);border-color:var(--gold);color:var(--gold)}
+.btn-row{display:flex;gap:8px}
+.btn-row>*{flex:1}
+
+.cards{display:flex;gap:8px;overflow:hidden}
+.pcard{flex:1;border:1px solid var(--rule);background:var(--surface);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.pcard .nm{font-size:11.5px;font-weight:600;line-height:1.25}
+.pcard .pr{font-family:var(--f-mono);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.pcard .at{font-size:10px;color:var(--ink-3);line-height:1.35}
+
+.cmp{width:100%;border-collapse:collapse;font-size:11px;background:var(--surface);border:1px solid var(--rule)}
+.cmp th,.cmp td{padding:5px 7px;border-bottom:1px solid var(--rule-soft);text-align:left}
+.cmp thead th{font-family:var(--f-mono);font-size:9px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-3);background:var(--surface-2)}
+.cmp td.pick{background:var(--accent-soft);font-weight:600}
+.cmp tbody tr:last-child td{border-bottom:0}
+
+.slip{border:1px solid var(--ink);background:var(--surface);padding:13px}
+.slip .ttl{font-family:var(--f-disp);font-size:15px;font-weight:600;margin-bottom:10px}
+.slip .row{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:4px 0;border-bottom:1px dotted var(--rule)}
+.slip .row:last-of-type{border-bottom:0}
+.slip .row .k{color:var(--ink-3)}
+.slip .row .v{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+.slip .tot{border-top:1px solid var(--ink);margin-top:6px;padding-top:7px;font-weight:600;font-size:13.5px}
+
+.scope{
+  border:1px solid var(--gold);background:var(--gold-soft);color:var(--gold);
+  padding:8px 10px;font-size:11.5px;line-height:1.45;
+}
+.scope .lbl{color:var(--gold);display:block;margin-bottom:5px}
+
+.note{font-size:10.5px;color:var(--ink-3);line-height:1.4}
+.mono-sm{font-family:var(--f-mono);font-size:10.5px;font-variant-numeric:tabular-nums}
+
+/* trust rail steps */
+.tstep{display:flex;gap:8px;align-items:flex-start;font-size:11px;line-height:1.35}
+.tstep .dot{
+  width:14px;height:14px;flex:none;border-radius:50%;border:1px solid var(--rule);
+  background:var(--surface);display:flex;align-items:center;justify-content:center;
+  font-size:8.5px;font-family:var(--f-mono);color:var(--ink-3);margin-top:1px;
+}
+.tstep.ok .dot{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.tstep.wait .dot{background:var(--gold-soft);border-color:var(--gold);color:var(--gold)}
+.tstep.fail .dot{background:var(--stop-soft);border-color:var(--stop);color:var(--stop)}
+.tstep.ok .t{color:var(--ink-2)}
+.tstep.fail .t{color:var(--stop);font-weight:600}
+.tstep .sub{display:block;font-family:var(--f-mono);font-size:9px;color:var(--ink-3);margin-top:1px}
+
+.code{
+  font-family:var(--f-mono);font-size:10.5px;background:var(--surface-2);border:1px solid var(--rule);
+  padding:7px 9px;overflow-x:auto;white-space:pre;color:var(--ink-2);
+}
+.codechip{font-family:var(--f-mono);font-size:9.5px;letter-spacing:0.04em;border:1px solid currentColor;padding:1px 5px;display:inline-block}
+.codechip.stop{color:var(--stop);background:var(--stop-soft)}
+.codechip.ok{color:var(--ok);background:var(--ok-soft)}
+
+.banner{padding:10px 11px;font-size:12px;line-height:1.45;border:1px solid}
+.banner.stop{border-color:var(--stop);background:var(--stop-soft);color:var(--stop)}
+.banner.ok{border-color:var(--ok);background:var(--ok-soft);color:var(--ok)}
+.banner b{display:block;font-family:var(--f-disp);font-size:13.5px;margin-bottom:3px}
+
+.dropzone{border:1.5px dashed var(--rule);background:var(--surface);padding:18px 12px;text-align:center;font-size:12px;color:var(--ink-3)}
+.tabs{display:flex;border-bottom:1px solid var(--rule)}
+.tabs span{font-size:11px;padding:5px 10px;color:var(--ink-3);border-bottom:2px solid transparent}
+.tabs span.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.tile{border:1px solid var(--rule);background:var(--surface);padding:9px 4px;text-align:center;font-size:10.5px;color:var(--ink-2)}
+.tile.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.toggle{display:flex;border:1px solid var(--rule);background:var(--surface)}
+.toggle span{flex:1;text-align:center;font-size:11px;padding:6px 4px;color:var(--ink-3)}
+.toggle span.on{background:var(--ink);color:var(--paper);font-weight:600}
+
+/* ── figures (svg) ────────────────────────────────── */
+figure.fig{margin:34px 0;border:1px solid var(--rule);background:var(--surface)}
+figure.fig .figbody{padding:20px 18px;overflow-x:auto}
+figure.fig svg{display:block;margin:0 auto;max-width:100%;height:auto;color:var(--ink)}
+figure.fig figcaption{
+  border-top:1px solid var(--rule-soft);padding:12px 18px;font-size:13.5px;
+  line-height:1.5;color:var(--ink-2);background:var(--surface-2);
+}
+figure.fig figcaption b{color:var(--ink)}
+
+/* ── misc blocks ──────────────────────────────────── */
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);padding:14px 16px;margin:26px 0;font-size:14.5px;line-height:1.55}
+.callout p:last-child{margin-bottom:0}
+.callout .lbl{color:var(--accent);display:block;margin-bottom:6px}
+.warn{border-left-color:var(--gold);background:var(--gold-soft)}
+.warn .lbl{color:var(--gold)}
+
+ul.tight{margin:0 0 1em;padding-left:20px}
+ul.tight li{margin-bottom:7px}
+ul.tight li::marker{color:var(--ink-3)}
+
+footer{margin-top:80px;border-top:1px solid var(--rule);padding-top:20px;font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3)}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <p class="eyebrow">LifeHack 2026 · Visa problem statement · Plan revision 2</p>
+  <h1>Agent-Ready Commerce</h1>
+  <p class="lede">
+    Wireframes for the two surfaces we ship — the shopper's conversation and the merchant's
+    90-second onboarding — plus the rebuilt agent architecture. The <strong>consent sheet (C5)</strong>
+    and the <strong>declined purchase (C8)</strong> are the two screens that win the rubric; everything
+    else exists to get a judge to them.
+  </p>
+  <div class="meta">
+    <span><b>Supersedes</b> contracts v0.9</span>
+    <span><b>Author</b> Claude Code / Aryan</span>
+    <span><b>Status</b> proposal — Y4 freezes at the huddle</span>
+    <span><b>Plan cost</b> +3 person-hours</span>
+  </div>
+</header>
+
+<div class="amds">
+  <div class="amd">
+    <p class="k">Amendment 1</p>
+    <h4>The shopper surface is specified</h4>
+    <p>Eight plates, C1–C8. The spend limit becomes a UI control in the first turn, which is also
+    how the Intent Mandate gets created — one gesture, two jobs.</p>
+  </div>
+  <div class="amd">
+    <p class="k">Amendment 2</p>
+    <h4>Onboarding drops from five screens to three</h4>
+    <p>One page, three sections, a live agent preview from the first keystroke. The persona screen
+    and the column-mapping screen are gone.</p>
+  </div>
+  <div class="amd">
+    <p class="k">Amendment 3</p>
+    <h4><code>agent/</code> becomes an orchestrator and five specialists</h4>
+    <p>Typed hops between them, a Guardian that re-grounds every model output against the database,
+    and no language model anywhere in the payment path.</p>
+  </div>
+</div>
+
+<!-- ══════════════════ PART 1 ══════════════════ -->
+<section id="consumer">
+  <div class="sec-hd">
+    <span class="num">Part one</span>
+    <h2>The shopper's conversation</h2>
+    <p>
+      One thread, no redirects, four turns from "I need X" to a receipt. Judging is a walking format:
+      a judge stands at the station for maybe ninety seconds, so every screen has to survive being
+      read from a metre and a half away, over noise, by someone who has already seen six chatbots.
+    </p>
+  </div>
+
+  <div class="col">
+    <h3>Four rules the surface has to obey</h3>
+    <ul class="tight">
+      <li><b>The limit is set before anything is searched.</b> A spend cap chosen in turn one is a
+        natural UI gesture <em>and</em> the Intent Mandate. Consent stops being a modal we bolt on at
+        the end and becomes the frame of the whole conversation.</li>
+      <li><b>Money never appears without its scope.</b> Any screen showing a price also shows what
+        the agent is allowed to do with it. The gold band in C5 is the only gold on the page.</li>
+      <li><b>A decline is a fork, not a wall.</b> C8 offers two ways forward. A dead end in a demo
+        reads as a bug; a recovery reads as a product.</li>
+      <li><b>The Trust Panel is scenery until it matters.</b> It sits quiet on the right, then earns
+        its place the moment a link turns red.</li>
+    </ul>
+  </div>
+
+  <div class="plates">
+
+    <figure class="plate">
+      <div class="plate-hd"><span class="plate-id">C1</span><span class="plate-nm">Two delivery modes</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="screen">
+        <div style="display:flex;gap:10px;flex:1">
+          <div style="flex:1;border:1px solid var(--rule);background:var(--surface);display:flex;flex-direction:column">
+            <div style="padding:6px 8px;border-bottom:1px solid var(--rule-soft)" class="lbl">Merchant site</div>
+            <div style="flex:1;padding:8px;display:flex;flex-direction:column;gap:5px">
+              <span class="bar w70"></span><span class="bar w40"></span>
+              <div class="ph-img" style="height:34px"></div>
+              <span class="bar w85"></span>
+            </div>
+            <div style="margin:0 8px 8px;border:1px solid var(--accent);background:var(--accent-soft);padding:6px;font-size:10px;color:var(--accent)">
+              Chat widget<span class="cx">1</span>
+            </div>
+          </div>
+          <div style="flex:1;border:1px solid var(--rule);background:var(--surface);display:flex;flex-direction:column">
+            <div style="padding:6px 8px;border-bottom:1px solid var(--rule-soft)" class="lbl">Demo stage</div>
+            <div style="flex:1;display:flex">
+              <div style="flex:1;padding:8px;display:flex;flex-direction:column;gap:5px">
+                <span class="bar w85"></span><span class="bar w55"></span><span class="bar w70"></span>
+              </div>
+              <div style="width:64px;border-left:1px dashed var(--rule);background:var(--surface-2);padding:6px;font-size:9px;color:var(--ink-3);line-height:1.3">
+                Trust<br>Panel<span class="cx">2</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption><ol>
+        <li>Embedded mode is what merchants install — a 400&nbsp;px panel, bottom right, same code.</li>
+        <li>Demo mode adds the Trust Panel rail. Judges see both halves; shoppers never see the rail.</li>
+      </ol></figcaption>
+    </figure>
+
+    <figure class="plate">
+      <div class="plate-hd"><span class="plate-id">C2</span><span class="plate-nm">Greeting &amp; spend limit</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="screen">
+        <div class="msg">
+          <span class="who">Lumen assistant</span>
+          Hi — I can find things, compare them, and check you out right here. What are you after?
+        </div>
+        <div class="field">
+          <span>Spend limit for this chat<span class="cx">1</span></span>
+          <span class="val">S$150.00 ▾</span>
+        </div>
+        <p class="note">I won't authorise anything above this without asking you again.<span class="cx">2</span></p>
+        <div class="chips">
+          <span class="chip">Headphones under S$150</span>
+          <span class="chip">Best noise cancelling</span>
+          <span class="chip">Compare top 3</span>
+        </div>
+        <div style="flex:1"></div>
+        <div class="field"><span>Ask anything…</span><span class="val">↵</span></div>
+        <p class="note mono-sm">intent mandate mnd_4kz · expires 15:00<span class="cx">3</span></p>
+      </div>
+      <figcaption><ol>
+        <li>The one control in the greeting. Default is the merchant's configured ceiling.</li>
+        <li>Plain language, not "mandate". The word never appears in the shopper's UI.</li>
+        <li>Setting the limit signs the Intent Mandate. Everything downstream inherits from it.</li>
+      </ol></figcaption>
+    </figure>
+
+    <figure class="plate">
+      <div class="plate-hd"><span class="plate-id">C3</span><span class="plate-nm">Discovery</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="screen">
+        <div class="msg me">Something with good noise cancelling for flights</div>
+        <div class="msg"><span class="who">Lumen assistant</span>Three that fit, all under your limit:</div>
+        <div class="cards">
+          <div class="pcard">
+            <div class="ph-img" style="height:38px"></div>
+            <span class="nm">Aria One ANC</span>
+            <span class="pr">S$129</span>
+            <span class="at">38 h · deep ANC</span>
+          </div>
+          <div class="pcard">
+            <div class="ph-img" style="height:38px"></div>
+            <span class="nm">Kestrel Studio 40</span>
+            <span class="pr">S$149</span>
+            <span class="at">45 h · deepest ANC</span>
+          </div>
+          <div class="pcard">
+            <div class="ph-img" style="height:38px"></div>
+            <span class="nm">Bolt Air Buds</span>
+            <span class="pr">S$89</span>
+            <span class="at">22 h · light ANC</span>
+          </div>
+        </div>
+        <div class="btn-row">
+          <span class="btn ghost">Compare these<span class="cx">2</span></span>
+          <span class="btn">Choose one</span>
+        </div>
+        <p class="note mono-sm">3 of 46 in catalog · price ≤ S$150 applied from your limit<span class="cx">1</span></p>
+      </div>
+      <figcaption><ol>
+        <li>The limit silently becomes a search filter. The shopper is never shown something they
+          can't buy — that's the cheapest possible decline prevention.</li>
+        <li>Comparison is one tap, not a typed request. The rubric names comparison explicitly.</li>
+      </ol></figcaption>
+    </figure>
+
+    <figure class="plate">
+      <div class="plate-hd"><span class="plate-id">C4</span><span class="plate-nm">Comparison</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="screen">
+        <div class="msg"><span class="who">Lumen assistant</span>On the dimensions that matter for flights:</div>
+        <table class="cmp">
+          <thead><tr><th></th><th>Aria One</th><th>Kestrel 40</th><th>Bolt Air</th></tr></thead>
+          <tbody>
+            <tr><td>Battery</td><td>38 h</td><td class="pick">45 h</td><td>22 h</td></tr>
+            <tr><td>ANC depth</td><td>−32 dB</td><td class="pick">−38 dB</td><td>−19 dB</td></tr>
+            <tr><td>Weight</td><td class="pick">248 g</td><td>276 g</td><td>52 g</td></tr>
+            <tr><td>Price</td><td>S$129</td><td>S$149</td><td class="pick">S$89</td></tr>
+          </tbody>
+        </table>
+        <div class="msg">
+          For long flights I'd take the <b>Kestrel 40</b> — the deepest cancelling and it lasts a
+          return trip without charging. The Aria One saves you S$20 and 28&nbsp;g.<span class="cx">2</span>
+        </div>
+        <p class="note mono-sm">4 dimensions from the electronics pack · all values read from catalog<span class="cx">1</span></p>
+      </div>
+      <figcaption><ol>
+        <li>Dimensions come from the category pack, not from the model. Fashion would show fit and
+          fabric; food would show dietary and spice.</li>
+        <li>Every number here appears in the injected product rows. The Guardian rejects the message
+          if it doesn't — see Part three.</li>
+      </ol></figcaption>
+    </figure>
+
+    <figure class="plate wide">
+      <div class="plate-hd"><span class="plate-id">C5</span><span class="plate-nm">Consent sheet — the screen that wins Trust &amp; Safety</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="screen split">
+        <div class="pane">
+          <div class="msg"><span class="who">Lumen assistant</span>Ready when you are — here's exactly what I'll do.</div>
+          <div class="slip">
+            <div class="ttl">Confirm this purchase</div>
+            <div class="row"><span class="k">Merchant</span><span class="v">Lumen Electronics</span></div>
+            <div class="row"><span class="k">Item</span><span class="v">Kestrel Studio 40 × 1</span></div>
+            <div class="row"><span class="k">Card</span><span class="v">Visa •••• 4821</span></div>
+            <div class="row tot"><span class="k">Total</span><span class="v">S$149.00</span></div>
+          </div>
+          <div class="scope">
+            <span class="lbl">What the agent may do<span class="cx">2</span></span>
+            Charge this card <b>once</b>, for <b>this cart</b>, at <b>this merchant</b>. Nothing else.
+            This permission expires in <b>4:52</b>.
+          </div>
+          <div class="btn-row">
+            <span class="btn ghost">Cancel</span>
+            <span class="btn pri">Confirm &amp; pay S$149.00<span class="cx">3</span></span>
+          </div>
+          <p class="note">Why am I seeing this? · What can this agent do?</p>
+        </div>
+        <div class="rail">
+          <p class="lbl">Authorisation chain<span class="cx">4</span></p>
+          <div class="tstep ok"><span class="dot">✓</span><span class="t">Spend limit set<span class="sub">intent · S$150 · 15 min</span></span></div>
+          <div class="tstep ok"><span class="dot">✓</span><span class="t">Agent identity<span class="sub">tag=agent-payer-auth</span></span></div>
+          <div class="tstep ok"><span class="dot">✓</span><span class="t">Cart signed<span class="sub">sha256:9f3c…&nbsp;· S$149</span></span></div>
+          <div class="tstep ok"><span class="dot">✓</span><span class="t">Within limit<span class="sub">149 ≤ 150</span></span></div>
+          <div class="tstep wait"><span class="dot">●</span><span class="t">You<span class="sub">waiting for confirmation</span></span></div>
+          <div class="tstep"><span class="dot">·</span><span class="t">Authorise<span class="sub">not yet requested</span></span></div>
+        </div>
+      </div>
+      <figcaption><ol>
+        <li>Everything a shopper needs to say yes fits above the fold: who, what, which card, how much.
+          No scrolling, no expander.</li>
+        <li>The scope band is the whole pitch in three lines — <em>once, this cart, this merchant</em> —
+          and it is the only gold element in the product.</li>
+        <li>The amount is on the button. Nobody should have to look up to remember what they're agreeing to.</li>
+        <li>The rail shows five links green and one waiting. The shopper <em>is</em> the missing link,
+          and the picture says so before anyone explains it.</li>
+      </ol></figcaption>
+    </figure>
+
+    <figure class="plate">
+      <div class="plate-hd"><span class="plate-id">C6</span><span class="plate-nm">Identity check</span><span class="plate-tag">Stretch → simulated</span></div>
+      <div class="screen">
+        <div style="flex:1"></div>
+        <div class="slip" style="text-align:center">
+          <div class="ttl">Confirm it's you</div>
+          <div style="width:44px;height:44px;border:1.5px solid var(--accent);border-radius:50%;margin:8px auto;display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:17px">◉</div>
+          <p class="note" style="margin:0">Touch ID · Lumen Electronics · S$149.00</p>
+          <p class="note" style="margin-top:8px;color:var(--accent)">Use device PIN instead<span class="cx">2</span></p>
+        </div>
+        <div style="flex:1"></div>
+        <p class="note mono-sm">passkey assertion → payment mandate<span class="cx">1</span></p>
+      </div>
+      <figcaption><ol>
+        <li>The assertion is what fills <code>human_confirmation</code> in the Payment Mandate. Real
+          WebAuthn if T-22 lands; a simulated sheet with the same shape if not — the chain is identical either way.</li>
+        <li>Always offer the fallback. A borrowed demo laptop with no enrolled biometric must not
+          strand the pitch.</li>
+      </ol></figcaption>
+    </figure>
+
+    <figure class="plate">
+      <div class="plate-hd"><span class="plate-id">C7</span><span class="plate-nm">Receipt</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="screen">
+        <div class="banner ok"><b>Paid — S$149.00</b>Lumen Electronics · Visa •••• 4821</div>
+        <div class="slip">
+          <div class="row"><span class="k">Order</span><span class="v">LUM-88213</span></div>
+          <div class="row"><span class="k">Auth code</span><span class="v">7K2M91</span></div>
+          <div class="row"><span class="k">Arriving</span><span class="v">Tue 1 Sep</span></div>
+        </div>
+        <div class="msg">
+          <span class="who">Lumen assistant</span>
+          Done — that's on its way. Anything else?<span class="cx">2</span>
+        </div>
+        <div style="flex:1"></div>
+        <p class="note" style="color:var(--accent)">View the authorisation chain →<span class="cx">1</span></p>
+      </div>
+      <figcaption><ol>
+        <li>The one place we invite a curious judge to open the full chain of signed mandates.</li>
+        <li>The thread keeps going. The agent didn't hand the shopper off anywhere — that <em>is</em>
+          the "no redirects" requirement, made visible.</li>
+      </ol></figcaption>
+    </figure>
+
+    <figure class="plate">
+      <div class="plate-hd"><span class="plate-id">C8</span><span class="plate-nm">Declined — the demo's money shot</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="screen split">
+        <div class="pane">
+          <div class="msg me">Actually, get me the Kestrel Studio 60 instead</div>
+          <div class="banner stop">
+            <b>Not authorised — S$39 over your limit</b>
+            You set a S$150 limit for this chat. The Kestrel Studio 60 is S$189.
+          </div>
+          <p class="note"><span class="codechip stop">AMOUNT_EXCEEDS_MANDATE</span><span class="cx">2</span></p>
+          <div class="btn-row">
+            <span class="btn ghost">Raise limit to S$189</span>
+            <span class="btn">Show options under S$150</span>
+          </div>
+          <p class="note">Raising the limit re-signs your permission — you'll confirm again.<span class="cx">3</span></p>
+        </div>
+        <div class="rail">
+          <p class="lbl">Authorisation chain</p>
+          <div class="tstep ok"><span class="dot">✓</span><span class="t">Spend limit set<span class="sub">intent · S$150</span></span></div>
+          <div class="tstep ok"><span class="dot">✓</span><span class="t">Agent identity<span class="sub">tag=agent-payer-auth</span></span></div>
+          <div class="tstep ok"><span class="dot">✓</span><span class="t">Cart signed<span class="sub">S$189.00</span></span></div>
+          <div class="tstep fail"><span class="dot">✕</span><span class="t">Within limit<span class="sub">189 &gt; 150 — stopped here</span></span></div>
+          <div class="tstep"><span class="dot">·</span><span class="t">You<span class="sub">never asked</span></span></div>
+          <div class="tstep"><span class="dot">·</span><span class="t">Authorise<span class="sub">never called</span></span></div>
+        </div>
+      </div>
+      <figcaption><ol>
+        <li>The agent is genuinely trying to buy it. Nothing is faked — the constraint check in
+          <code>payments/</code> refuses, and the refusal is what we're showing off.</li>
+        <li>The machine code is on screen, small, beside the human sentence. Engineers in the judging
+          panel look for it; shoppers ignore it.</li>
+        <li>Note the two dead links below the red one: the shopper was <em>never asked</em>, and the
+          network was <em>never called</em>. That's the sentence to say out loud to a Visa judge.</li>
+      </ol></figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ══════════════════ PART 2 ══════════════════ -->
+<section id="merchant">
+  <div class="sec-hd">
+    <span class="num">Part two</span>
+    <h2>Merchant onboarding, simplified</h2>
+    <p>
+      The claim on stage is "ninety seconds from CSV to a live agent". A five-screen wizard cannot
+      make that claim, and every screen we build is a screen we have to debug at 3 a.m. So: one page,
+      three sections, and a preview that has been live since the first keystroke.
+    </p>
+  </div>
+
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>Was — contracts v0.9</th><th>Now</th><th>Why it's safe to cut</th></tr></thead>
+      <tbody>
+        <tr><td>Five-screen wizard with back/next state</td><td>One page, three sections</td><td>No wizard state machine to build or break. Saves ~0.5&nbsp;h and a whole class of bug.</td></tr>
+        <tr><td>Column-mapping screen</td><td>Auto-map on header names, editable chips</td><td>Real CSVs use <code>title</code>, <code>price</code>, <code>sku</code>. Show the guess; let them correct it inline.</td></tr>
+        <tr><td>Agent persona configuration screen</td><td>Collapsed "Advanced" disclosure</td><td>Nobody tunes a persona in ninety seconds. The category pack already sets the voice.</td></tr>
+        <tr><td>"Connect API" as a separate path</td><td>One "Feed URL" field beside the file picker</td><td>Same ingestion code path, a third of the UI.</td></tr>
+        <tr><td>Preview available after publishing</td><td>Preview live from section one</td><td>The preview <em>is</em> the pitch. Hiding it until the end wastes the only wow this module has.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="plates">
+
+    <figure class="plate">
+      <div class="plate-hd"><span class="plate-id">M1</span><span class="plate-nm">Your shop</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="screen">
+        <p class="lbl">Section 1 of 3 · about 20 seconds</p>
+        <div class="field"><span>Shop name</span><span class="val">Lumen Electronics</span></div>
+        <p class="lbl">What do you sell?<span class="cx">1</span></p>
+        <div class="tiles">
+          <span class="tile">Food</span>
+          <span class="tile">Fashion</span>
+          <span class="tile on">Electronics</span>
+          <span class="tile">Travel</span>
+        </div>
+        <p class="lbl">Shop size</p>
+        <div class="toggle"><span>Small business</span><span class="on">Large retailer<span class="cx">2</span></span></div>
+        <p class="note">Size sets sensible defaults — spend ceilings, catalog limits, how chatty the
+          agent is. Change any of it later.</p>
+        <div style="flex:1"></div>
+        <p class="note" style="color:var(--ink-3)">▸ Advanced — greeting, tone, spend ceiling<span class="cx">3</span></p>
+      </div>
+      <figcaption><ol>
+        <li>Category is a tile, not a dropdown — it's the highest-consequence choice on the page and
+          it loads the whole subagent pack.</li>
+        <li>The SME / large-retailer toggle is the literal answer to the "Scalability" rubric line.
+          It has to be visible, not buried in settings.</li>
+        <li>Everything optional lives behind one collapsed row. Closed by default, forever.</li>
+      </ol></figcaption>
+    </figure>
+
+    <figure class="plate">
+      <div class="plate-hd"><span class="plate-id">M2</span><span class="plate-nm">Your catalog</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="screen">
+        <p class="lbl">Section 2 of 3 · about 40 seconds</p>
+        <div class="tabs"><span class="on">Upload a file</span><span>Feed URL</span><span>Use sample</span></div>
+        <div class="dropzone">Drop a CSV or JSON here<br><span class="note">or choose a file</span></div>
+        <div class="banner ok" style="padding:7px 9px"><b style="font-size:12px">48 products read · 2 rows need attention<span class="cx">1</span></b></div>
+        <p class="lbl">We matched your columns<span class="cx">2</span></p>
+        <div class="chips">
+          <span class="chip on">title ← Product Name</span>
+          <span class="chip on">price ← Price (SGD)</span>
+          <span class="chip on">sku ← Item Code</span>
+          <span class="chip">change</span>
+        </div>
+        <div class="code">row 17  price "N/A"        → skipped
+row 33  duplicate sku KS-40  → kept first<span class="cx">3</span></div>
+      </div>
+      <figcaption><ol>
+        <li>Partial success is the default. 46 good rows beat a rejected file — never make a merchant
+          fix a spreadsheet before they can see anything work.</li>
+        <li>The mapping is shown as a result, not asked as a question. One "change" chip covers the
+          minority who need it.</li>
+        <li>Errors name the row and say what happened to it. This is the same payload
+          <code>POST /merchant/{id}/catalog</code> already returns — the UI is just rendering it.</li>
+      </ol></figcaption>
+    </figure>
+
+    <figure class="plate">
+      <div class="plate-hd"><span class="plate-id">M3</span><span class="plate-nm">Go live</span><span class="plate-tag mvp">MVP</span></div>
+      <div class="screen split">
+        <div class="pane">
+          <p class="lbl">Section 3 of 3 · about 10 seconds</p>
+          <div class="code">&lt;script src="https://agentready.dev
+  /a/m_lumen.js" async&gt;&lt;/script&gt;</div>
+          <div class="btn-row"><span class="btn pri">Copy snippet<span class="cx">1</span></span></div>
+          <p class="note">Paste it before <code>&lt;/body&gt;</code>. That's the whole integration.</p>
+          <div class="tstep ok" style="margin-top:4px"><span class="dot">✓</span><span class="t">Catalog<span class="sub">46 products</span></span></div>
+          <div class="tstep ok"><span class="dot">✓</span><span class="t">Agent<span class="sub">electronics pack</span></span></div>
+          <div class="tstep ok"><span class="dot">✓</span><span class="t">Payments<span class="sub">Visa · test mode</span></span></div>
+        </div>
+        <div class="rail" style="width:190px">
+          <p class="lbl">Live preview<span class="cx">2</span></p>
+          <div class="msg" style="font-size:10.5px;max-width:100%">
+            <span class="who">Lumen assistant</span>Hi — what are you after?
+          </div>
+          <div class="pcard" style="padding:6px">
+            <div class="ph-img" style="height:26px"></div>
+            <span class="nm" style="font-size:10px">Kestrel Studio 40</span>
+            <span class="pr" style="font-size:10.5px">S$149</span>
+          </div>
+          <p class="note">Real agent · your catalog<span class="cx">3</span></p>
+        </div>
+      </div>
+      <figcaption><ol>
+        <li>One button, one line of HTML. Say the word "Stripe" once in the pitch and the judge
+          understands the whole distribution model.</li>
+        <li>The preview has been running since M1, re-rendering as the shop is configured.</li>
+        <li>It is the real widget against the real uploaded catalog — not a mock. Which is why
+          uploading a CSV live on stage is safe to attempt.</li>
+      </ol></figcaption>
+    </figure>
+
+  </div>
+
+  <div class="callout warn">
+    <span class="lbl">Demo-day fallback</span>
+    <p>If the console slips past T+20, the pitch keeps the claim: the ingest API is real and early
+    (T-40), so we upload the CSV with <code>curl</code> on screen and show the agent going live. The
+    capability is what the rubric scores; the wizard is only how we make it pretty.</p>
+  </div>
+</section>
+
+<!-- ══════════════════ PART 3 ══════════════════ -->
+<section id="agents">
+  <div class="sec-hd">
+    <span class="num">Part three</span>
+    <h2>One agent becomes six</h2>
+    <p>
+      A single model holding the whole conversation — every category pack, every product row, the
+      cart and the card — is exactly the setup that invents a SKU, quotes last turn's price, or
+      offers sizing advice about a pair of headphones. Splitting the work into specialists with
+      narrow, typed jobs removes most of that surface, and the split is worth building for a second
+      reason: it lets us say, truthfully, that no language model can move money.
+    </p>
+  </div>
+
+  <figure class="fig">
+    <div class="figbody">
+      <svg viewBox="0 0 760 604" role="img" aria-label="Vertical pipeline: a shopper turn passes through Concierge, Discovery, the Catalog service, Comparison, the Cart builder, human consent, and the payment executor. Language-model stages are dashed; code stages are solid. A Guardian rail on the left validates every model output against the database before it moves on.">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+          </marker>
+          <marker id="arg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#96600A"/>
+          </marker>
+        </defs>
+
+        <!-- guardian rail -->
+        <line x1="46" y1="118" x2="46" y2="470" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3" opacity="0.55"/>
+        <text x="46" y="106" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="currentColor">Guardian</text>
+        <text x="46" y="486" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.6">every hop</text>
+
+        <!-- stage 1 -->
+        <rect x="110" y="20" width="470" height="46" fill="none" stroke="currentColor" stroke-width="1" opacity="0.45"/>
+        <text x="126" y="41" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">Shopper turn</text>
+        <text x="126" y="56" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.6">“something with good ANC for flights”</text>
+
+        <line x1="180" y1="66" x2="180" y2="96" stroke="currentColor" stroke-width="1.3" marker-end="url(#ar)"/>
+
+        <!-- stage 2 concierge -->
+        <rect x="110" y="98" width="470" height="52" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 3"/>
+        <text x="126" y="119" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">Concierge</text>
+        <text x="126" y="135" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.65">routes the turn · holds no product facts</text>
+        <text x="600" y="123" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="currentColor" opacity="0.75">LLM</text>
+        <text x="600" y="136" font-family="IBM Plex Mono, monospace" font-size="9" fill="currentColor" opacity="0.5">nano</text>
+
+        <line x1="180" y1="150" x2="180" y2="182" stroke="currentColor" stroke-width="1.3" marker-end="url(#ar)"/>
+        <text x="192" y="171" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.7">scoped brief · category=electronics</text>
+
+        <!-- stage 3 discovery -->
+        <rect x="110" y="184" width="470" height="52" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 3"/>
+        <text x="126" y="205" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">Discovery</text>
+        <text x="126" y="221" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.65">may emit only a CatalogQuery — never prose</text>
+        <text x="600" y="209" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="currentColor" opacity="0.75">LLM</text>
+        <text x="600" y="222" font-family="IBM Plex Mono, monospace" font-size="9" fill="currentColor" opacity="0.5">mini</text>
+        <line x1="60" y1="210" x2="104" y2="210" stroke="currentColor" stroke-width="1" stroke-dasharray="3 2" marker-end="url(#ar)" opacity="0.6"/>
+
+        <line x1="180" y1="236" x2="180" y2="268" stroke="currentColor" stroke-width="1.3" marker-end="url(#ar)"/>
+        <text x="192" y="257" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.7">{q, max_price, attrs}</text>
+
+        <!-- stage 4 catalog -->
+        <rect x="110" y="270" width="470" height="52" fill="currentColor" fill-opacity="0.07" stroke="currentColor" stroke-width="1.4"/>
+        <text x="126" y="291" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">Catalog service</text>
+        <text x="126" y="307" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.65">SQL over the merchant's rows — the only source of facts</text>
+        <text x="600" y="295" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="currentColor" opacity="0.75">code</text>
+
+        <line x1="180" y1="322" x2="180" y2="354" stroke="currentColor" stroke-width="1.3" marker-end="url(#ar)"/>
+        <text x="192" y="343" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.7">Product[] injected verbatim</text>
+
+        <!-- stage 5 comparison -->
+        <rect x="110" y="356" width="470" height="52" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 3"/>
+        <text x="126" y="377" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">Comparison</text>
+        <text x="126" y="393" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.65">phrases the rows it was given · cites sku + attribute</text>
+        <text x="600" y="381" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="currentColor" opacity="0.75">LLM</text>
+        <text x="600" y="394" font-family="IBM Plex Mono, monospace" font-size="9" fill="currentColor" opacity="0.5">mini</text>
+        <line x1="60" y1="382" x2="104" y2="382" stroke="currentColor" stroke-width="1" stroke-dasharray="3 2" marker-end="url(#ar)" opacity="0.6"/>
+
+        <line x1="180" y1="408" x2="180" y2="440" stroke="currentColor" stroke-width="1.3" marker-end="url(#ar)"/>
+        <text x="192" y="429" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.7">chosen sku only</text>
+
+        <!-- stage 6 cart -->
+        <rect x="110" y="442" width="470" height="52" fill="currentColor" fill-opacity="0.07" stroke="currentColor" stroke-width="1.4"/>
+        <text x="126" y="463" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="currentColor">Cart builder</text>
+        <text x="126" y="479" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.65">totals computed from DB prices · signs the Cart Mandate</text>
+        <text x="600" y="467" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="currentColor" opacity="0.75">code</text>
+
+        <line x1="180" y1="494" x2="180" y2="522" stroke="#96600A" stroke-width="1.6" marker-end="url(#arg)"/>
+
+        <!-- human gate -->
+        <rect x="110" y="524" width="230" height="40" fill="#96600A" fill-opacity="0.12" stroke="#96600A" stroke-width="1.6"/>
+        <text x="126" y="542" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="#96600A">Human consent</text>
+        <text x="126" y="556" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#96600A">plate C5 · no bypass</text>
+
+        <line x1="340" y1="544" x2="368" y2="544" stroke="currentColor" stroke-width="1.3" marker-end="url(#ar)"/>
+
+        <!-- payment -->
+        <rect x="370" y="524" width="210" height="40" fill="currentColor" fill-opacity="0.07" stroke="currentColor" stroke-width="2"/>
+        <text x="386" y="542" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">Payment executor</text>
+        <text x="386" y="556" font-family="IBM Plex Mono, monospace" font-size="9.5" font-weight="600" fill="currentColor">no model in this box</text>
+        <text x="600" y="548" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="currentColor" opacity="0.75">code</text>
+
+        <!-- legend -->
+        <rect x="110" y="580" width="18" height="11" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 3"/>
+        <text x="134" y="590" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.7">language model</text>
+        <rect x="248" y="580" width="18" height="11" fill="currentColor" fill-opacity="0.07" stroke="currentColor" stroke-width="1.4"/>
+        <text x="272" y="590" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.7">deterministic code</text>
+        <rect x="400" y="580" width="18" height="11" fill="#96600A" fill-opacity="0.12" stroke="#96600A" stroke-width="1.4"/>
+        <text x="424" y="590" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#96600A">human decision</text>
+      </svg>
+    </div>
+    <figcaption>
+      <b>Facts travel through code; only phrasing travels through a model.</b> Discovery may emit a
+      query and nothing else. The catalog service is the only thing that ever produces a price.
+      Comparison receives those rows verbatim and is allowed to describe them, not to add to them.
+      From the cart down there is no model at all — so the honest answer to "what if the AI
+      hallucinates a price?" is that the AI never touches one.
+    </figcaption>
+  </figure>
+
+  <h3>The roster</h3>
+  <div class="tbl-scroll">
+    <table>
+      <thead><tr><th>Subagent</th><th>Sees</th><th>May emit</th><th class="mono">Model</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Concierge</b><br><span class="note">orchestrator</span></td>
+          <td>The transcript. No product rows, no prices, no card.</td>
+          <td>User-facing text, or a routing decision.</td>
+          <td class="mono">nano</td>
+        </tr>
+        <tr>
+          <td><b>Discovery</b><br><span class="note">per category</span></td>
+          <td>A scoped brief: this turn, the category schema, the spend cap.</td>
+          <td>A <code>CatalogQuery</code> object. Prose is rejected by schema.</td>
+          <td class="mono">mini</td>
+        </tr>
+        <tr>
+          <td><b>Comparison</b><br><span class="note">per category</span></td>
+          <td>Up to five product rows, injected verbatim, plus the pack's dimensions.</td>
+          <td>A comparison table and one recommendation, every claim citing a <code>sku</code>.</td>
+          <td class="mono">mini</td>
+        </tr>
+        <tr>
+          <td><b>Cart builder</b></td>
+          <td>SKUs and quantities.</td>
+          <td>A Cart Mandate. Totals re-read from the database, never carried over.</td>
+          <td class="mono">— code</td>
+        </tr>
+        <tr>
+          <td><b>Payment executor</b></td>
+          <td>A signed cart mandate and a human confirmation.</td>
+          <td>One call to <code>/pay/authorize</code>.</td>
+          <td class="mono">— code</td>
+        </tr>
+        <tr>
+          <td><b>Guardian</b><br><span class="note">validator</span></td>
+          <td>Every message between every pair of agents.</td>
+          <td>Pass, repair-once, or refuse — plus a <code>TrustEvent</code> either way.</td>
+          <td class="mono">— code</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Why this actually stops cross-category bleed</h3>
+
+  <figure class="fig">
+    <div class="figbody">
+      <svg viewBox="0 0 900 320" role="img" aria-label="Two panels compared. On the left, one agent holds three category packs and the full transcript in a single context, so fashion sizing rules leak into an electronics answer. On the right, only the electronics specialist is instantiated, it receives a scoped brief instead of the transcript, and the other two packs are never loaded.">
+        <defs>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+          </marker>
+          <marker id="ar2r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#AB2318"/>
+          </marker>
+        </defs>
+
+        <!-- LEFT -->
+        <text x="20" y="20" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing="1" fill="currentColor" opacity="0.6">V0.9 — ONE AGENT</text>
+        <rect x="20" y="34" width="400" height="212" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 3"/>
+        <text x="36" y="56" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">one context window</text>
+
+        <rect x="36" y="70" width="110" height="34" fill="currentColor" fill-opacity="0.07" stroke="currentColor" stroke-width="1"/>
+        <text x="91" y="91" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor">fashion pack</text>
+        <rect x="156" y="70" width="110" height="34" fill="currentColor" fill-opacity="0.07" stroke="currentColor" stroke-width="1"/>
+        <text x="211" y="91" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor">food pack</text>
+        <rect x="276" y="70" width="128" height="34" fill="currentColor" fill-opacity="0.07" stroke="currentColor" stroke-width="1"/>
+        <text x="340" y="91" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor">electronics pack</text>
+
+        <rect x="36" y="118" width="368" height="30" fill="currentColor" fill-opacity="0.07" stroke="currentColor" stroke-width="1"/>
+        <text x="52" y="137" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor">full transcript · all prior turns · all prior products</text>
+
+        <path d="M 91 104 C 91 160, 200 150, 220 178" fill="none" stroke="#AB2318" stroke-width="1.6" marker-end="url(#ar2r)"/>
+        <text x="60" y="172" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#AB2318">bleeds</text>
+
+        <rect x="36" y="180" width="368" height="50" fill="#AB2318" fill-opacity="0.09" stroke="#AB2318" stroke-width="1.4"/>
+        <text x="52" y="200" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="#AB2318">“These run a little small — size up.”</text>
+        <text x="52" y="217" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#AB2318">…about a pair of headphones</text>
+
+        <!-- divider -->
+        <line x1="450" y1="20" x2="450" y2="300" stroke="currentColor" stroke-width="1" opacity="0.25"/>
+
+        <!-- RIGHT -->
+        <text x="480" y="20" font-family="IBM Plex Mono, monospace" font-size="10.5" font-weight="600" letter-spacing="1" fill="currentColor" opacity="0.6">REVISED — SCOPED INSTANTIATION</text>
+        <rect x="480" y="34" width="400" height="212" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="496" y="56" font-family="IBM Plex Sans, sans-serif" font-size="12.5" font-weight="600" fill="currentColor">one specialist, built for this session</text>
+
+        <rect x="496" y="70" width="110" height="34" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity="0.3"/>
+        <text x="551" y="91" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.35">not loaded</text>
+        <rect x="616" y="70" width="110" height="34" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity="0.3"/>
+        <text x="671" y="91" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.35">not loaded</text>
+        <rect x="736" y="70" width="128" height="34" fill="#1434CB" fill-opacity="0.12" stroke="#1434CB" stroke-width="1.6"/>
+        <text x="800" y="91" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="600" fill="#1434CB">electronics pack</text>
+
+        <rect x="496" y="118" width="368" height="30" fill="currentColor" fill-opacity="0.07" stroke="currentColor" stroke-width="1"/>
+        <text x="512" y="137" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor">scoped brief · this turn · this schema · this cap</text>
+
+        <line x1="680" y1="148" x2="680" y2="178" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar2)"/>
+
+        <rect x="496" y="180" width="368" height="50" fill="currentColor" fill-opacity="0.07" stroke="currentColor" stroke-width="1.4"/>
+        <text x="512" y="200" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600" fill="currentColor">“45 h battery, −38 dB — deepest here.”</text>
+        <text x="512" y="217" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity="0.65">both figures present in the injected rows</text>
+
+        <!-- bottom note -->
+        <text x="20" y="278" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">The fix is context isolation, not a longer system prompt:</text>
+        <text x="20" y="296" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity="0.7">the wrong category&#39;s vocabulary is never in the window to be reached for.</text>
+      </svg>
+    </div>
+    <figcaption>
+      <b>Instructing one agent to "stay in category" is a request; not loading the other categories is
+      a guarantee.</b> Each specialist is constructed per session from the merchant's configured pack
+      and handed a scoped brief — never the running transcript. Packs are data files, so a fourth
+      category costs a JSON file, not a prompt rewrite.
+    </figcaption>
+  </figure>
+
+  <div class="col">
+    <h3>What the Guardian checks, on every hop</h3>
+    <ul class="tight">
+      <li><b>Schema.</b> The message parses into the declared type, or it never leaves.</li>
+      <li><b>Grounding.</b> Every <code>sku</code> mentioned exists in this merchant's catalog; every
+        price and attribute matches the database row to the cent. One repair attempt, then a
+        deterministic fallback — a plain table built from the rows in code.</li>
+      <li><b>Scope.</b> Products outside the session's category or merchant scope are stripped.</li>
+      <li><b>Mandate.</b> Nothing proposes a cart above the Intent Mandate's cap, and nothing reaches
+        the payment executor without a cart mandate and a human confirmation.</li>
+    </ul>
+    <p>
+      Every check emits a <code>TrustEvent</code> on the existing bus, which means the Trust Panel is
+      already wired for this — Y4's <code>/trust/events</code> stream needs no contract change, only
+      more event sources.
+    </p>
+  </div>
+
+  <div class="callout">
+    <span class="lbl">On cost — the objection to answer before a judge raises it</span>
+    <p>
+      More agents does not mean more spend. Each specialist runs on a short, purpose-built context
+      instead of one ballooning transcript, so a full demo run stays under the <b>$0.05</b> target in
+      T-24. The concierge is nano-tier, discovery emits a tiny JSON object, and the two most expensive
+      boxes in the pipeline — cart and payment — make no model calls at all.
+    </p>
+  </div>
+</section>
+
+<!-- ══════════════════ BOARD ══════════════════ -->
+<section id="board">
+  <div class="sec-hd">
+    <span class="num">Consequences</span>
+    <h2>What changes on the board</h2>
+    <p>
+      Net <b>+3 person-hours</b>, taking the plan from ~50 h to ~53 h against 55–65 h available. That
+      eats most of the buffer, so one more item goes on the cut list: the real WebAuthn passkey in C6
+      drops to a simulated sheet unless everything else is green by T+16.
+    </p>
+  </div>
+
+  <div class="tbl-scroll">
+    <table>
+      <thead>
+        <tr><th class="mono">ID</th><th>Change</th><th>Owner</th><th class="num">Est</th><th>Note</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">T-20</td><td><b>Split</b> into T-20a Concierge + routing + SSE, T-20b Discovery + catalog tool, T-20c Comparison + grounded-claim check</td><td>Y3</td><td class="num">5.0</td><td>Was one 3 h task. Three smaller ones are also three testable ones.</td></tr>
+        <tr><td class="mono">T-25</td><td><b>New</b> — Guardian validator, four checks, emits <code>TrustEvent</code></td><td>Y3</td><td class="num">2.0</td><td>The whole anti-hallucination claim rests here. Not cuttable.</td></tr>
+        <tr><td class="mono">T-23</td><td><b>Cheaper</b> — category packs become data files, not prompt engineering</td><td>Y3</td><td class="num">1.0</td><td>Was 2.5 h. The architecture pays for itself here.</td></tr>
+        <tr><td class="mono">T-10</td><td><b>Grows</b> — absorbs the deterministic cart builder from <code>agent/</code></td><td>Y4</td><td class="num">3.5</td><td>Cart totals belong next to the money, not next to the model.</td></tr>
+        <tr><td class="mono">T-30</td><td><b>Respecified</b> against plates C1–C8; consent sheet and decline recovery are now explicit</td><td>Y2</td><td class="num">3.5</td><td>Same estimate, far less ambiguity.</td></tr>
+        <tr><td class="mono">T-32</td><td><b>Simplified</b> — five screens to three sections</td><td>Y2</td><td class="num">2.5</td><td>Was 3.0 h.</td></tr>
+        <tr><td class="mono">T-34</td><td><b>New</b> — live agent preview in the merchant console</td><td>Y2</td><td class="num">1.0</td><td>Reuses the widget from T-30. The "90 seconds" claim needs it.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <span class="lbl">Decisions for the huddle</span>
+    <p>
+      Y4 owns three calls before anyone writes agent code: does the <b>Guardian live in
+      <code>agent/</code></b> (proposed — one owner, one interface) <b>or in <code>payments/</code></b>
+      beside the other trust code; is the <b>cart builder</b> Y4's or Y3's; and does the category pack
+      get chosen by the merchant at onboarding only, or can the concierge switch packs mid-conversation
+      (proposed: <b>no</b> — a switch is a new session, which keeps the isolation guarantee absolute).
+    </p>
+  </div>
+</section>
+
+<footer>
+  Agent-Ready Commerce · plan revision 2 · supersedes docs/contracts.md v0.9 ·
+  wireframes are specification, not visual design — colour, imagery and type in the built product are Y2's call.
+</footer>
+
+</div>

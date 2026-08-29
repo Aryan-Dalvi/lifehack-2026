@@ -7,14 +7,14 @@
 
 | # | Requirement (from `brief.md` §3) | Delivered by | MVP? | Risk |
 |---|---|---|---|---|
-| **R1** | Category-trained chatbot/voice assistant | T-20 (agent loop), **T-23 (category packs)**, T-03 (category seed data) | partial — one category at MVP | med — T-23 lands late (T+16); if cut, R1 rests on a single hard-coded pack. **Keep at least 2 packs.** |
-| **R2** | Discovery, recommendations, **comparison**, decision | T-20, T-41 (search), T-30 (product cards + comparison view) | ✅ yes | low |
-| **R3** | Simple merchant onboarding (upload catalog / connect API / no-code) | **T-32 (console wizard)**, T-40 (ingest), T-42 (config + embed snippet) | no — MVP uses seeded catalogs | **high** — console is the latest-starting rubric-critical task (T+13). Ingest API (T-40) is early and real, so the capability exists even if the UI slips; slip rule at T+20 covers it. |
-| **R4** | Customisable for merchant types/sizes (SME vs large) | T-03 (two merchants, two sizes), T-40 (`size` field), T-32 (size preset), T-41 (cross-merchant) | ✅ yes — cheap, high rubric value | low |
+| **R1** | Category-trained chatbot/voice assistant | T-20b/T-20c (per-category specialists), **T-23 (packs as data)**, T-03 (category seed data) | partial — one category at MVP | **low, improved in rev 2** — packs are now data files and the specialists are instantiated per category, so a second pack is a file, not a rewrite. Category isolation is now a structural guarantee, not a prompt instruction. |
+| **R2** | Discovery, recommendations, **comparison**, decision | T-20b, T-20c, T-41 (search), T-30 (cards + comparison view, plates C3–C4) | ✅ yes | low |
+| **R3** | Simple merchant onboarding (upload catalog / connect API / no-code) | **T-32 (3-section console)**, T-34 (live preview), T-40 (ingest), T-42 (config + embed snippet) | no — MVP uses seeded catalogs | **med, improved in rev 2** — was high. The console dropped from 5 screens to 3 sections (3.0 h → 2.5 h) and starts at the same time, so it now has slack. Ingest API (T-40) is early and real; slip rule at T+20 still covers it. |
+| **R4** | Customisable for merchant types/sizes (SME vs large) | T-03 (two merchants, two sizes), T-40 (`size` field), T-32 (size toggle, plate M1), T-41 (cross-merchant) | ✅ yes — cheap, high rubric value | low |
 | **R5** | Mock/simulated **Visa** payment flow | **T-10 (token vault, authorize/capture)** | ✅ yes | low |
 | **R6** | Frictionless checkout **in the conversation, no redirects** | T-30 (confirm sheet + receipt in-thread), T-20 (`execute_payment` tool) | ✅ yes — this is the MVP's defining property | low |
-| **R7** | Users **authorize** agent-driven actions | T-30 (transaction preview + Confirm), **T-11 (mandate chain)**, T-22 (intent mandate), S6 passkey (stretch) | ✅ yes | low |
-| **R8** | Safeguards: transaction previews, identity verification, confirmation before transacting | T-30 (preview), **T-13 (safeguard rules + decline)**, T-12 (agent identity via TAP), T-31 (Trust Panel) | partial at MVP (preview + confirm); full by T+17 | med — T-12/T-13 are the crypto-risk block. Slip rules in `timeline.md` degrade them without losing the story. |
+| **R7** | Users **authorize** agent-driven actions | T-30 (plate C5 consent sheet + scope band), **T-11 (mandate chain)**, T-22 (intent mandate signed at the spend-limit control, plate C2), C6 passkey (stretch) | ✅ yes | low |
+| **R8** | Safeguards: transaction previews, identity verification, confirmation before transacting | T-30 (preview), **T-13 (safeguard rules + decline)**, **T-25 (Guardian — new in rev 2)**, T-12 (agent identity via TAP), T-31 (Trust Panel + plate C8) | partial at MVP (preview + confirm); full by T+17 | med — T-12/T-13 remain the crypto-risk block, but **rev 2 adds a second, independent safeguard layer**: the Guardian is pure code with no crypto dependency, so if T-12 slips entirely, R8 still has grounding, scope and mandate-cap enforcement to show. |
 | **R9** | Working prototype (web/app/chat) | T-02, T-30, T-33 | ✅ yes | low |
 | **R10** | Demo/video of discover → decide → pay | **T-55 (script + rehearsal)**, **T-56 (backup recording)** | ✅ yes | low — but only if T+21 freeze holds |
 | **R11a** | Written explanation: architecture (AI + payments) | T-52 (README + diagram), T-53 | ✅ yes | low |
@@ -32,9 +32,9 @@
 |---|---|---|
 | **Innovation** | Payment completes *inside the thread* — no redirect, no new tab — and the Trust Panel shows why that's now safe | T-30, T-31, T-11 |
 | **User Experience** | Four turns from "I need X" to a receipt. No forms. | T-30, T-20, T-33 |
-| **Technical Feasibility** | "These are Visa's own TAP headers, and an AP2-shaped mandate chain" — real spec shapes, named | T-12, T-11, T-10 |
-| **Scalability** | Two merchants of different sizes, same agent, same rails; a CSV upload makes a third one live in 90 s | T-03, T-40, T-32, T-04 |
-| **Trust & Safety** | The agent tries to overspend and is **declined**, live, with the broken link highlighted | **T-13, T-31** |
+| **Technical Feasibility** | "These are Visa's own TAP headers, and an AP2-shaped mandate chain" — real spec shapes, named. Plus: **no language model anywhere in the payment path** | T-12, T-11, T-10, T-25 |
+| **Scalability** | Two merchants of different sizes, same agent, same rails; a CSV upload makes a third one live in 90 s; a fourth category costs a JSON file | T-03, T-40, T-32, T-34, T-23 |
+| **Trust & Safety** | The agent tries to overspend and is **declined**, live, with the broken link highlighted and the two dead steps below it | **T-13, T-31, T-25** |
 
 ## Gaps and honest weaknesses (say these before a judge finds them)
 
@@ -53,3 +53,4 @@
 | When | By | Result |
 |---|---|---|
 | T+0:40 | Claude Code / Aryan | Initial matrix — full coverage, no orphans. R3 and R8 flagged as the two at-risk requirements. |
+| T+1:10 | Claude Code / Aryan | **Revision 2** re-check. Still full coverage, no orphans. R3 risk high → med (console simplified, now has slack). R8 gains a crypto-independent second layer (T-25 Guardian). R1 risk med → low (packs are data). New task T-34 mapped to R3; new task T-25 mapped to R8. |

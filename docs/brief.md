@@ -163,6 +163,9 @@ Merchant console shows the seeded catalog and the embed snippet (can be static a
 
 ### Pre-agreed cut list — what dies first, in order
 
+> **Revision 2 (T+1:10):** the plan grew from ~50 h to ~53 h, so item 2 is now near-certain — treat
+> real WebAuthn as cut unless everything else is green by T+16.
+
 1. Voice input (S9)
 2. Real WebAuthn passkey → **simulated** passkey sheet (S6 degrades, doesn't vanish)
 3. Cross-merchant search (S8)
