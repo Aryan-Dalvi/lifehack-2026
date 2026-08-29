@@ -161,6 +161,17 @@ not just in this file.
   the next huddle so the next window isn't rebuilding files someone meant to retire.
 - 2026-08-29 T+3:47 (Claude Code / Aryan) · Removed redundant `docs/research/.gitkeep` (dir was
   already non-empty). Refreshed this handoff to record the architecture doc and the deletions above.
+- 2026-08-29 T+7:06 (Codex / Aryan) · **Approved catalog format and staged cleaner pushed** on
+  `codex/catalog-cleaner-agent`: constrained XLSX is the primary merchant upload, with CSV and
+  versioned JSON fallbacks; raw sources are immutable; classifications require paginated merchant
+  review and a base-catalog/mode/removal-bound approval token before publication. Verified after
+  rebasing on current `origin/main`: 31 pytest tests, Ruff, and TypeScript all pass. No live OpenAI
+  call was made and API credit spend remains **$0**.
+- 2026-08-29 T+7:17 (Codex / Aryan) · **Task 3 matched sample prepared without running the
+  cleaner:** eight official Sigi Skin product records were gathered into an intentionally unclean
+  XLSX and a manually normalized clean-control XLSX. Every row has an official source URL. Public
+  availability provides no stock quantity, so stock is explicitly marked as a synthetic test
+  fixture; missing public merchant SKUs use clearly labeled dataset-only identifiers.
 
 ## How to run & test
 
