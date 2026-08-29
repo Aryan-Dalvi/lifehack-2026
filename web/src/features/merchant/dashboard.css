@@ -357,6 +357,14 @@
   gap: 8px;
 }
 
+.crm-metric-label {
+  color: var(--crm-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .crm-select {
   position: relative;
   display: inline-flex;
@@ -371,17 +379,33 @@
 }
 
 .crm-select select {
-  appearance: none;
-  border: 0;
-  background: none;
-  font-size: 12px;
-  font-weight: 500;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
   cursor: pointer;
 }
 
-.crm-select select:focus-visible {
+.crm-period-select {
+  min-width: 118px;
+  padding-right: 30px;
+  cursor: pointer;
+}
+
+.crm-period-select > span,
+.crm-period-select > svg {
+  pointer-events: none;
+}
+
+.crm-period-select > svg {
+  position: absolute;
+  right: 10px;
+}
+
+.crm-period-select:focus-within {
   outline: 2px solid var(--sage-500);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 .crm-icon-button {
@@ -479,7 +503,7 @@
   line-height: 1.4;
 }
 
-/* ---------- dot-matrix chart ---------- */
+/* ---------- revenue chart ---------- */
 
 .crm-chart {
   display: grid;
@@ -492,7 +516,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding-bottom: 26px;
+  padding: 36px 0 26px;
   color: var(--crm-muted);
   font-size: 10px;
   text-align: right;
@@ -501,67 +525,60 @@
 
 .crm-chart-plot {
   min-width: 0;
-  overflow-x: auto;
+  padding-top: 36px;
+  overflow: hidden;
 }
 
 .crm-chart-columns {
-  display: flex;
+  position: relative;
+  display: grid;
   gap: 3px;
   align-items: stretch;
   height: 190px;
+  min-width: 0;
+  background-image:
+    linear-gradient(var(--crm-line), var(--crm-line)),
+    linear-gradient(var(--crm-line), var(--crm-line)),
+    linear-gradient(var(--crm-line), var(--crm-line)),
+    linear-gradient(var(--crm-line), var(--crm-line));
+  background-repeat: no-repeat;
+  background-position: 0 0, 0 33.333%, 0 66.667%, 0 100%;
+  background-size: 100% 1px;
 }
 
 .crm-chart-column {
   position: relative;
   display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  justify-content: space-between;
-  min-width: 9px;
-  gap: 3px;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 0;
 }
 
 .crm-chart-column i {
+  position: relative;
+  z-index: 1;
   display: block;
-  width: 100%;
+  width: clamp(3px, 72%, 11px);
   max-width: 11px;
-  aspect-ratio: 1;
-  margin: 0 auto;
-  border-radius: 50%;
+  min-height: 2px;
+  border-radius: 999px 999px 2px 2px;
 }
 
-.crm-chart-column i.is-empty { background: transparent; }
+.crm-chart-column i.is-empty { min-height: 0; background: transparent; }
 .crm-chart-column i.is-actual { background: var(--crm-mint); }
 .crm-chart-column i.is-peak { background: var(--crm-violet); }
 
 .crm-chart-column i.is-forecast {
   background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--crm-mint-pale);
-}
-
-.crm-chart-column.is-peak::before {
-  content: "";
-  position: absolute;
-  inset: -4px -3px;
-  border-radius: 10px;
-  background: rgba(111, 128, 102, 0.09);
-}
-
-/* The leader line back to the axis, as on a tooltip: it says which gridline the peak sits on.
-   The plot clips it at its own left edge, which is exactly where the axis labels are. */
-.crm-chart-callout::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: 100%;
-  width: 100vw;
-  border-top: 1px dashed rgba(111, 128, 102, 0.55);
+  box-shadow: inset 0 0 0 1.5px var(--sage-300);
 }
 
 .crm-chart-callout {
   position: absolute;
   left: 50%;
   z-index: 2;
+  display: grid;
+  gap: 1px;
   transform: translate(-50%, -6px);
   padding: 3px 8px;
   border-radius: 7px;
@@ -573,32 +590,52 @@
   font-variant-numeric: tabular-nums;
 }
 
+.crm-chart-callout small {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 8px;
+  font-weight: 500;
+  text-align: center;
+}
+
 .crm-chart-dates {
-  display: flex;
+  display: grid;
   gap: 3px;
   margin-top: 10px;
   color: var(--crm-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .crm-chart-dates span {
-  flex: 1 1 0;
-  min-width: 9px;
+  min-width: 0;
+  justify-self: center;
   text-align: center;
   white-space: nowrap;
 }
+
+.crm-chart-dates span:first-child { justify-self: start; }
+.crm-chart-dates span:last-child { justify-self: end; }
 
 .crm-chart-dates span[data-show="no"] {
   visibility: hidden;
 }
 
 .crm-chart-dates span.is-peak {
-  padding: 2px 0;
-  border-radius: 6px;
-  background: var(--crm-violet);
-  color: #fff;
-  font-weight: 600;
+  color: var(--crm-violet-deep);
+  font-weight: 700;
   visibility: visible;
+}
+
+.crm-chart--empty {
+  min-height: 252px;
+  place-items: center;
+  border: 1px dashed var(--crm-line-strong);
+  border-radius: 8px;
+  color: var(--crm-muted);
+}
+
+.crm-chart--empty p {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 /* ---------- tables ---------- */
@@ -788,6 +825,299 @@
   color: var(--crm-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- product management ---------- */
+
+.crm-product-manager {
+  padding-bottom: 14px;
+}
+
+.crm-product-manager-head {
+  align-items: flex-start;
+}
+
+.crm-product-manager-head p,
+.crm-section-copy {
+  margin: 4px 0 0;
+  color: var(--crm-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.crm-product-add,
+.crm-product-save,
+.crm-product-cancel,
+.crm-product-load-error button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid var(--crm-line-strong);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--crm-ink-soft);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.crm-product-add {
+  border-color: var(--coral);
+  background: var(--coral);
+  color: #fff;
+}
+
+.crm-product-add:hover:not(:disabled) {
+  border-color: var(--coral-dark);
+  background: var(--coral-dark);
+}
+
+.crm-product-add:disabled,
+.crm-product-save:disabled,
+.crm-product-cancel:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.crm-product-create {
+  margin: 0 0 18px;
+  padding: 16px;
+  border: 1px solid var(--sage-300);
+  border-radius: 9px;
+  background: var(--sage-50);
+}
+
+.crm-product-create > header,
+.crm-product-create > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.crm-product-create h3,
+.crm-product-create p {
+  margin: 0;
+}
+
+.crm-product-create h3 {
+  color: var(--crm-ink);
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.crm-product-create p {
+  margin-top: 3px;
+  color: var(--crm-muted);
+  font-size: 10.5px;
+}
+
+.crm-product-create fieldset {
+  min-width: 0;
+  margin: 15px 0;
+  padding: 0;
+  border: 0;
+}
+
+.crm-product-create-core {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(200px, 1.6fr) 110px 90px minmax(140px, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.crm-product-details {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.7fr) minmax(180px, 1.2fr) repeat(3, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.crm-product-field {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+}
+
+.crm-product-field > span {
+  color: var(--crm-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+}
+
+.crm-product-field input,
+.crm-product-field textarea,
+.crm-product-input,
+.crm-product-money-input {
+  width: 100%;
+  border: 1px solid var(--crm-line-strong);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--crm-ink);
+  font: inherit;
+  font-size: 11.5px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.crm-product-field input,
+.crm-product-input {
+  min-height: 34px;
+  padding: 7px 9px;
+}
+
+.crm-product-field textarea {
+  min-height: 58px;
+  padding: 8px 9px;
+  resize: vertical;
+}
+
+.crm-product-field input:focus,
+.crm-product-field textarea:focus,
+.crm-product-input:focus,
+.crm-product-money-input:focus-within {
+  border-color: var(--sage-500);
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(111, 128, 102, 0.13);
+}
+
+.crm-product-field input:disabled,
+.crm-product-field textarea:disabled,
+.crm-product-input:disabled {
+  background: var(--paper);
+  cursor: wait;
+}
+
+.crm-product-table {
+  min-width: 920px;
+}
+
+.crm-product-table th:nth-child(1) { width: 27%; }
+.crm-product-table th:nth-child(2) { width: 13%; }
+.crm-product-table th:nth-child(3) { width: 10%; }
+.crm-product-table th:nth-child(4) { width: 18%; }
+.crm-product-table th:nth-child(5) { width: 18%; }
+.crm-product-table th:nth-child(6) { width: 14%; }
+
+.crm-product-row-group + .crm-product-row-group > tr:first-child td {
+  border-top-width: 8px;
+  border-top-color: var(--paper);
+}
+
+.crm-product-input--title {
+  font-weight: 650;
+}
+
+.crm-product-input--number {
+  min-width: 68px;
+  font-variant-numeric: tabular-nums;
+}
+
+.crm-product-money-input {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding-left: 9px;
+  color: var(--crm-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.crm-product-money-input input {
+  min-width: 58px;
+  padding: 7px 8px 7px 4px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--crm-ink);
+  font: inherit;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.crm-product-row-status {
+  color: var(--crm-muted);
+  font-size: 10.5px;
+}
+
+.crm-product-row-status[data-state="dirty"] { color: var(--crm-amber); }
+.crm-product-row-status[data-state="saved"] { color: var(--crm-green); }
+.crm-product-row-status[data-state="error"] { color: var(--crm-red); }
+
+.crm-product-save:not(:disabled) {
+  border-color: var(--sage-500);
+  background: var(--sage-500);
+  color: #fff;
+}
+
+.crm-product-detail-row td,
+.crm-product-detail-row:hover td {
+  padding-top: 0;
+  background: var(--sage-50);
+}
+
+.crm-product-detail-row .crm-product-details {
+  min-width: 840px;
+  padding: 12px;
+  border-radius: 7px;
+}
+
+.crm-product-form-status {
+  color: var(--crm-red);
+  font-size: 11px;
+}
+
+.crm-product-load-error,
+.crm-product-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px dashed var(--crm-line-strong);
+  border-radius: 8px;
+  color: var(--crm-muted);
+}
+
+.crm-product-load-error {
+  border-color: var(--danger);
+  background: var(--danger-50);
+  color: var(--danger);
+}
+
+.crm-product-empty p {
+  margin: 0;
+}
+
+.crm-product-count {
+  margin: 12px 2px 0;
+  color: var(--crm-muted);
+  font-size: 10.5px;
+  text-align: right;
+}
+
+.crm-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.is-spinning {
+  animation: crm-spin 0.8s linear infinite;
+}
+
+@keyframes crm-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ---------- scorecards ---------- */
@@ -1255,5 +1585,37 @@
 
   .crm-run {
     margin-top: 0;
+  }
+
+  .crm-analytics-head,
+  .crm-product-manager-head,
+  .crm-product-create > header,
+  .crm-product-create > footer {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .crm-product-create-core,
+  .crm-product-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .crm-product-field--description {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  .crm-controls {
+    flex-wrap: wrap;
+  }
+
+  .crm-product-create-core,
+  .crm-product-create .crm-product-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .crm-product-field--description {
+    grid-column: auto;
   }
 }

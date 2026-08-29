@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 from app.db import init_databases, transaction, utc_now
 from app.main import app
-from merchant.insights import merchant_insights
+from merchant.insights import _kpi, merchant_insights
 from merchant.insights_summary import (
     SummaryValidationError,
     route,
@@ -88,6 +88,22 @@ def test_kpis_compare_the_window_against_the_one_before_it(client: TestClient) -
     assert revenue["value"] < revenue["previous"]
     assert revenue["direction"] == "down"
     assert revenue["delta_display"].startswith("-")
+
+
+def test_money_kpi_does_not_show_raw_cents_when_the_previous_window_is_zero() -> None:
+    revenue = _kpi(
+        "revenue",
+        "Revenue",
+        7200,
+        0,
+        display="S$72.00",
+        previous_display="S$0.00",
+        unit="money",
+        as_percent=True,
+    )
+
+    assert revenue["change_percent"] is None
+    assert revenue["delta_display"] == "New"
 
 
 def test_revenue_totals_match_the_transactions_they_came_from(client: TestClient) -> None:

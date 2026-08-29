@@ -164,6 +164,19 @@ def _kpi(
     """
     change = value - previous
     percent = _delta_percent(value, previous)
+    if as_percent:
+        # A percentage has no denominator when the previous window is zero. Falling back to
+        # the raw change used to expose money in cents (for example "+7200" for S$72), which
+        # is neither a percentage nor a merchant-readable amount.
+        delta_display = (
+            f"{percent:+.0f}%"
+            if percent is not None
+            else "New"
+            if change > 0
+            else "No change"
+        )
+    else:
+        delta_display = f"{change:+.0f}"
     return {
         "key": key,
         "label": label,
@@ -173,9 +186,7 @@ def _kpi(
         "previous_display": previous_display,
         "change": round(change, 2),
         "change_percent": percent,
-        "delta_display": (
-            f"{percent:+.0f}%" if as_percent and percent is not None else f"{change:+.0f}"
-        ),
+        "delta_display": delta_display,
         "direction": "up" if change > 0 else "down" if change < 0 else "flat",
         "is_good": change >= 0,
         "unit": unit,

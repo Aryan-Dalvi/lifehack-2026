@@ -27,6 +27,7 @@ import {
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { api, getMerchantKey, money } from "../../api";
 import type { Insights, Summary, Task } from "./insights";
+import { ProductManagement } from "./ProductManagement";
 import "./dashboard.css";
 
 const WINDOWS = [
@@ -59,17 +60,18 @@ const SOURCE_LABELS: Record<string, string> = {
   model_rephrased_deterministic_facts: "Your figures, reworded by the assistant",
 };
 
-/**
- * Revenue as a dot column per day: one dot is a fixed slice of money, so height is
- * countable rather than estimated. Actual days are solid, the forecast is hollow, and the
- * best day is called out - the three things a merchant actually looks for in a trend.
- */
+/** Daily earnings: actual bars are solid, projected bars are outlined, and the peak is called out. */
 function RevenueChart({ series }: { series: Insights["revenue_series"] }) {
-  const rows = 9;
-  const ceiling = Math.max(
-    ...series.points.map((point) => point.actual_cents ?? point.projected_cents ?? 0),
-    1,
-  );
+  const values = series.points.map((point) => point.actual_cents ?? point.projected_cents ?? 0);
+  const ceiling = Math.max(...values, 0);
+  if (ceiling === 0) {
+    return (
+      <div className="crm-chart crm-chart--empty" role="img" aria-label="No earnings in this period">
+        <p>No earnings in this period yet.</p>
+      </div>
+    );
+  }
+
   // Three gridlines above zero, each landing on a round amount: an axis a merchant has to
   // read as 333.33 is an axis they stop reading.
   const target = ceiling / 3;
@@ -80,19 +82,32 @@ function RevenueChart({ series }: { series: Insights["revenue_series"] }) {
       .find((candidate) => candidate >= target) ?? magnitude * 10;
   const axisMax = tick * 3;
   const peakDate = series.peak?.date;
+  const actualEndIndex = Math.max(0, series.actual_days - 1);
+  const shownDateIndexes = new Set([
+    0,
+    Math.round(actualEndIndex / 2),
+    actualEndIndex,
+    series.points.length - 1,
+  ]);
+  const chartColumns = {
+    gridTemplateColumns: `repeat(${series.points.length}, minmax(0, 1fr))`,
+  };
+  const chartSummary = series.peak
+    ? `Daily actual and projected earnings. Peak was ${money(series.peak.actual_cents ?? 0, series.currency)} on ${series.peak.label}. The seven-day projection is ${money(series.forecast.total_cents, series.currency)}.`
+    : "Daily actual and projected earnings for this period.";
 
   return (
-    <div className="crm-chart">
+    <div className="crm-chart" role="img" aria-label={chartSummary}>
       <div className="crm-chart-axis">
         {[3, 2, 1, 0].map((mark) => (
           <span key={mark}>{money((axisMax / 3) * mark, series.currency).replace(/\.00$/, "")}</span>
         ))}
       </div>
       <div className="crm-chart-plot">
-        <div className="crm-chart-columns">
+        <div className="crm-chart-columns" style={chartColumns}>
           {series.points.map((point) => {
             const value = point.actual_cents ?? point.projected_cents ?? 0;
-            const filled = value === 0 ? 0 : Math.max(1, Math.round((value / axisMax) * rows));
+            const height = Math.min(100, (value / axisMax) * 100);
             const isPeak = point.date === peakDate;
             return (
               <div
@@ -101,34 +116,34 @@ function RevenueChart({ series }: { series: Insights["revenue_series"] }) {
                 title={`${point.label}: ${money(value, series.currency)}${point.is_forecast ? " projected" : ""}`}
               >
                 {isPeak ? (
-                  <b className="crm-chart-callout" style={{ bottom: `${(filled / rows) * 100}%` }}>
+                  <b className="crm-chart-callout" style={{ bottom: `${height}%` }}>
                     {money(value, series.currency).replace(/\.00$/, "")}
+                    <small>{point.label}</small>
                   </b>
                 ) : null}
-                {Array.from({ length: rows }).map((_, row) => (
-                  <i
-                    key={row}
-                    className={
-                      row >= rows - filled
-                        ? point.is_forecast
-                          ? "is-forecast"
-                          : isPeak
-                            ? "is-peak"
-                            : "is-actual"
-                        : "is-empty"
-                    }
-                  />
-                ))}
+                <i
+                  aria-hidden
+                  className={
+                    value === 0
+                      ? "is-empty"
+                      : point.is_forecast
+                        ? "is-forecast"
+                        : isPeak
+                          ? "is-peak"
+                          : "is-actual"
+                  }
+                  style={{ height: `${height}%` }}
+                />
               </div>
             );
           })}
         </div>
-        <div className="crm-chart-dates">
+        <div className="crm-chart-dates" style={chartColumns}>
           {series.points.map((point, index) => (
             <span
               key={point.date}
               className={point.date === peakDate ? "is-peak" : ""}
-              data-show={point.date === peakDate || index % 5 === 0 ? "yes" : "no"}
+              data-show={shownDateIndexes.has(index) ? "yes" : "no"}
             >
               {point.label}
             </span>
@@ -279,6 +294,7 @@ export function MerchantDashboard({ onNavigate }: { onNavigate?: (path: string) 
   const [tab, setTab] = useState<TabKey>("overview");
   const [customerTab, setCustomerTab] = useState("all");
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [catalogRevision, setCatalogRevision] = useState(0);
   const [asking, setAsking] = useState(false);
   const [question, setQuestion] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -309,7 +325,7 @@ export function MerchantDashboard({ onNavigate }: { onNavigate?: (path: string) 
     return () => {
       live = false;
     };
-  }, [days, merchantKey, onNavigate]);
+  }, [catalogRevision, days, merchantKey, onNavigate]);
 
   const ask = async (payload: { question?: string; scope?: string }) => {
     if (!insights) return;
@@ -444,10 +460,12 @@ export function MerchantDashboard({ onNavigate }: { onNavigate?: (path: string) 
                 <header className="crm-analytics-head">
                   <h2>Revenue analytics</h2>
                   <div className="crm-controls">
-                    <span className="crm-select">
-                      Earnings <ChevronDown size={14} />
-                    </span>
-                    <label className="crm-select">
+                    <span className="crm-metric-label">Earnings</span>
+                    <label className="crm-select crm-period-select">
+                      <span aria-hidden>
+                        {WINDOWS.find((option) => option.days === days)?.label ?? `${days} days`}
+                      </span>
+                      <ChevronDown size={14} aria-hidden />
                       <select
                         aria-label="Reporting period"
                         value={days}
@@ -459,12 +477,12 @@ export function MerchantDashboard({ onNavigate }: { onNavigate?: (path: string) 
                           </option>
                         ))}
                       </select>
-                      <ChevronDown size={14} />
                     </label>
                     <a
                       className="crm-icon-button"
                       href={`/api/merchant/${merchant.merchant_id}/insights?days=${days}`}
                       title="Open the underlying report"
+                      aria-label="Open underlying revenue report"
                     >
                       <Download size={15} />
                     </a>
@@ -480,7 +498,7 @@ export function MerchantDashboard({ onNavigate }: { onNavigate?: (path: string) 
                         <i className="is-forecast" /> Projected
                       </li>
                     </ul>
-                    <div className="crm-tip">
+                    <div className="crm-tip" aria-live="polite">
                       <InfinityIcon size={15} />
                       <p>{summary?.scope === "revenue" ? summary.summary : insights.insight.text}</p>
                     </div>
@@ -522,61 +540,76 @@ export function MerchantDashboard({ onNavigate }: { onNavigate?: (path: string) 
             ) : null}
 
             {tab === "products" ? (
-              <section className="crm-card crm-table-card">
-                <header className="crm-table-head">
-                  <h2>Products</h2>
-                  <span className="crm-muted">
-                    {catalog.product_count} live · {catalog.in_stock_count} in stock ·{" "}
-                    {catalog.with_photo_count} with a photo
-                  </span>
-                </header>
-                <div className="crm-table-scroll">
-                  <table className="crm-table">
-                    <thead>
-                      <tr>
-                        <th>Product</th>
-                        <th>Units sold</th>
-                        <th>Revenue</th>
-                        <th>Share of revenue</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {insights.top_products.map((product) => {
-                        const total = insights.top_products.reduce(
-                          (sum, entry) => sum + entry.revenue_cents,
-                          0,
-                        );
-                        const share = total ? Math.round((product.revenue_cents / total) * 100) : 0;
-                        return (
-                          <tr key={product.sku}>
-                            <td>
-                              {product.title}
-                              <small>{product.sku}</small>
-                            </td>
-                            <td>{product.units}</td>
-                            <td className="crm-value">
-                              {money(product.revenue_cents, merchant.currency)}
-                            </td>
-                            <td>
-                              <div className="crm-bar">
-                                <i style={{ width: `${share}%` }} />
-                                <span>{share}%</span>
-                              </div>
+              <>
+                <ProductManagement
+                  merchantId={merchant.merchant_id}
+                  currency={merchant.currency}
+                  onCatalogChanged={() => setCatalogRevision((value) => value + 1)}
+                />
+                <section className="crm-card crm-table-card" id="product-purchase-history">
+                  <header className="crm-table-head">
+                    <div>
+                      <h2>Product purchase history</h2>
+                      <p className="crm-section-copy">
+                        Sales are kept separate from catalog edits and reflect the last{" "}
+                        {period.days} days.
+                      </p>
+                    </div>
+                    <span className="crm-muted">
+                      {catalog.product_count} live · {catalog.in_stock_count} in stock ·{" "}
+                      {catalog.with_photo_count} with a photo
+                    </span>
+                  </header>
+                  <div className="crm-table-scroll">
+                    <table className="crm-table">
+                      <thead>
+                        <tr>
+                          <th>Product</th>
+                          <th>Units sold</th>
+                          <th>Revenue</th>
+                          <th>Share of revenue</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {insights.top_products.map((product) => {
+                          const total = insights.top_products.reduce(
+                            (sum, entry) => sum + entry.revenue_cents,
+                            0,
+                          );
+                          const share = total
+                            ? Math.round((product.revenue_cents / total) * 100)
+                            : 0;
+                          return (
+                            <tr key={product.sku}>
+                              <td>
+                                {product.title}
+                                <small>{product.sku}</small>
+                              </td>
+                              <td>{product.units}</td>
+                              <td className="crm-value">
+                                {money(product.revenue_cents, merchant.currency)}
+                              </td>
+                              <td>
+                                <div className="crm-bar">
+                                  <i style={{ width: `${share}%` }} />
+                                  <span>{share}%</span>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {insights.top_products.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="crm-empty">
+                              Nothing has sold in this period yet.
                             </td>
                           </tr>
-                        );
-                      })}
-                      {insights.top_products.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="crm-empty">
-                            Nothing has sold in this period yet.
-                          </td>
-                        </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              </>
             ) : null}
 
             {tab === "tasks" ? (
