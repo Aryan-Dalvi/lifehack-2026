@@ -63,10 +63,32 @@ email into the "Allocated PS" section below the moment it arrives.
 Each team gets **US$50 OpenAI API credits**; org staff on-site grant access (form was emailed —
 one member's OpenAI-account email per the form). Budget policy in `ai-budget.md`.
 
-## Allocated PS (paste the allocation email here when it arrives)
+## Allocated PS — **VISA** (received T0, 29 Aug 2026)
 
-> _pending_
+**"Conversational Commerce Agents for Every Merchant"** · source file: `Visa Problem Statement.pdf`
+(repo root) · full breakdown in `docs/brief.md`.
 
-## Official judging criteria (paste at ceremony)
+**Challenge (verbatim):** "How might we enable merchants of any size to deploy pre-built,
+category-trained AI commerce agents on their platforms, allowing customers to discover, decide, and
+pay through a single conversation—powered by Visa's payment stack?"
 
-> _pending_
+**Expected submissions:** (1) AI agent layer — category-trained chatbot or voice assistant handling
+discovery, recommendations, comparison, decision · (2) Merchant integration — upload catalog /
+connect APIs / no-code setup, customisable for SMEs vs large retailers · (3) Seamless payment flow —
+mock or simulated Visa payment, frictionless checkout **within the conversation (no redirects)** ·
+(4) Trust, consent & transparency — user authorisation of agent actions, transaction previews,
+identity verification, confirmation before the agent transacts.
+
+**Expected output:** working prototype (web/app/chat) · demo/video of discover → decide → pay ·
+brief written explanation of architecture, merchant onboarding flow, and trust/security handling.
+
+## Official judging criteria — **from the Visa PS itself** (supersedes the proxy below)
+
+1. **Innovation** — novelty of the agentic commerce experience
+2. **User Experience** — simplicity and intuitiveness of the conversation flow
+3. **Technical Feasibility** — realistic integration of AI + payment concepts
+4. **Scalability** — applicability across merchants of different sizes
+5. **Trust & Safety** — clear handling of consent, security, and transparency
+
+> These five are the PS's own rubric. If the organisers publish separate event-level criteria in the
+> Telegram channel, paste them here too and re-run `STATUS` to re-prioritise.
