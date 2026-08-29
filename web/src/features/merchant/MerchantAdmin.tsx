@@ -121,7 +121,7 @@ type UploadResult = {
   }>;
 };
 
-export function MerchantAdmin() {
+export function MerchantAdmin({ onNavigate }: { onNavigate?: (path: string) => void }) {
   const [config, setConfig] = useState<MerchantConfig | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [upload, setUpload] = useState<UploadResult | null>(null);
@@ -295,6 +295,9 @@ export function MerchantAdmin() {
       setPublished(true);
       const catalog = await api<{ results: Product[] }>(`/catalog/search?merchant_id=${config.merchant_id}&category=skincare&limit=5`);
       setProducts(catalog.results);
+      // Onboarding is finished the moment the agent is live: hand the merchant their CRM
+      // dashboard rather than leaving them on a setup form they have no more use for.
+      onNavigate?.("/admin");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "The agent could not be published.");
     } finally {
@@ -400,8 +403,9 @@ export function MerchantAdmin() {
   return (
     <div className="admin-shell">
       <header className="admin-header">
-        <a className="sway-logo" href="/admin">Sway</a>
+        <a className="sway-logo" href="/admin/setup">Sway</a>
         <nav aria-label="Merchant navigation">
+          <a href="/admin" onClick={(event) => { if (onNavigate) { event.preventDefault(); onNavigate("/admin"); } }}>Dashboard</a>
           <a className="active" href="#setup">Store setup</a>
           <a href="#preview">Preview</a>
         </nav>

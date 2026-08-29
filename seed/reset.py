@@ -7,6 +7,7 @@ from pathlib import Path
 from app.auth import hash_password, new_secret, token_digest
 from app.db import connect, init_databases, transaction, utc_now
 from app.settings import settings
+from seed.demo_history import demo_history_totals, seed_demo_history
 
 SEED_FILE = Path(__file__).with_name("mysa_catalog.json")
 
@@ -94,6 +95,9 @@ def seed() -> None:
             (json.dumps(["14 Prince George's Park", "#05-21"]),),
         )
 
+    # The admin dashboard reads real rows, so a demo merchant needs a real trading past.
+    seed_demo_history(merchant["merchant_id"])
+
     MERCHANT_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
     MERCHANT_KEY_FILE.write_text(api_key, encoding="utf-8")
 
@@ -108,3 +112,8 @@ if __name__ == "__main__":
     print("Sway databases reset and Mysa Skin seeded.")
     print(f"  merchant API key -> {MERCHANT_KEY_FILE} (paste into the admin page)")
     print(f"  demo shopper     -> {DEMO_CONSUMER_EMAIL} / {_demo_consumer_password()}")
+    totals = demo_history_totals()
+    print(
+        f"  demo history     -> {totals['orders']} orders, {totals['customers']} customers, "
+        f"S${totals['revenue_cents'] / 100:,.2f} over 60 days"
+    )

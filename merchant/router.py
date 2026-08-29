@@ -37,6 +37,8 @@ from merchant.catalog_pipeline import (
     stage_and_clean_catalog,
 )
 from merchant.catalog_template import TEMPLATE_FILENAME, build_template
+from merchant.insights import merchant_insights
+from merchant.insights_summary import SCOPE_TITLES, summarize_business
 
 merchant_router = APIRouter(prefix="/merchant", tags=["merchant"])
 catalog_router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -64,6 +66,14 @@ class ApproveCatalogRequest(BaseModel):
     approval_token: str = Field(min_length=64, max_length=64)
     reviewed_row_count: int = Field(ge=1, le=10_000)
     mode: Literal["replace", "upsert"] = "replace"
+
+
+class InsightsSummaryRequest(BaseModel):
+    """One question about the merchant's own numbers, or a named report to open."""
+
+    question: str | None = Field(default=None, max_length=400)
+    scope: str | None = None
+    days: int = Field(default=30, ge=1, le=45)
 
 
 def _snippet(merchant_id: str) -> str:
@@ -195,6 +205,44 @@ def merchant_snippet(
         "snippet": _snippet(merchant_id),
         "hosted_url": f"{settings.web_base_url}/storefront?merchant={merchant_id}",
     }
+
+
+@merchant_router.get("/{merchant_id}/insights")
+def merchant_insights_route(
+    merchant_id: str,
+    days: int = Query(default=30, ge=1, le=45),
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
+    """The CRM dashboard: this merchant's own orders, customers, catalog and open work."""
+    assert_merchant(merchant_id, x_merchant_key)
+    insights = merchant_insights(merchant_id, days=days)
+    if not insights:
+        raise api_error(404, "NO_MERCHANT", "The merchant was not found.")
+    return insights
+
+
+@merchant_router.post("/{merchant_id}/insights/summary")
+async def merchant_insights_summary_route(
+    merchant_id: str,
+    body: InsightsSummaryRequest,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
+    """Summarise any of the dashboard's business content, in the merchant's own words.
+
+    The figures are computed first and the model, when one is configured, may only reword
+    them - so an answer here can be trusted the same way the cards above it can.
+    """
+    assert_merchant(merchant_id, x_merchant_key)
+    if body.scope is not None and body.scope not in SCOPE_TITLES:
+        raise api_error(
+            400,
+            "VALIDATION",
+            f"Unknown report. Choose one of: {', '.join(sorted(SCOPE_TITLES))}.",
+        )
+    insights = merchant_insights(merchant_id, days=body.days)
+    if not insights:
+        raise api_error(404, "NO_MERCHANT", "The merchant was not found.")
+    return await summarize_business(insights, question=body.question, scope=body.scope)
 
 
 async def _catalog_source(request: Request):
