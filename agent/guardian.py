@@ -7,6 +7,7 @@ from app.errors import api_error
 
 ALLOWED_ROUTES = {
     "clarify",
+    "answer",
     "search",
     "recommend",
     "compare",
@@ -119,6 +120,49 @@ def is_medical_request(message: str) -> bool:
 
 MAX_SUMMARY_CHARS = 400
 MAX_ADVICE_CHARS = 240
+MAX_ANSWER_CHARS = 900
+
+# Any money-shaped token in free prose, whether the currency leads ("S$36") or trails
+# ("3600 cents"). The adviser is told never to quote a price; this is what makes that a rule
+# rather than a request, since a wrong price is the most damaging thing it could invent —
+# and the product card beside the answer already carries the real one.
+_PRICE_PATTERN = re.compile(
+    r"(?:(?:s\$|\$|sgd|usd)\s*\d+(?:[.,]\d+)?)"
+    r"|(?:\d+(?:[.,]\d+)?\s*(?:cents?|dollars?|sgd|usd)\b)",
+    re.IGNORECASE,
+)
+
+
+def validate_answer(
+    value: dict[str, Any],
+    *,
+    allowed_skus: list[str],
+) -> tuple[dict[str, Any], list[str]]:
+    """Check a free-form adviser answer before a shopper ever sees it.
+
+    The adviser is the only component allowed to contribute general skincare knowledge, so
+    it is also the one whose output needs the widest check: no invented product, no quoted
+    price, no medical claim. A rejected answer is dropped entirely rather than trimmed —
+    there is no safe way to partially believe a paragraph.
+    """
+    violations: list[str] = []
+    allowed = set(allowed_skus)
+    cited = [sku for sku in (value.get("cited_skus") or []) if isinstance(sku, str)]
+    grounded = [sku for sku in cited if sku in allowed]
+    if len(grounded) != len(cited):
+        violations.append("UNGROUNDED_CLAIM")
+
+    answer = value.get("answer")
+    if not isinstance(answer, str) or not answer.strip() or len(answer) > MAX_ANSWER_CHARS:
+        return {"answer": "", "cited_skus": grounded}, [*violations, "SCHEMA_REJECTED"]
+    if any(term in answer.lower() for term in MEDICAL_CLAIM_TERMS):
+        return {"answer": "", "cited_skus": []}, [*violations, "MEDICAL_CLAIM"]
+    if _PRICE_PATTERN.search(answer):
+        # The prose is dropped, but the products it pointed at are real and their cards
+        # carry the authoritative price — so the shopper still gets an answer.
+        return {"answer": "", "cited_skus": grounded}, [*violations, "PRICE_IN_PROSE"]
+
+    return {"answer": answer.strip(), "cited_skus": grounded}, violations
 
 
 def validate_recommendation(

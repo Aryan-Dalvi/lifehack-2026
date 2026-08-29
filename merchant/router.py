@@ -385,6 +385,23 @@ def catalog_search(
     }
 
 
+def catalog_digest(merchant_id: str, *, include_unpublished: bool = False) -> list[dict[str, Any]]:
+    """Every purchasable product for one merchant — the agent's view of the whole shop.
+
+    Same tenant and published rules as `catalog_search`, but unranked and unlimited, so the
+    agent can answer questions *about* the catalog rather than only search within it.
+    """
+    with connect() as connection:
+        rows = connection.execute(
+            "SELECT p.*,m.name AS merchant_name,m.size AS merchant_size FROM products p "
+            "JOIN merchants m ON m.merchant_id=p.merchant_id "
+            "WHERE p.merchant_id=? AND p.category='skincare' AND p.stock>0 "
+            "AND (m.status='published' OR ?=1) ORDER BY p.sku",
+            (merchant_id, 1 if include_unpublished else 0),
+        ).fetchall()
+    return [_product_payload(row) for row in rows]
+
+
 def catalog_product(sku: str, merchant_id: str, *, include_unpublished: bool = False) -> dict[str, Any]:
     """Read one product, always scoped to a merchant.
 
