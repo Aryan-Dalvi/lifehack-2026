@@ -173,7 +173,7 @@ async def phrase_routine(
     if settings.openai_model.startswith("gpt-5"):
         text_options["verbosity"] = "low"
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=10.0, max_retries=0)
+    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=10.0, max_retries=1)
     try:
         response = await client.responses.create(
             model=settings.openai_model,

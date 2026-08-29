@@ -7,6 +7,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _load_env_file(path: Path = ROOT / ".env") -> None:
+    """Load .env into os.environ. Real environment variables always win.
+
+    Settings below is a dataclass, so its field defaults are read once when the class
+    body executes on import — this has to run before that, not lazily.
+    """
+    if not path.exists():
+        return
+    try:
+        from dotenv import load_dotenv
+    except ImportError:  # keep the app runnable on a venv without python-dotenv
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip().removeprefix("export ").strip()
+            os.environ.setdefault(key, value.strip().strip("\"'"))
+    else:
+        load_dotenv(path, override=False)
+
+
+_load_env_file()
+
+
 @dataclass(frozen=True)
 class Settings:
     database_path: Path = Path(os.getenv("DATABASE_PATH", ROOT / "var" / "sway.db"))

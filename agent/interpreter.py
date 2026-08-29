@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,8 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from app.settings import settings
+
+logger = logging.getLogger(__name__)
 
 PACK = json.loads(
     (Path(__file__).with_name("packs") / "skincare.json").read_text(encoding="utf-8")
@@ -261,6 +264,18 @@ async def interpret(
             "deterministic_demo_parser",
         )
 
+    # The medical boundary is decided in code, never by the model. Asked to "diagnose my
+    # eczema", gpt-4.1 declines but routes to 'clarify', which renders as an ordinary
+    # follow-up question instead of the safety boundary. Checking here keeps the refusal
+    # identical whether or not a model is in the loop.
+    if any(term in " ".join(message.lower().split()) for term in MEDICAL_TERMS):
+        return (
+            deterministic_interpret(
+                message=message, merchant_id=merchant_id, visible_skus=visible_skus
+            ),
+            "deterministic_safety_guard",
+        )
+
     state = {
         "session_id": session_id,
         "message": message,
@@ -270,7 +285,9 @@ async def interpret(
         "visible_skus": visible_skus,
         "profile_preferences": profile,
     }
-    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=8.0, max_retries=0)
+    # One retry: transient APIConnectionError is common on venue wifi and fails fast,
+    # so a retry costs far less than silently degrading to the canned parser.
+    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=8.0, max_retries=1)
     text_options: dict[str, Any] = {
         "format": {
             "type": "json_schema",
@@ -309,7 +326,9 @@ async def interpret(
             store=False,
         )
         return json.loads(response.output_text), "openai_responses"
-    except Exception:  # noqa: BLE001 - availability fallback covers SDK and transport failures
+    except Exception as error:  # noqa: BLE001 - availability fallback covers SDK and transport failures
+        # Never silent: a swallowed failure here is indistinguishable from demo mode.
+        logger.warning("Interpretation failed (%s): %s", type(error).__name__, error)
         return (
             deterministic_interpret(
                 message=message, merchant_id=merchant_id, visible_skus=visible_skus
