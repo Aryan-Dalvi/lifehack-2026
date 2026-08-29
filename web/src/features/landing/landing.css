@@ -1,0 +1,964 @@
+/* ==========================================================================
+   Sway Landing Page Styles (Reference Match)
+   ========================================================================== */
+
+.landing-root {
+  min-height: 100vh;
+  background: #fdfcf9;
+  color: #1a201b;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow-x: hidden;
+}
+
+.landing-container {
+  width: min(1280px, calc(100% - 48px));
+  margin: 0 auto;
+}
+
+/* --------------------------------------------------------------------------
+   1. Navbar
+   -------------------------------------------------------------------------- */
+.landing-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(253, 252, 249, 0.94);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #eaece6;
+  height: 74px;
+}
+
+.landing-nav-inner {
+  width: min(1280px, calc(100% - 48px));
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.landing-brand {
+  display: flex;
+  align-items: center;
+}
+
+.landing-logo {
+  text-decoration: none;
+  color: #1a201b;
+  display: flex;
+  align-items: center;
+}
+
+.landing-logo span {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 27px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  color: #1a201b;
+}
+
+.landing-powered-tag {
+  font-size: 11.5px;
+  color: #71786d;
+  font-weight: 500;
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid #dcdecb;
+}
+
+.landing-menu {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
+.nav-link {
+  color: #3e463c;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 6px 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s ease;
+}
+
+.nav-link:hover {
+  color: #1a201b;
+}
+
+.chevron-icon {
+  color: #8c9489;
+  transition: transform 0.2s ease;
+}
+
+.landing-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-ghost {
+  border: 1px solid #d4d7ce;
+  background: #ffffff;
+  color: #20261f;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.btn-ghost:hover {
+  border-color: #244131;
+  background: #f8faf6;
+}
+
+.btn-primary-dark {
+  background: #1f382a;
+  color: #ffffff;
+  border: 1px solid #1f382a;
+  padding: 8.5px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.btn-primary-dark:hover {
+  background: #2b4b39;
+  border-color: #2b4b39;
+  transform: translateY(-1px);
+}
+
+/* --------------------------------------------------------------------------
+   2. Hero Section
+   -------------------------------------------------------------------------- */
+.landing-hero-section {
+  padding: 56px 0 74px;
+  background: #fdfcf9;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 1.15fr;
+  gap: 42px;
+  align-items: center;
+}
+
+.hero-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #f0f5ed;
+  border: 1px solid #d5e0d1;
+  color: #243e2f;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 13px;
+  border-radius: 99px;
+  margin-bottom: 22px;
+}
+
+.badge-zap {
+  color: #3b6647;
+}
+
+.hero-headline {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(44px, 4.2vw, 64px);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  color: #171d17;
+  margin: 0 0 18px;
+}
+
+.hero-highlight-serif {
+  font-style: italic;
+  color: #4e7845;
+  font-weight: 400;
+}
+
+.hero-subtitle {
+  font-size: 15.5px;
+  line-height: 1.58;
+  color: #535c52;
+  max-width: 470px;
+  margin: 0 0 32px;
+}
+
+.hero-cta-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 38px;
+}
+
+.btn-cta-primary {
+  background: #1f382a;
+  color: #ffffff;
+  border: 1px solid #1f382a;
+  padding: 13px 22px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  box-shadow: 0 4px 14px rgba(31, 56, 42, 0.16);
+  transition: all 0.18s ease;
+}
+
+.btn-cta-primary:hover {
+  background: #2b4d3a;
+  border-color: #2b4d3a;
+  transform: translateY(-1px);
+}
+
+.btn-cta-secondary {
+  background: #ffffff;
+  border: 1px solid #d6dbd1;
+  color: #1d231d;
+  padding: 13px 20px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  transition: all 0.18s ease;
+}
+
+.btn-cta-secondary:hover {
+  border-color: #1f382a;
+  background: #f9fbf8;
+}
+
+.play-icon-circle {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #edf2ea;
+  display: grid;
+  place-items: center;
+  color: #1f382a;
+}
+
+.hero-feature-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  padding-top: 4px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #384236;
+}
+
+.feature-icon {
+  color: #557551;
+}
+
+/* --------------------------------------------------------------------------
+   3. Hero Mockup Card (Live Visualizer)
+   -------------------------------------------------------------------------- */
+.hero-mockup-wrapper {
+  position: relative;
+}
+
+.hero-card-frame {
+  background: #ffffff;
+  border: 1px solid #dce1d8;
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(23, 36, 25, 0.09);
+  display: grid;
+  grid-template-columns: 1.38fr 1fr;
+  overflow: hidden;
+}
+
+/* Left Pane: Chat Window */
+.mockup-chat-pane {
+  padding: 18px 18px 16px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+.mockup-chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #edf0eb;
+  margin-bottom: 13px;
+}
+
+.mockup-store-title {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  font-weight: 500;
+  color: #191f19;
+}
+
+.mockup-agent-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #6a7368;
+  margin-top: 2px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4e7845;
+}
+
+.mockup-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mockup-cart-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f4ed;
+  border: 1px solid #d8e0d4;
+  border-radius: 99px;
+  padding: 2.5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #26382a;
+}
+
+.mockup-menu-btn {
+  background: none;
+  border: 0;
+  color: #7a8277;
+  cursor: pointer;
+  padding: 2px;
+  display: grid;
+  place-items: center;
+}
+
+.mockup-chat-body {
+  flex: 1;
+}
+
+.mockup-msg-agent {
+  background: #f7faf5;
+  border: 1px solid #e2e8df;
+  border-radius: 12px 12px 12px 3px;
+  padding: 11px 13px;
+  font-size: 12px;
+  line-height: 1.44;
+  color: #212820;
+  margin-bottom: 11px;
+}
+
+.mockup-msg-agent p {
+  margin: 0;
+}
+
+.mockup-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.mockup-chip {
+  background: #ffffff;
+  border: 1px solid #d7ded3;
+  border-radius: 99px;
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #313930;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mockup-chip:hover {
+  background: #f4f8f2;
+  border-color: #557551;
+}
+
+.mockup-chip.active {
+  background: #edf5eb;
+  border-color: #4e7845;
+  color: #1d3324;
+  font-weight: 600;
+}
+
+.mockup-compare-block {
+  background: #fcfdfa;
+  border: 1px solid #e5ebe1;
+  border-radius: 11px;
+  padding: 11px 10px;
+  margin-bottom: 13px;
+}
+
+.mockup-compare-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 9px;
+}
+
+.compare-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #243526;
+}
+
+.compare-link {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4e7845;
+  text-decoration: none;
+}
+
+.mockup-product-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.mockup-product-item {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e1e6dd;
+  border-radius: 8px;
+  padding: 7px 5px 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mockup-product-item:hover {
+  border-color: #557551;
+}
+
+.mockup-product-item.selected {
+  border-color: #4e7845;
+  box-shadow: 0 0 0 1px #4e7845;
+  background: #fafcf9;
+}
+
+.product-checkbox {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  border: 1px solid #c9d2c5;
+  background: #ffffff;
+  display: grid;
+  place-items: center;
+  color: #4e7845;
+}
+
+.mockup-product-item.selected .product-checkbox {
+  background: #4e7845;
+  border-color: #4e7845;
+  color: #ffffff;
+}
+
+.product-img-box {
+  width: 100%;
+  height: 52px;
+  background: #f3f6f0;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+
+.product-img-box img {
+  max-width: 82%;
+  max-height: 82%;
+  object-fit: contain;
+}
+
+.product-details h4 {
+  margin: 0 0 2px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #1c221b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.price-text {
+  font-weight: 700;
+  font-size: 10.5px;
+  color: #1a201a;
+}
+
+.rating-text {
+  font-size: 9px;
+  color: #70786e;
+  margin-top: 1px;
+}
+
+.star {
+  color: #4e7845;
+  font-weight: 600;
+  margin-right: 2px;
+}
+
+.mockup-chat-input {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dce2d8;
+  border-radius: 99px;
+  padding: 3px 5px 3px 12px;
+  gap: 8px;
+}
+
+.mockup-chat-input input {
+  border: 0;
+  outline: 0;
+  font-size: 11px;
+  flex: 1;
+  background: transparent;
+  color: #1a201b;
+}
+
+.mockup-chat-input input::placeholder {
+  color: #8c9489;
+}
+
+.input-send-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #1f382a;
+  color: #ffffff;
+  border: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+/* Right Pane: Trust Rail / Checkout */
+.mockup-rail-pane {
+  background: #fcfbf8;
+  border-left: 1px solid #ebede7;
+  padding: 16px 14px 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.mockup-rail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 9px;
+  border-bottom: 1px solid #eaece6;
+  margin-bottom: 13px;
+}
+
+.rail-heading {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #1a201a;
+}
+
+.visa-badge-text {
+  font-family: Inter, sans-serif;
+  font-weight: 850;
+  font-size: 14px;
+  color: #1a1f71;
+  letter-spacing: 0.05em;
+}
+
+.mockup-rail-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.rail-step {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.rail-marker {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  background: #4e7845;
+  border: 1px solid #4e7845;
+  color: #ffffff;
+}
+
+.rail-marker.empty {
+  background: #ffffff;
+  border: 1px solid #d4dad0;
+}
+
+.rail-step-text strong {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #1e251e;
+  display: block;
+}
+
+.rail-step-text p {
+  margin: 1px 0 0;
+  font-size: 9px;
+  color: #6e766c;
+  line-height: 1.3;
+}
+
+.step-title-split {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.change-link {
+  font-size: 8.5px;
+  color: #557551;
+  cursor: pointer;
+}
+
+.limit-val {
+  font-weight: 600;
+  color: #1a201a !important;
+}
+
+.mockup-rail-footer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 8.5px;
+  color: #747d72;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #ebede7;
+}
+
+/* --------------------------------------------------------------------------
+   4. Built on Visa Trust Marquee
+   -------------------------------------------------------------------------- */
+.landing-marquee-section {
+  background: #ffffff;
+  border-top: 1px solid #eaece6;
+  border-bottom: 1px solid #eaece6;
+  padding: 34px 0 38px;
+}
+
+.marquee-caption {
+  text-align: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.085em;
+  font-weight: 700;
+  color: #70786d;
+  margin: 0 0 20px;
+}
+
+.marquee-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.marquee-card {
+  background: #fafbf9;
+  border: 1px solid #e2e6de;
+  border-radius: 9px;
+  padding: 12px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #273026;
+  min-height: 52px;
+}
+
+.marquee-icon {
+  color: #4e7845;
+  flex-shrink: 0;
+}
+
+.marquee-visa-brand {
+  background: #f8fafc;
+  border-color: #d6e2f5;
+  justify-content: center;
+  gap: 10px;
+}
+
+.visa-large-logo {
+  font-weight: 900;
+  font-size: 20px;
+  color: #1a1f71;
+  letter-spacing: 0.05em;
+}
+
+.visa-tagline {
+  display: flex;
+  flex-direction: column;
+  font-size: 8.5px;
+  line-height: 1.25;
+}
+
+.visa-tagline strong {
+  color: #1a201b;
+}
+
+.visa-tagline span {
+  color: #555e54;
+}
+
+/* --------------------------------------------------------------------------
+   5. From Catalog to AI Commerce in 90 Seconds
+   -------------------------------------------------------------------------- */
+.landing-steps-section {
+  background: #f6f8f4;
+  padding: 76px 0 84px;
+}
+
+.steps-layout {
+  display: grid;
+  grid-template-columns: 310px 1fr;
+  gap: 36px;
+  align-items: center;
+}
+
+.steps-main-title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 36px;
+  font-weight: 400;
+  line-height: 1.12;
+  color: #191f19;
+  margin: 0 0 14px;
+}
+
+.highlight-serif-green {
+  font-style: italic;
+  color: #4e7845;
+}
+
+.steps-main-desc {
+  font-size: 14.5px;
+  color: #586157;
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+
+.steps-guide-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f382a;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.steps-flow-grid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-workflow-card {
+  flex: 1;
+  background: #ffffff;
+  border: 1px solid #dce2d7;
+  border-radius: 13px;
+  padding: 18px 14px 16px;
+  position: relative;
+  box-shadow: 0 4px 14px rgba(24, 38, 25, 0.03);
+}
+
+.step-badge-num {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e8f0e4;
+  color: #2b4b33;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.step-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: #f1f6ee;
+  color: #2b4b33;
+  display: grid;
+  place-items: center;
+  margin: 8px 0 14px auto;
+}
+
+.step-workflow-card h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #182017;
+  margin: 0 0 6px;
+}
+
+.step-workflow-card p {
+  font-size: 11px;
+  line-height: 1.45;
+  color: #596257;
+  margin: 0;
+}
+
+.step-arrow-connector {
+  color: #9ba498;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   6. Footer
+   -------------------------------------------------------------------------- */
+.landing-footer {
+  background: #192e22;
+  color: #e4ebe2;
+  padding: 42px 0 32px;
+}
+
+.landing-footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.footer-logo {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 24px;
+  color: #ffffff;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.footer-brand-side p {
+  margin: 0;
+  font-size: 12px;
+  color: #aeb8aa;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.footer-links-side {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+}
+
+.footer-links-side a {
+  color: #cad3c6;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.footer-links-side a:hover {
+  color: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   7. Responsive Adaptations
+   -------------------------------------------------------------------------- */
+@media (max-width: 1180px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+  .hero-mockup-wrapper {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .marquee-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .steps-layout {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+}
+
+@media (max-width: 860px) {
+  .landing-menu {
+    display: none;
+  }
+  .steps-flow-grid {
+    flex-direction: column;
+    gap: 14px;
+  }
+  .step-arrow-connector {
+    transform: rotate(90deg);
+  }
+  .marquee-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .hero-card-frame {
+    grid-template-columns: 1fr;
+  }
+  .mockup-rail-pane {
+    border-left: 0;
+    border-top: 1px solid #ebede7;
+  }
+}
+
+@media (max-width: 600px) {
+  .hero-headline {
+    font-size: 36px;
+  }
+  .hero-cta-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .btn-cta-primary, .btn-cta-secondary {
+    justify-content: center;
+  }
+  .marquee-grid {
+    grid-template-columns: 1fr;
+  }
+}

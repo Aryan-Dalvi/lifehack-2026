@@ -77,3 +77,20 @@ test("shopper surface stays within a mobile viewport", async ({ page }) => {
   expect(width.scroll).toBeLessThanOrEqual(width.client);
   await page.screenshot({ path: "test-results/shopper-mobile.png", fullPage: true });
 });
+
+test("landing home page renders with hero mockup, marquee, and onboarding flow", async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+
+  await page.setViewportSize({ width: 1584, height: 1024 });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: /Turn conversations into trusted sales/i })).toBeVisible();
+  await expect(page.getByText("The 90-Second Conversational Commerce Platform")).toBeVisible();
+  await expect(page.getByText("Built on Visa's trust and payment network")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /From catalog to AI commerce in 90 seconds/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Get started in 90 seconds" }).first()).toBeVisible();
+  await page.screenshot({ path: "test-results/landing-page.png", fullPage: true });
+  expect(consoleErrors).toEqual([]);
+});
