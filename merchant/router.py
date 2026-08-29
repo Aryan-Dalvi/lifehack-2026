@@ -39,6 +39,13 @@ from merchant.catalog_pipeline import (
 from merchant.catalog_template import TEMPLATE_FILENAME, build_template
 from merchant.insights import merchant_insights
 from merchant.insights_summary import SCOPE_TITLES, summarize_business
+from merchant.product_management import (
+    ProductCreate,
+    ProductUpdate,
+    create_product,
+    list_products,
+    update_product,
+)
 
 merchant_router = APIRouter(prefix="/merchant", tags=["merchant"])
 catalog_router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -243,6 +250,39 @@ async def merchant_insights_summary_route(
     if not insights:
         raise api_error(404, "NO_MERCHANT", "The merchant was not found.")
     return await summarize_business(insights, question=body.question, scope=body.scope)
+
+
+@merchant_router.get("/{merchant_id}/products")
+def merchant_products_route(
+    merchant_id: str,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
+    """List every live catalog row for this merchant, including unavailable stock."""
+    assert_merchant(merchant_id, x_merchant_key)
+    return list_products(merchant_id)
+
+
+@merchant_router.post("/{merchant_id}/products", status_code=201)
+def create_merchant_product_route(
+    merchant_id: str,
+    body: ProductCreate,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
+    """Add one product without replacing the catalog or touching prior orders."""
+    assert_merchant(merchant_id, x_merchant_key)
+    return create_product(merchant_id, body)
+
+
+@merchant_router.put("/{merchant_id}/products/{sku}")
+def update_merchant_product_route(
+    merchant_id: str,
+    sku: str,
+    body: ProductUpdate,
+    x_merchant_key: str | None = Header(default=None, alias="X-Merchant-Key"),
+) -> dict[str, Any]:
+    """Change editable listing facts while the SKU and historical order facts stay fixed."""
+    assert_merchant(merchant_id, x_merchant_key)
+    return update_product(merchant_id, sku, body)
 
 
 async def _catalog_source(request: Request):

@@ -72,15 +72,31 @@ invents a revenue figure is worse than no dashboard, so the failure mode is bori
 
 ## API
 
-Both routes are `assert_merchant`-guarded and scoped to one tenant.
+Every route is `assert_merchant`-guarded and scoped to one tenant.
 
 ```
 GET  /merchant/{merchant_id}/insights?days=30        -> the whole dashboard payload
 POST /merchant/{merchant_id}/insights/summary        -> {question?, scope?, days?}
+
+GET  /merchant/{merchant_id}/products                -> the whole private catalog
+POST /merchant/{merchant_id}/products                -> add one product
+PUT  /merchant/{merchant_id}/products/{sku}          -> update one product
 ```
 
 `days` is bounded to 1–45. An unknown `scope` is a 400 naming the valid reports rather than a
 guess. Response shapes are mirrored in `web/src/features/merchant/insights.ts`.
+
+Product creation requires `sku`, `title`, integer `price_cents` and integer `stock`; it also
+accepts `description`, `image_url`, `product_type`, `ingredients`, `skin_types` and `concerns`.
+The update body is any non-empty subset of those fields except `sku`: an existing SKU remains the
+product's identity, which avoids changing references merchants and customers already know. Omitted
+fields are preserved, and editing the four exposed attribute groups merges them into
+`attributes_json` rather than discarding cleaner provenance, safety tags or other catalog facts.
+
+The list includes out-of-stock rows and draft-store rows because it is a private management view.
+Writes update the same `products` table that storefront search and cart pricing read, so a published
+store reflects them on the next request. Past orders remain unchanged: their item names and unit
+prices are immutable snapshots in the order evidence, not joins back to the mutable catalog.
 
 ## Demo data
 
@@ -125,8 +141,11 @@ setup page.
 
 ## Tests
 
-`tests/test_insights.py` — 20 cases, covering tenant isolation (a rival key gets 403; a new
+`tests/test_insights.py` covers tenant isolation (a rival key gets 403; a new
 merchant sees zeroes, not the demo merchant's trade), the window comparison arithmetic, the chart
 totalling to the KPI, the forecast being reproducible from the series, task derivation, the
 repeat-rate denominator, question routing, the invented-figure guardrail, and a live order moving
-the numbers. `web/e2e/core.spec.ts` covers the published-merchant landing and the summary panel.
+the numbers. `tests/test_product_management.py` covers key enforcement, cross-tenant reads and
+writes, strict validation, SKU conflicts, attribute-preserving edits, immediate storefront
+visibility and unchanged order evidence. `web/e2e/core.spec.ts` covers the published-merchant
+landing and the summary panel.
