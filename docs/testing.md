@@ -704,3 +704,13 @@ finding out did not require writing to anybody's working database.
 advertised `cart_mandate_id`. The table now names `cart_id`. The cart and its SSE
 `confirm_request` event still expose `cart_mandate_id` as the consent-chain artifact; it is not
 the HTTP field accepted by `POST /agent/confirm`.
+
+---
+
+## 2026-08-30 — Rebased-main regression
+
+**Target:** rebased `main` at `6eeb841`, including the newer empty-catalog and merchant-branding
+changes.
+
+**Result: green.** `210 passed in 12.16s`; Ruff reports `All checks passed!` across `app`,
+`agent`, `merchant`, `payments`, `seed`, `scripts`, and `tests`.
