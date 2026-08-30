@@ -589,12 +589,15 @@
   color: #1a201a;
 }
 
-.visa-badge-text {
-  font-family: Inter, sans-serif;
-  font-weight: 850;
-  font-size: 14px;
-  color: #1a1f71;
-  letter-spacing: 0.05em;
+.visa-brand-mark {
+  display: block;
+  width: auto;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.visa-brand-mark--rail {
+  width: 42px;
 }
 
 .mockup-rail-steps {
@@ -724,11 +727,8 @@
   gap: 10px;
 }
 
-.visa-large-logo {
-  font-weight: 900;
-  font-size: 20px;
-  color: #1a1f71;
-  letter-spacing: 0.05em;
+.visa-brand-mark--marquee {
+  width: 68px;
 }
 
 .visa-tagline {

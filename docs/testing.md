@@ -731,3 +731,19 @@ the icon.
 A Playwright layout assertion was added to `merchant-gate.spec.ts`. The shell E2E runner could
 not execute it on this Mac because the configured Microsoft Edge channel is not installed; the
 same geometry assertion was exercised directly in the in-app browser against the isolated stack.
+
+---
+
+## 2026-08-30 — Official Visa Brand Mark replacement
+
+**Target:** every faux all-caps `VISA` wordmark in the customer-facing website.
+
+**Result: green.** Both imitations on the landing page—the secure-checkout rail and trust-network
+marquee—now use Visa's official blue Brand Mark from Visa's own CDN, stored locally as
+`web/public/visa-brand-mark.png` for an offline-safe demo. Source asset: 208×68 RGBA PNG,
+SHA-256 `0ebb1697ec9ed895955069d5aca347918d92cd59da740f98f772f468707e2361`.
+
+TypeScript and the Vite production build pass. Browser verification confirmed two visible marks,
+each at the source's exact aspect ratio, both with accessible name `Visa`, and zero remaining
+leaf text nodes whose exact content is `VISA`. Ordinary copy and product names such as “Visa
+Secure” remain sentence-case text rather than being misused as logo replacements.
