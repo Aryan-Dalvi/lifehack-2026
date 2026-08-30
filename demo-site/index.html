@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LUMINA BEAUTY · Official Store</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;1,400&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --black: #000000;
+        --white: #ffffff;
+        --gray-50: #f9f9f9;
+        --gray-100: #f4f4f4;
+        --gray-200: #e6e6e6;
+        --gray-400: #999999;
+        --gray-700: #444444;
+        --red: #cf112c;
+        --font-sans: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        --font-serif: 'Playfair Display', Georgia, serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: var(--font-sans);
+        color: var(--black);
+        background-color: var(--white);
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* Top Announcement Banner */
+      .top-banner {
+        background-color: var(--black);
+        color: var(--white);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-align: center;
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+      }
+      .top-banner span {
+        text-decoration: underline;
+        cursor: pointer;
+      }
+
+      /* Header */
+      header {
+        border-bottom: 1px solid var(--gray-200);
+        position: sticky;
+        top: 0;
+        background: var(--white);
+        z-index: 100;
+      }
+
+      .header-main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 18px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 32px;
+      }
+
+      .brand-logo {
+        font-family: var(--font-sans);
+        font-weight: 800;
+        font-size: 24px;
+        letter-spacing: 0.22em;
+        text-decoration: none;
+        color: var(--black);
+        text-transform: uppercase;
+      }
+
+      .search-bar {
+        flex: 1;
+        max-width: 540px;
+        position: relative;
+      }
+
+      .search-bar input {
+        width: 100%;
+        padding: 10px 16px 10px 42px;
+        border-radius: 99px;
+        border: 1px solid var(--gray-200);
+        background-color: var(--gray-50);
+        font-size: 13px;
+        font-family: inherit;
+        outline: none;
+        transition: all 0.2s ease;
+      }
+
+      .search-bar input:focus {
+        border-color: var(--black);
+        background-color: var(--white);
+        box-shadow: 0 0 0 1px var(--black);
+      }
+
+      .search-bar svg {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--gray-400);
+        pointer-events: none;
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+
+      .action-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--black);
+        text-decoration: none;
+        cursor: pointer;
+        position: relative;
+      }
+
+      .action-item:hover {
+        opacity: 0.75;
+      }
+
+      .bag-count {
+        position: absolute;
+        top: -6px;
+        right: -8px;
+        background: var(--red);
+        color: var(--white);
+        font-size: 10px;
+        font-weight: 700;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+      }
+
+      /* Category Navigation */
+      .nav-categories {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 24px;
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+
+      .nav-categories a {
+        padding: 12px 0;
+        color: var(--black);
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border-bottom: 2px solid transparent;
+        transition: border-color 0.15s ease;
+      }
+
+      .nav-categories a:hover,
+      .nav-categories a.active {
+        border-bottom-color: var(--black);
+      }
+
+      .nav-categories a.sale {
+        color: var(--red);
+      }
+
+      /* Hero Banner */
+      .hero-section {
+        background: linear-gradient(135deg, #f7f2ed 0%, #ebe2d8 100%);
+        padding: 60px 24px;
+      }
+
+      .hero-content {
+        max-width: 1280px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 40px;
+        align-items: center;
+      }
+
+      .hero-tag {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #7d6350;
+        margin-bottom: 12px;
+      }
+
+      .hero-title {
+        font-family: var(--font-serif);
+        font-size: 48px;
+        font-weight: 600;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        margin-bottom: 16px;
+      }
+
+      .hero-subtitle {
+        font-size: 16px;
+        color: var(--gray-700);
+        margin-bottom: 28px;
+        max-width: 480px;
+      }
+
+      .hero-cta {
+        display: inline-block;
+        background: var(--black);
+        color: var(--white);
+        padding: 14px 32px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        text-decoration: none;
+        border-radius: 4px;
+        transition: background 0.2s ease;
+      }
+
+      .hero-cta:hover {
+        background: #333333;
+      }
+
+      .hero-visual {
+        display: flex;
+        justify-content: center;
+      }
+
+      .hero-card-stack {
+        background: var(--white);
+        padding: 24px;
+        border-radius: 12px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+        text-align: center;
+        max-width: 320px;
+      }
+
+      .hero-card-stack img {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        border-radius: 8px;
+        margin-bottom: 14px;
+      }
+
+      .hero-card-stack strong {
+        font-size: 16px;
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .hero-card-stack p {
+        font-size: 13px;
+        color: var(--gray-700);
+      }
+
+      /* Featured Products Section */
+      .section-container {
+        max-width: 1280px;
+        margin: 60px auto;
+        padding: 0 24px;
+      }
+
+      .section-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        margin-bottom: 28px;
+      }
+
+      .section-title {
+        font-family: var(--font-serif);
+        font-size: 28px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+
+      .section-subtitle {
+        font-size: 12px;
+        color: var(--gray-400);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-top: 4px;
+      }
+
+      .view-all-link {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--black);
+        text-decoration: underline;
+      }
+
+      .product-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 24px;
+      }
+
+      .product-card {
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 16px;
+        background: var(--white);
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .product-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 28px rgba(0,0,0,0.06);
+      }
+
+      .product-image-wrap {
+        width: 100%;
+        height: 220px;
+        background: var(--gray-50);
+        border-radius: 6px;
+        overflow: hidden;
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      }
+
+      .product-image-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .badge-clean {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: #235c34;
+        color: var(--white);
+        font-size: 9px;
+        font-weight: 700;
+        padding: 3px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .product-brand {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--gray-400);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 4px;
+      }
+
+      .product-name {
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.35;
+        margin-bottom: 8px;
+        color: var(--black);
+      }
+
+      .product-rating {
+        font-size: 12px;
+        color: #e59819;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .product-rating span {
+        color: var(--gray-400);
+        font-size: 11px;
+      }
+
+      .product-price {
+        font-size: 16px;
+        font-weight: 700;
+        margin-top: auto;
+        padding-top: 10px;
+        margin-bottom: 12px;
+      }
+
+      .add-to-bag-btn {
+        width: 100%;
+        padding: 10px;
+        background: var(--black);
+        color: var(--white);
+        border: 0;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+
+      .add-to-bag-btn:hover {
+        background: #333333;
+      }
+
+      /* Toast Notification */
+      .toast {
+        position: fixed;
+        top: 24px;
+        right: 24px;
+        background: var(--black);
+        color: var(--white);
+        padding: 12px 20px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+        display: none;
+        z-index: 9999;
+        animation: fadeIn 0.2s ease;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* Footer */
+      footer {
+        background: #111111;
+        color: #888888;
+        padding: 60px 24px 30px;
+        margin-top: 80px;
+      }
+
+      .footer-grid {
+        max-width: 1280px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr 1fr;
+        gap: 40px;
+        padding-bottom: 40px;
+        border-bottom: 1px solid #222222;
+      }
+
+      .footer-col h4 {
+        color: var(--white);
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 16px;
+      }
+
+      .footer-col ul {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .footer-col a {
+        color: #888888;
+        text-decoration: none;
+        font-size: 13px;
+      }
+
+      .footer-col a:hover {
+        color: var(--white);
+      }
+
+      .footer-bottom {
+        max-width: 1280px;
+        margin: 30px auto 0;
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+      }
+
+      @media (max-width: 960px) {
+        .hero-content { grid-template-columns: 1fr; }
+        .product-grid { grid-template-columns: repeat(2, 1fr); }
+        .footer-grid { grid-template-columns: 1fr 1fr; }
+      }
+
+      @media (max-width: 600px) {
+        .header-main { flex-wrap: wrap; gap: 14px; }
+        .search-bar { order: 3; max-width: 100%; }
+        .product-grid { grid-template-columns: 1fr; }
+        .hero-title { font-size: 32px; }
+        .footer-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- Top Promo Bar -->
+    <div class="top-banner">
+      <p>✨ FREE STANDARD SHIPPING on all orders over $50 | <span>Join Beauty Insider</span></p>
+    </div>
+
+    <!-- Main Navigation Header -->
+    <header>
+      <div class="header-main">
+        <a href="/" class="brand-logo">LUMINA</a>
+
+        <div class="search-bar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" placeholder="Search skincare, cleansers, serums, brands..." />
+        </div>
+
+        <div class="header-actions">
+          <a class="action-item" href="#">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span>Sign In</span>
+          </a>
+
+          <a class="action-item" href="#">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <path d="M16 10a4 4 0 0 1-8 0"></path>
+            </svg>
+            <span id="bag-count" class="bag-count">0</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Category Links -->
+      <nav class="nav-categories">
+        <a href="#" class="active">Skincare</a>
+        <a href="#">Clean Beauty</a>
+        <a href="#">Serums & Treatments</a>
+        <a href="#">Moisturizers</a>
+        <a href="#">Sunscreen</a>
+        <a href="#">Bestsellers</a>
+        <a href="#" class="sale">Sale & Offers</a>
+      </nav>
+    </header>
+
+    <!-- Hero Showcase -->
+    <section class="hero-section">
+      <div class="hero-content">
+        <div>
+          <span class="hero-tag">The Daily Routine Edit</span>
+          <h1 class="hero-title">Elevate your daily ritual with clean, restorative formulas.</h1>
+          <p class="hero-subtitle">Grounded skincare designed to strengthen barrier health, calm sensitive complexions, and lock in lasting hydration.</p>
+          <a href="#trending" class="hero-cta">Shop The Collection</a>
+        </div>
+        <div class="hero-visual">
+          <div class="hero-card-stack">
+            <img src="https://images.unsplash.com/photo-1556228720-195a672e8a03?w=600&auto=format&fit=crop&q=80" alt="Skincare Collection" />
+            <strong>Barrier Restore Cream</strong>
+            <p>Ceramides · Centella · S$42.00</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Trending Products -->
+    <section id="trending" class="section-container">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Trending Skincare</h2>
+          <p class="section-subtitle">Top curated essentials for balanced, healthy skin</p>
+        </div>
+        <a href="#" class="view-all-link">View all (12)</a>
+      </div>
+
+      <div class="product-grid">
+        <!-- Product 1 -->
+        <article class="product-card">
+          <div class="product-image-wrap">
+            <span class="badge-clean">Clean at Lumina</span>
+            <img src="https://images.unsplash.com/photo-1556228720-195a672e8a03?w=500&auto=format&fit=crop&q=80" alt="Gentle Cloud Cleanser" />
+          </div>
+          <span class="product-brand">Mysa Skin</span>
+          <h3 class="product-name">Gentle Cloud Cleanser</h3>
+          <div class="product-rating">
+            ★★★★★ <span>(4.9 · 128)</span>
+          </div>
+          <div class="product-price">S$34.00</div>
+          <button class="add-to-bag-btn" onclick="addToBag('Gentle Cloud Cleanser', 34)">Add to Bag</button>
+        </article>
+
+        <!-- Product 2 -->
+        <article class="product-card">
+          <div class="product-image-wrap">
+            <span class="badge-clean">Clean at Lumina</span>
+            <img src="https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=500&auto=format&fit=crop&q=80" alt="Barrier Restore Cream" />
+          </div>
+          <span class="product-brand">Mysa Skin</span>
+          <h3 class="product-name">Barrier Restore Cream</h3>
+          <div class="product-rating">
+            ★★★★★ <span>(4.8 · 214)</span>
+          </div>
+          <div class="product-price">S$42.00</div>
+          <button class="add-to-bag-btn" onclick="addToBag('Barrier Restore Cream', 42)">Add to Bag</button>
+        </article>
+
+        <!-- Product 3 -->
+        <article class="product-card">
+          <div class="product-image-wrap">
+            <span class="badge-clean">Clean at Lumina</span>
+            <img src="https://images.unsplash.com/photo-1608248597359-00f72f88320e?w=500&auto=format&fit=crop&q=80" alt="Hydrating Glow Essence" />
+          </div>
+          <span class="product-brand">Mysa Skin</span>
+          <h3 class="product-name">Hydrating Glow Essence</h3>
+          <div class="product-rating">
+            ★★★★☆ <span>(4.7 · 95)</span>
+          </div>
+          <div class="product-price">S$38.00</div>
+          <button class="add-to-bag-btn" onclick="addToBag('Hydrating Glow Essence', 38)">Add to Bag</button>
+        </article>
+
+        <!-- Product 4 -->
+        <article class="product-card">
+          <div class="product-image-wrap">
+            <span class="badge-clean">Clean at Lumina</span>
+            <img src="https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=500&auto=format&fit=crop&q=80" alt="Mineral Shield Sunscreen SPF 50+" />
+          </div>
+          <span class="product-brand">Mysa Skin</span>
+          <h3 class="product-name">Mineral Shield Sunscreen SPF 50+</h3>
+          <div class="product-rating">
+            ★★★★★ <span>(4.9 · 310)</span>
+          </div>
+          <div class="product-price">S$36.00</div>
+          <button class="add-to-bag-btn" onclick="addToBag('Mineral Shield Sunscreen SPF 50+', 36)">Add to Bag</button>
+        </article>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <div class="footer-grid">
+        <div class="footer-col">
+          <h4>LUMINA BEAUTY</h4>
+          <p style="font-size: 13px; line-height: 1.6; max-width: 320px;">
+            The premier destination for conscious skincare and clean beauty. Discover routines tailored to your skin's unique needs.
+          </p>
+        </div>
+        <div class="footer-col">
+          <h4>About Lumina</h4>
+          <ul>
+            <li><a href="#">About Us</a></li>
+            <li><a href="#">Careers</a></li>
+            <li><a href="#">Sustainability</a></li>
+            <li><a href="#">Beauty Insider</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Help & Support</h4>
+          <ul>
+            <li><a href="#">Shipping & Returns</a></li>
+            <li><a href="#">Store Locator</a></li>
+            <li><a href="#">Track Order</a></li>
+            <li><a href="#">Contact Us</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="#">Privacy Policy</a></li>
+            <li><a href="#">Terms of Use</a></li>
+            <li><a href="#">Accessibility</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>© 2026 Lumina Beauty Inc. All rights reserved. (Demo Retailer Storefront)</p>
+        <p>Simulation & Testing Environment</p>
+      </div>
+    </footer>
+
+    <!-- Toast Notification Element -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+      let count = 0;
+      function addToBag(productName, price) {
+        count++;
+        document.getElementById('bag-count').textContent = count;
+        const toast = document.getElementById('toast');
+        toast.textContent = `✓ Added ${productName} (S$${price.toFixed(2)}) to Bag`;
+        toast.style.display = 'block';
+        setTimeout(() => {
+          toast.style.display = 'none';
+        }, 2200);
+      }
+    </script>
+
+    <!-- 
+      =========================================================================================
+      SWAY COMMERCE AGENT WIDGET INTEGRATION (TO TEST LATER)
+      
+      When you are ready to test embedding the Sway conversational commerce agent,
+      uncomment the script tag below (or paste it into your existing site before </body>):
+      
+      <script src="http://localhost:5173/widget.js" data-merchant="m_mysa" data-position="bottom-right"></script>
+      =========================================================================================
+    -->
+    <script src="http://localhost:5173/widget.js" data-merchant="m_mysa" data-position="bottom-right"></script>
+  </body>
+</html>
