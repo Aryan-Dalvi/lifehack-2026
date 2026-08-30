@@ -439,8 +439,14 @@ export function MerchantAdmin({ onNavigate }: { onNavigate?: (path: string) => v
           <a href="#preview">Preview</a>
         </nav>
         <a className="storefront-link" href={config.hosted_url}><span>{config.name}</span><ExternalLink size={15} /></a>
-        <button type="button" className="sign-out" onClick={signOut} title={config.merchant_id}>
-          <LogOut size={14} /> Switch store
+        <button
+          type="button"
+          className="sign-out"
+          onClick={signOut}
+          title={config.merchant_id}
+          aria-label="Switch store"
+        >
+          <LogOut size={14} /> <span>Switch store</span>
         </button>
       </header>
 

@@ -1,4 +1,4 @@
-# Sway
+# Sway — conversational commerce for any skincare merchant
 
 > Turn a merchant catalog into a trusted conversational storefront that can discover, decide,
 > and pay in one experience.
@@ -6,9 +6,10 @@
 ![Sway — Discover, Decide, Pay](outputs/sway-video-thumbnail.png)
 
 Sway is a plug-and-play, category-specialized commerce agent built for the Visa LifeHack 2026
-challenge. A merchant can bring an ordinary spreadsheet, review deterministic catalog diagnostics,
-publish a branded storefront or embeddable widget, and let shoppers move from a natural-language
-need to a verified payment without being redirected to another checkout.
+challenge. Any skincare merchant can sign themselves up—there is no administrator gatekeeping an
+API key—then bring an ordinary spreadsheet, review deterministic catalog diagnostics, and publish
+a branded storefront or embeddable widget. Nothing is hard-coded to the demo merchant: catalog
+rows, receipts, and the agent's answers name the shop the shopper is actually visiting.
 
 The current prototype specializes in **skincare**. It combines conversational discovery with
 deterministic product facts, server-side pricing, explicit per-purchase consent, issuer-style OTP
@@ -73,7 +74,8 @@ replace them with live captures using the screenshot checklist below.
 4. The mock issuer authenticates the shopper with a single-use OTP challenge.
 5. A TAP-shaped signed payer request is verified before authorization.
 6. The payment simulator authorizes the transaction and records an immutable order snapshot.
-7. The receipt and authorization trail remain visible in the same experience.
+7. The receipt and authorization trail remain visible in the same experience, and the receipt is
+   delivered by email or written to the deterministic demo outbox.
 
 ## Features
 
@@ -117,7 +119,7 @@ replace them with live captures using the screenshot checklist below.
 - Side-by-side comparison across relevant skincare attributes.
 - Persistent cart sidebar and optional session spending limit.
 - Inline card, address, consent, bank verification, and receipt surfaces—no external checkout
-  redirect.
+  redirect—with receipt delivery by email or demo outbox.
 - Only the card brand, expiry, holder, and last four digits are retained; the full card number is
   checked and discarded, and is never sent to the shopping model.
 
@@ -208,11 +210,38 @@ audit trail, not a private model chain-of-thought log.
 | Testing | Pytest, Ruff, TypeScript compiler, Playwright |
 | Tooling | `uv` for Python dependencies; npm for the web application |
 
+## Payment adapters
+
+Two interchangeable adapters sit behind one interface selected by `PAYMENT_ADAPTER`:
+
+- **`simulator`** (default) is the reliable demo path. It never charges a real card; the OTP is
+  `492118`.
+- **`visa`** sends a VisaNet Connect Acceptance Authorization request to Visa's sandbox using mTLS,
+  Message Level Encryption, and the Authorizations v3 envelope. It activates only when the Visa
+  configuration in `.env.example` is complete. `GET /health` reports `payment_ready: false` and the
+  adapter refuses to run when configuration is missing or invalid—it never silently falls back.
+
+Do not select the Visa adapter for a demo until it has been verified end to end with sandbox
+credentials.
+
 ## Run locally
 
-Prerequisites: **Python 3.11+**, **Node.js 20+**, `uv`, and npm.
+Prerequisites: **Python 3.11+**, **Node.js 20+**, and npm. `uv` is recommended for Python dependency
+management but is not required by the commands below.
 
-### PowerShell
+### Bash
+
+```bash
+cp .env.example .env   # optional for deterministic demo mode; configure live integrations here
+python3 -m venv .venv
+./.venv/bin/pip install -e ".[dev]"
+npm --prefix web install
+./.venv/bin/python -m seed.reset
+./.venv/bin/python scripts/dev.py
+```
+
+<details>
+<summary>PowerShell</summary>
 
 ```powershell
 python -m venv .venv
@@ -221,6 +250,10 @@ npm --prefix web install
 .\.venv\Scripts\python.exe -m seed.reset
 .\.venv\Scripts\python.exe -m scripts.dev
 ```
+</details>
+
+`seed.reset` seeds a demo merchant, a demo shopper (`demo@mysa.test` / `mysa-demo-password`), and
+demo order history, then writes the demo merchant's API key to `var/merchant-key.txt` (gitignored).
 
 ### Demo surfaces
 
@@ -230,21 +263,26 @@ npm --prefix web install
 - Merchant setup: <http://localhost:5173/admin/setup>
 - API documentation: <http://localhost:8000/docs>
 - Widget demonstration: <http://localhost:5173/widget-demo.html>
+- One-line embed: `<script src=".../widget.js" data-merchant="m_…"></script>`
 
 Demo details:
 
 - Payment mode: `simulator`
 - Mock issuer OTP: `492118`
 - Seeded merchant: Mysa Skin (`m_mysa`)
-- Demo mode: deterministic unless `DEMO_MODE=0` and `OPENAI_API_KEY` is configured
+
+`DEMO_MODE=0` with `OPENAI_API_KEY` set runs one structured interpretation call per ambiguous
+shopper turn (or one further bounded call for a routine explanation or a general question);
+`DEMO_MODE=1` runs a deterministic parser and makes no model calls at all. Either way, catalog
+search, cart pricing, consent, and checkout are deterministic code, never the model.
 
 ## Verify
 
-With the application running for browser tests:
+With the application running for the Playwright specs:
 
-```powershell
-.\.venv\Scripts\ruff.exe check app agent merchant payments seed scripts tests
-.\.venv\Scripts\python.exe -m pytest -q
+```bash
+./.venv/bin/ruff check app agent merchant payments seed scripts tests
+./.venv/bin/python -m pytest -q
 npm --prefix web run build
 npm --prefix web run test:e2e
 ```
@@ -270,7 +308,15 @@ and merchant insights.
 
 For the final submission, capture the live app at approximately **1440×900 or 1600×900**, keep the
 browser zoom consistent, and avoid showing API keys, local file paths, email addresses, or full card
-details. Recommended files:
+details. The three strongest supplied captures should use these stable filenames:
+
+| File to add | Capture |
+| --- | --- |
+| `docs/screenshots/landing-trust-flow.png` | Landing-page value proposition beside the discover-to-pay protection chain |
+| `docs/screenshots/embedded-widget.png` | Sway running as a modal widget over an existing merchant website |
+| `docs/screenshots/merchant-dashboard.png` | Revenue KPIs, chart, priority tasks, and merchant summary assistant |
+
+Additional walkthrough captures, if time permits:
 
 | File to add | Capture |
 | --- | --- |
@@ -280,11 +326,11 @@ details. Recommended files:
 | `docs/screenshots/product-comparison.png` | Side-by-side product comparison and active spending limit |
 | `docs/screenshots/trusted-checkout.png` | Exact transaction preview beside the expanded Purchase Protection rail |
 | `docs/screenshots/payment-receipt.png` | Completed receipt and successful verification events |
-| `docs/screenshots/merchant-dashboard.png` | Revenue KPIs, chart, priority tasks, and customer table |
 
-Once captured, replace the two interface-preview image links near the top of this README with the
-best live merchant and shopper screenshots. Keep the remaining images for a compact walkthrough
-gallery rather than placing every capture above the fold.
+Once the files exist, place `landing-trust-flow.png` first because it communicates the complete
+product promise, followed by `embedded-widget.png` to prove merchant integration and
+`merchant-dashboard.png` to show the merchant payoff. Replace the two interface-preview image links
+near the top with the best two live screenshots and keep the rest in a compact walkthrough gallery.
 
 ## Prototype boundaries
 
@@ -304,4 +350,4 @@ gallery rather than placing every capture above the fold.
 - [Merchant CRM](docs/merchant-dashboard.md)
 - [Security and tenant isolation](docs/security.md)
 - [API contracts](docs/contracts.md)
-- [Testing notes](docs/testing.md)
+- [Testing notes and dated regression log](docs/testing.md)

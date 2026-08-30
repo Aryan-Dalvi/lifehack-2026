@@ -242,6 +242,8 @@ test("landing home page renders with hero mockup, marquee, and onboarding flow",
   await expect(page.getByRole("heading", { name: /Turn conversations into trusted sales/i })).toBeVisible();
   await expect(page.getByText("The 90-Second Conversational Commerce Platform")).toBeVisible();
   await expect(page.getByText("Built on Visa's trust and payment network")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Visa" })).toHaveCount(2);
+  await expect(page.getByText("VISA", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /From catalog to AI commerce in 90 seconds/i })).toBeVisible();
   await expect(page.getByRole("link", { name: "Get started in 90 seconds" }).first()).toBeVisible();
   await page.screenshot({ path: "test-results/landing-page.png", fullPage: true });

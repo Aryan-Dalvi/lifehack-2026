@@ -18,6 +18,7 @@ import {
   Check,
 } from "lucide-react";
 import "./landing.css";
+import { VisaBrandMark } from "./VisaBrandMark";
 
 interface LandingPageProps {
   onNavigate?: (path: string) => void;
@@ -357,7 +358,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                 <div className="mockup-rail-pane">
                   <div className="mockup-rail-header">
                     <span className="rail-heading">Secure checkout</span>
-                    <span className="visa-badge-text">VISA</span>
+                    <VisaBrandMark className="visa-brand-mark--rail" />
                   </div>
 
                   <div className="mockup-rail-steps">
@@ -470,7 +471,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                 <span>No Hallucinations. Only Facts.</span>
               </div>
               <div className="marquee-card marquee-visa-brand">
-                <span className="visa-large-logo">VISA</span>
+                <VisaBrandMark className="visa-brand-mark--marquee" />
                 <div className="visa-tagline">
                   <strong>Global standards.</strong>
                   <span>Local trust.</span>

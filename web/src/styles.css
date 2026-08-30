@@ -2296,7 +2296,8 @@ img {
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.97);
   display: grid;
-  grid-template-columns: 140px 1fr auto;
+  grid-template-columns: 140px minmax(0, 1fr) auto auto;
+  column-gap: 10px;
   align-items: center;
 }
 
@@ -3344,9 +3345,14 @@ img {
   .receipt-simulation { grid-column: 2; }
   .decline-panel { grid-template-columns: 32px 1fr; }
   .decline-panel > button { grid-column: 2; justify-self: start; }
-  .admin-header { height: 60px; padding: 0 16px; grid-template-columns: 85px 1fr auto; }
+  .admin-header {
+    height: 60px;
+    padding: 0 16px;
+    grid-template-columns: 85px minmax(0, 1fr) auto auto;
+    column-gap: 8px;
+  }
   .sway-logo { font-size: 26px; }
-  .admin-header nav { gap: 16px; }
+  .admin-header nav { gap: clamp(8px, 2.5vw, 16px); }
   .storefront-link span { display: none; }
   .setup-column { padding: 24px 16px 0; }
   .admin-title h1 { font-size: 38px; }
@@ -3658,7 +3664,6 @@ img {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-left: 10px;
   padding: 7px 10px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
@@ -3671,6 +3676,11 @@ img {
 }
 
 .admin-header .sign-out:hover { border-color: var(--sage-500); color: var(--sage-700); }
+
+@media (max-width: 640px) {
+  .admin-header .sign-out { padding: 7px; }
+  .admin-header .sign-out span { display: none; }
+}
 
 .all-clear--empty { color: var(--muted); }
 .all-clear--empty svg { color: #c08a2a; }

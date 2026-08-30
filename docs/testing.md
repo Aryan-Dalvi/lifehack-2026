@@ -687,3 +687,63 @@ An existing `var/sway.db` created before this branch has no `logo_url` and no ca
 Confirmed on a **copy** of the real database that `init_databases()` adds all six on first
 startup, so switching to this branch needs no reset. The copy was used precisely so that
 finding out did not require writing to anybody's working database.
+
+---
+
+## 2026-08-30 — Backend regression and contract alignment
+
+**Target:** current `main` at `d3b24da` — regression baseline plus the published
+`/agent/confirm` request contract.
+
+**Result: green.** `207 passed in 11.83s`; Ruff reports `All checks passed!` across `app`,
+`agent`, `merchant`, `payments`, `seed`, `scripts`, and `tests`.
+
+### Contract correction
+
+`ConfirmRequest` requires `cart_id`; the API table in `docs/contracts.md` had incorrectly
+advertised `cart_mandate_id`. The table now names `cart_id`. The cart and its SSE
+`confirm_request` event still expose `cart_mandate_id` as the consent-chain artifact; it is not
+the HTTP field accepted by `POST /agent/confirm`.
+
+---
+
+## 2026-08-30 — Rebased-main regression
+
+**Target:** rebased `main` at `6eeb841`, including the newer empty-catalog and merchant-branding
+changes.
+
+**Result: green.** `210 passed in 12.16s`; Ruff reports `All checks passed!` across `app`,
+`agent`, `merchant`, `payments`, `seed`, `scripts`, and `tests`.
+
+---
+
+## 2026-08-30 — Merchant onboarding header alignment
+
+**Target:** the authenticated `/admin/setup` header after the fourth grid item, “Switch store”,
+was wrapping beneath the Sway logo.
+
+**Result: visually green.** Production TypeScript and Vite builds pass. In an isolated seeded
+stack, the Sway logo, navigation, storefront link and switch-store control all share the same
+vertical center at both 1280×720 and 390×844. The phone layout remains exactly 390 px wide with
+no horizontal overflow; its switch-store control keeps the accessible name while collapsing to
+the icon.
+
+A Playwright layout assertion was added to `merchant-gate.spec.ts`. The shell E2E runner could
+not execute it on this Mac because the configured Microsoft Edge channel is not installed; the
+same geometry assertion was exercised directly in the in-app browser against the isolated stack.
+
+---
+
+## 2026-08-30 — Official Visa Brand Mark replacement
+
+**Target:** every faux all-caps `VISA` wordmark in the customer-facing website.
+
+**Result: green.** Both imitations on the landing page—the secure-checkout rail and trust-network
+marquee—now use Visa's official blue Brand Mark from Visa's own CDN, stored locally as
+`web/public/visa-brand-mark.png` for an offline-safe demo. Source asset: 208×68 RGBA PNG,
+SHA-256 `0ebb1697ec9ed895955069d5aca347918d92cd59da740f98f772f468707e2361`.
+
+TypeScript and the Vite production build pass. Browser verification confirmed two visible marks,
+each at the source's exact aspect ratio, both with accessible name `Visa`, and zero remaining
+leaf text nodes whose exact content is `VISA`. Ordinary copy and product names such as “Visa
+Secure” remain sentence-case text rather than being misused as logo replacements.
