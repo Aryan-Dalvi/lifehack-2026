@@ -127,8 +127,10 @@ export function ShopperApp() {
   const [cardBusy, setCardBusy] = useState(false);
   const [receiptEmail, setReceiptEmail] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
+  // Empty until the session says whose shop this is: a placeholder name here is another
+  // merchant's brand on the screen, however briefly.
   const [merchantTheme, setMerchantTheme] = useState<MerchantTheme>({
-    name: "Mysa Skin",
+    name: "",
     accent_color: DEFAULT_MERCHANT_ACCENT,
     logo_url: null,
   });
@@ -236,7 +238,10 @@ export function ShopperApp() {
         setStage("comparison");
       }
       if (event.type === "category_table") {
-        setCategories(event.data as unknown as CategoryTableData);
+        // A table with no rows is a header and a shrug. The agent says so in words instead,
+        // so drop the empty one rather than drawing an empty frame around nothing.
+        const table = event.data as unknown as CategoryTableData;
+        setCategories(table.categories.length > 0 ? table : null);
         setComparison(null);
       }
     }
@@ -827,6 +832,7 @@ export function ShopperApp() {
           decline={decline}
           stage={stage}
           trustEvents={trustEvents}
+          merchantName={merchantTheme.name}
           onIncrement={incrementBasketLine}
           onDecrement={decrementBasketLine}
           onRemove={removeBasketLine}

@@ -14,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
 
+from agent import router as agent_router
 from app.db import init_databases
 from app.main import app
 from merchant import router as merchant_router
@@ -261,3 +262,107 @@ def test_each_merchants_profile_is_their_own(client: TestClient) -> None:
     assert profile["name"] == "Aurora Skin"
     assert profile["accent_color"] == "#255B78"
     assert profile["merchant_id"] != "m_mysa"
+
+
+# --- a shop with nothing in it ------------------------------------------------------------
+
+
+def publish_empty_store(client: TestClient, name: str) -> str:
+    """A merchant who has gone live before uploading a catalog. This is a normal state."""
+    merchant = onboard(client, name)
+    keyed(merchant["api_key"]).put(
+        f"/merchant/{merchant['merchant_id']}/config", json={"status": "published"}
+    )
+    return merchant["merchant_id"]
+
+
+def open_session(client: TestClient, merchant_id: str) -> tuple[str, dict[str, str]]:
+    session = client.post(
+        "/agent/session",
+        json={"merchant_id": merchant_id, "category": "skincare", "budget_cents": None},
+    ).json()
+    return session["session_id"], {"X-Session-Token": session["session_token"]}
+
+
+def test_an_empty_shop_says_so_instead_of_showing_an_empty_table(client: TestClient) -> None:
+    """Asking anything of a shop with no catalog used to draw a table with no rows in it."""
+    merchant_id = publish_empty_store(client, "Bare Shelf Botanicals")
+    session_id, headers = open_session(client, merchant_id)
+
+    for question in (
+        "what products do you have?",
+        "what categories do you have?",
+        "I have dry sensitive skin, what should I use?",
+        "show me a cleanser",
+        "compare these",
+    ):
+        response = client.post(
+            "/agent/turn", json={"session_id": session_id, "text": question}, headers=headers
+        )
+        assert response.status_code == 200, response.text
+        events = response.json()["events"]
+
+        # One plain answer, naming this shop. Never an empty table, never empty cards.
+        assert [event["type"] for event in events] == ["token"], question
+        text = events[0]["data"]["text"]
+        assert "Bare Shelf Botanicals" in text
+        assert "not added any products yet" in text
+        assert events[0]["data"]["source"] == "catalog_database"
+
+    trust = client.get(
+        f"/trust/events/snapshot?session_id={session_id}", headers=headers
+    ).json()["events"]
+    empty_notes = [event for event in trust if event["label"] == "No products in this catalog yet"]
+    assert empty_notes, "the trust rail should record why there was nothing to show"
+    assert all(note["detail"]["llm_calls"] == 0 for note in empty_notes)
+
+
+def test_an_empty_shop_costs_no_model_call(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """There is nothing to interpret when there is nothing to sell, so nothing is asked."""
+    merchant_id = publish_empty_store(client, "Bare Shelf Botanicals")
+    session_id, headers = open_session(client, merchant_id)
+
+    async def fail_interpret(**_kwargs):
+        raise AssertionError("the interpreter was called for a shop with no catalog")
+
+    monkeypatch.setattr(agent_router, "interpret", fail_interpret)
+    response = client.post(
+        "/agent/turn", json={"session_id": session_id, "text": "what do you sell?"}, headers=headers
+    )
+    assert response.status_code == 200, response.text
+
+
+def test_the_agent_names_the_shop_it_is_actually_serving(client: TestClient) -> None:
+    """Every merchant's assistant used to introduce itself as the seeded demo store."""
+    merchant = onboard(client, "Aurora Skin")
+    api = keyed(merchant["api_key"])
+    upload = api.post(
+        f"/merchant/{merchant['merchant_id']}/catalog/uploads",
+        files={"file": ("catalog.xlsx", catalog_bytes("AUR-1", "Aurora Serum"), "application/vnd.ms-excel")},
+    ).json()
+    plan = upload["approval"]["modes"]["replace"]
+    api.post(
+        f"/merchant/{merchant['merchant_id']}/catalog/uploads/{upload['upload_id']}/approve",
+        json={
+            "approval_token": plan["approval_token"],
+            "reviewed_row_count": upload["approval"]["reviewed_row_count_required"],
+            "mode": "replace",
+        },
+    )
+    api.put(f"/merchant/{merchant['merchant_id']}/config", json={"status": "published"})
+
+    session_id, headers = open_session(client, merchant["merchant_id"])
+    response = client.post(
+        "/agent/turn",
+        json={"session_id": session_id, "text": "show me something for dry skin"},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    spoken = " ".join(
+        event["data"].get("text", "") for event in response.json()["events"] if event["type"] == "token"
+    )
+    assert "Mysa Skin" not in spoken, spoken
+    if spoken.strip():
+        assert "Aurora Skin" in spoken, spoken

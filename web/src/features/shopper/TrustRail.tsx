@@ -15,6 +15,8 @@ type Props = {
   stage: JourneyStage;
   budgetCents: number | null;
   events: TrustEvent[];
+  /** The shop this session is with. Every merchant used to be told "Mysa Skin". */
+  merchantName?: string;
   isCollapsibleContent?: boolean;
 };
 
@@ -29,10 +31,17 @@ const stepIndex: Record<JourneyStage, number> = {
   declined: 2,
 };
 
-export function TrustRail({ stage, budgetCents, events, isCollapsibleContent = false }: Props) {
+export function TrustRail({
+  stage,
+  budgetCents,
+  events,
+  merchantName,
+  isCollapsibleContent = false,
+}: Props) {
   const index = stepIndex[stage];
+  const shop = merchantName?.trim() || "this shop";
   const steps = [
-    ["Catalog verified", "Product facts come from Mysa Skin."],
+    ["Catalog verified", `Product facts come from ${shop}.`],
     ["Your limit", budgetCents === null ? "Optional · not set" : `S$${(budgetCents / 100).toFixed(2)} active`],
     ["Cart preview", stage === "declined" ? "Stopped before bank contact" : "Items and pricing rechecked"],
     ["Your confirmation", "Bound to this exact transaction"],

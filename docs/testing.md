@@ -622,3 +622,68 @@ wrong, and would have been "fixed" by breaking the animation.
 like a security block rather than a missing file. Swapped for a live photo, and every product
 image now hides itself if it fails rather than rendering as alt text in Times. That file is
 untracked and is not part of this commit.
+
+---
+
+## 2026-08-30 (T+~20) — A shop with nothing in it, and whose name the agent uses
+
+**Target:** the shopper storefront for a merchant who has published before uploading a
+catalog — which is what *every* merchant is for their first minute.
+**Run by:** Aryan / Claude Code window. Reported from the browser: asking "what products do
+you have?" in a new store drew a **Shop by category table with a header row and nothing under
+it**, and asking "who are you?" got *"I am here to help with skincare questions about **Mysa
+Skin's** products"* — in somebody else's shop.
+
+**Environment note.** The primary checkout was being moved between branches by another window
+mid-session, so this work was done in a **git worktree** (`git worktree add … aryan/shopper-ux`)
+with its own API on `:8001` and Vite on `:5174`. Nothing in `C:/Nam-projects/lifehack-2026`
+was touched. Worth copying: it is the only way to work on a branch while somebody else has
+the checkout.
+
+**Result: green.** 186 pytest (+3), 27 Playwright specs (+3), Ruff clean, `tsc -b` clean,
+`vite build` clean.
+
+### 1. An empty catalog now gets an answer, not an empty frame
+
+Every route degraded differently and none of them said the plain thing:
+
+| Asked | Was | Now |
+|---|---|---|
+| "what products do you have?" | a category table with **no rows** | one sentence naming the shop |
+| "what categories do you have?" | same empty table | same sentence |
+| "I have dry sensitive skin…" | *"I do not currently see any products listed from Mysa Skin"* | same sentence |
+| "show me a cleanser" | *"There are no cleansers currently listed…"* | same sentence |
+
+The check sits in `_turn` **before** interpretation: with nothing to sell there is nothing to
+interpret, so this costs **zero model calls** and cannot vary with phrasing. A `warn` trust
+event records why the screen is empty. Two further guards, because one is not enough: the
+categories route falls back to the same message if it produces no rows, and the UI drops a
+`category_table` event whose `categories` is empty rather than drawing a frame around nothing.
+
+### 2. Every merchant's agent introduced itself as the demo store
+
+`"Mysa Skin"` was a string literal in six places, including the adviser's **system prompt**
+(*"You are Sway's skincare adviser for the merchant Mysa Skin"*) — which is why the model said
+it out loud when asked who it was. Also in the deterministic fallback, the routine summary,
+the search summary, the category pack's greeting, and — on the front end — the trust rail's
+*"Product facts come from Mysa Skin."* and the storefront header's placeholder name.
+
+Every catalog row already carries its own `merchant_name`, so the answer now reads the shop
+off the rows it is quoting; the storefront threads the real name into the trust rail; and the
+header starts blank rather than showing another merchant's brand for a beat. Asked "who are
+you?", a stocked store now answers *"…recommend products from Aurora Skin."*
+
+The e2e asserts the whole rendered page of a non-seeded storefront contains no "Mysa" at all,
+which is the version of this check that will not rot.
+
+### Also
+
+`deterministic_recommendation` said "1 steps in the morning". It is in the sentence this pass
+rewrote anyway.
+
+### Verified, not assumed
+
+An existing `var/sway.db` created before this branch has no `logo_url` and no card columns.
+Confirmed on a **copy** of the real database that `init_databases()` adds all six on first
+startup, so switching to this branch needs no reset. The copy was used precisely so that
+finding out did not require writing to anybody's working database.
