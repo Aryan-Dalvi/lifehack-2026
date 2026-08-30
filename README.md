@@ -3,7 +3,7 @@
 > Turn a merchant catalog into a trusted conversational storefront that can discover, decide,
 > and pay in one experience.
 
-![Sway — Discover, Decide, Pay](outputs/sway-video-thumbnail.png)
+![Sway landing page showing conversational discovery and the trusted checkout flow](docs/screenshots/landing-trust-flow.png)
 
 Sway is a plug-and-play, category-specialized commerce agent built for the Visa LifeHack 2026
 challenge. Any skincare merchant can sign themselves up—there is no administrator gatekeeping an
@@ -35,14 +35,23 @@ Sway closes both gaps:
 - **For trust:** a signed permission chain proving that the shopper approved this exact cart,
   amount, merchant, card, and delivery address.
 
-## Interface preview
+## Product in action
 
-These design previews show the intended merchant and shopper experiences. For the final submission,
-replace them with live captures using the screenshot checklist below.
+### One-line embed, complete shopping experience
 
-| Merchant onboarding and deployment | Conversational shopping and purchase protection |
-| --- | --- |
-| ![Merchant onboarding interface preview](web/design/merchant-concept.png) | ![Shopper interface preview](web/design/shopper-concept.png) |
+The same merchant-scoped storefront can run over an existing website as a responsive widget. The
+host keeps its own design while Sway provides conversational discovery, cart controls, session
+limits, and the live Visa Purchase Protection rail.
+
+![Sway embedded as a conversational commerce widget on an existing merchant website](docs/screenshots/embedded-widget.png)
+
+### Merchant operations after launch
+
+Publishing is the start of the merchant journey, not the end. The tenant-scoped CRM turns live
+sessions, carts, orders, catalog state, and trust events into KPIs, revenue analysis, priority tasks,
+customer health, product controls, and numerically guarded summaries.
+
+![Sway merchant dashboard with revenue analytics, priority tasks, and data summaries](docs/screenshots/merchant-dashboard.png)
 
 ## End-to-end journey
 
@@ -306,15 +315,10 @@ and merchant insights.
 
 ## Screenshot capture checklist
 
-For the final submission, capture the live app at approximately **1440×900 or 1600×900**, keep the
-browser zoom consistent, and avoid showing API keys, local file paths, email addresses, or full card
-details. The three strongest supplied captures should use these stable filenames:
-
-| File to add | Capture |
-| --- | --- |
-| `docs/screenshots/landing-trust-flow.png` | Landing-page value proposition beside the discover-to-pay protection chain |
-| `docs/screenshots/embedded-widget.png` | Sway running as a modal widget over an existing merchant website |
-| `docs/screenshots/merchant-dashboard.png` | Revenue KPIs, chart, priority tasks, and merchant summary assistant |
+The README now includes the live landing/trust flow, embedded widget, and merchant dashboard
+captures. For additional submission screenshots, use approximately **1440×900 or 1600×900**, keep
+browser zoom consistent, and avoid showing API keys, local file paths, personal email addresses, or
+full card details.
 
 Additional walkthrough captures, if time permits:
 
@@ -327,10 +331,8 @@ Additional walkthrough captures, if time permits:
 | `docs/screenshots/trusted-checkout.png` | Exact transaction preview beside the expanded Purchase Protection rail |
 | `docs/screenshots/payment-receipt.png` | Completed receipt and successful verification events |
 
-Once the files exist, place `landing-trust-flow.png` first because it communicates the complete
-product promise, followed by `embedded-widget.png` to prove merchant integration and
-`merchant-dashboard.png` to show the merchant payoff. Replace the two interface-preview image links
-near the top with the best two live screenshots and keep the rest in a compact walkthrough gallery.
+Keep any additional images in a compact walkthrough gallery rather than placing every capture above
+the fold.
 
 ## Prototype boundaries
 
