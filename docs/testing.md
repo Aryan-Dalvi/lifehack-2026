@@ -687,3 +687,20 @@ An existing `var/sway.db` created before this branch has no `logo_url` and no ca
 Confirmed on a **copy** of the real database that `init_databases()` adds all six on first
 startup, so switching to this branch needs no reset. The copy was used precisely so that
 finding out did not require writing to anybody's working database.
+
+---
+
+## 2026-08-30 — Backend regression and contract alignment
+
+**Target:** current `main` at `d3b24da` — regression baseline plus the published
+`/agent/confirm` request contract.
+
+**Result: green.** `207 passed in 11.83s`; Ruff reports `All checks passed!` across `app`,
+`agent`, `merchant`, `payments`, `seed`, `scripts`, and `tests`.
+
+### Contract correction
+
+`ConfirmRequest` requires `cart_id`; the API table in `docs/contracts.md` had incorrectly
+advertised `cart_mandate_id`. The table now names `cart_id`. The cart and its SSE
+`confirm_request` event still expose `cart_mandate_id` as the consent-chain artifact; it is not
+the HTTP field accepted by `POST /agent/confirm`.

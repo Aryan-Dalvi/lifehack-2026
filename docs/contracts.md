@@ -304,7 +304,7 @@ the issuer token no longer matches it. That is the property, and it is worth say
 | POST | `/agent/message` | `{session_id, text}` | **SSE** stream of `{type, data}` | 400, 404, 429 |
 | PUT | `/agent/session/{id}/card` | `{number, expiry_month, expiry_year, cvc, holder}` | `{brand, last4, expiry, holder}` — **the number is validated and dropped; only these four fields are stored** | 400 `CARD_INVALID` / `CARD_EXPIRED`, 404 |
 | PUT | `/agent/session/{id}/receipt-email` | `{email}` (null clears) | `{session_id, receipt_email}` | 400, 404 |
-| POST | `/agent/confirm` | `{session_id, cart_mandate_id, confirmation:{method,assertion?}, receipt_email?}` | `{status, transaction_id?, receipt?, decline_code?}` | 400, 404, 409 |
+| POST | `/agent/confirm` | `{session_id, cart_id, confirmation:{method,assertion?}, receipt_email?}` | `{status, transaction_id?, receipt?, decline_code?}` | 400, 404, 409 |
 
 **SSE event types from `/agent/message`** (Y2 must handle every one, including unknown types —
 ignore gracefully):
