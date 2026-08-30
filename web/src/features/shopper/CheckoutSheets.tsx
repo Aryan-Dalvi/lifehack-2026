@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, CreditCard, LockKeyhole, MapPin, ShieldCheck, X } from "lucide-react";
+import { ArrowLeft, Check, CreditCard, LockKeyhole, Mail, MapPin, ShieldCheck, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { money } from "../../api";
 import type { CartPreview, Receipt } from "../../types";
@@ -6,11 +6,24 @@ import type { CartPreview, Receipt } from "../../types";
 type ConsentProps = {
   cart: CartPreview;
   busy: boolean;
+  receiptEmail: string;
+  emailError: string | null;
+  onReceiptEmailChange: (value: string) => void;
+  onChangeCard: () => void;
   onCancel: () => void;
   onConfirm: () => void;
 };
 
-export function ConsentSheet({ cart, busy, onCancel, onConfirm }: ConsentProps) {
+export function ConsentSheet({
+  cart,
+  busy,
+  receiptEmail,
+  emailError,
+  onReceiptEmailChange,
+  onChangeCard,
+  onCancel,
+  onConfirm,
+}: ConsentProps) {
   const address = cart.shipping_address;
   return (
     <div className="sheet-backdrop" role="presentation">
@@ -39,7 +52,13 @@ export function ConsentSheet({ cart, busy, onCancel, onConfirm }: ConsentProps) 
             <div key={item.sku}><span>{item.title} × {item.quantity}</span><strong>{money(item.unit_price_cents * item.quantity)}</strong></div>
           ))}
           <div><span>Delivery</span><strong>2–4 business days</strong></div>
-          <div><span>Card</span><strong>Visa •••• {cart.last4}</strong></div>
+          <div>
+            <span>Card</span>
+            <strong>
+              {cart.card_brand} •••• {cart.last4}
+              <button type="button" className="text-link slip-change" onClick={onChangeCard}>Change</button>
+            </strong>
+          </div>
           <div className="total-row"><span>Total</span><strong>{money(cart.total_cents, cart.currency)}</strong></div>
         </div>
 
@@ -49,6 +68,20 @@ export function ConsentSheet({ cart, busy, onCancel, onConfirm }: ConsentProps) 
             Charge this card <strong>once</strong>, for <strong>this cart</strong>, at <strong>this merchant</strong>, shipping to <strong>this address</strong>. Nothing else.
           </p>
         </div>
+
+        <label className="receipt-email">
+          <span><Mail size={16} /> Email the receipt to</span>
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            value={receiptEmail}
+            aria-invalid={Boolean(emailError)}
+            onChange={(event) => onReceiptEmailChange(event.target.value)}
+            placeholder="you@example.com"
+          />
+          {emailError ? <small role="alert">{emailError}</small> : null}
+        </label>
 
         <p className="bank-warning"><LockKeyhole size={16} /> Your bank will ask you to approve this next.</p>
         <footer>
@@ -64,13 +97,14 @@ export function ConsentSheet({ cart, busy, onCancel, onConfirm }: ConsentProps) 
 
 type BankProps = {
   amountCents: number;
+  merchantName: string;
   busy: boolean;
   error: string | null;
   onBack: () => void;
   onVerify: (code: string) => void;
 };
 
-export function BankSheet({ amountCents, busy, error, onBack, onVerify }: BankProps) {
+export function BankSheet({ amountCents, merchantName, busy, error, onBack, onVerify }: BankProps) {
   const [code, setCode] = useState("");
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -82,7 +116,7 @@ export function BankSheet({ amountCents, busy, error, onBack, onVerify }: BankPr
         <button className="back-button" type="button" onClick={onBack}><ArrowLeft size={17} /> Return to preview</button>
         <div className="bank-brand"><span>◆</span> Meridian Bank · Visa Secure simulation</div>
         <CreditCard size={34} strokeWidth={1.4} />
-        <h2 id="bank-title">Approve {money(amountCents)} at Mysa Skin</h2>
+        <h2 id="bank-title">Approve {money(amountCents)} at {merchantName}</h2>
         <p>A six-digit verification code was sent to •••• 8821. It is bound to this cart and can be used once.</p>
         <form onSubmit={submit}>
           <label htmlFor="bank-code">Verification code</label>
@@ -103,9 +137,25 @@ export function BankSheet({ amountCents, busy, error, onBack, onVerify }: BankPr
             {busy ? "Verifying with bank…" : "Verify and continue"}
           </button>
         </form>
-        <p className="privacy-note"><LockKeyhole size={14} /> Mysa Skin never sees this code. Neither does the shopping model.</p>
+        <p className="privacy-note"><LockKeyhole size={14} /> {merchantName} never sees this code. Neither does the shopping model.</p>
       </section>
     </div>
+  );
+}
+
+function ReceiptDelivery({ delivery }: { delivery: NonNullable<Receipt["email_delivery"]> }) {
+  const message =
+    delivery.status === "sent"
+      ? `Receipt emailed to ${delivery.recipient}`
+      : delivery.status === "simulated"
+        ? `Receipt prepared for ${delivery.recipient} — demo outbox, no mail server configured`
+        : delivery.status === "skipped"
+          ? "No email address was given, so no receipt was sent"
+          : `The receipt to ${delivery.recipient} could not be delivered — your order is still confirmed`;
+  return (
+    <p className={`receipt-delivery receipt-delivery--${delivery.status}`}>
+      <Mail size={14} /> {message}
+    </p>
   );
 }
 
@@ -120,7 +170,8 @@ export function ReceiptCard({ receipt }: ReceiptProps) {
         <h2>{money(receipt.total_cents, receipt.currency)} paid to {receipt.merchant}</h2>
         <span>
           {receipt.items[0]?.title}
-          {receipt.items.length > 1 ? ` + ${receipt.items.length - 1} more` : ""} · Visa •••• {receipt.last4}
+          {receipt.items.length > 1 ? ` + ${receipt.items.length - 1} more` : ""} ·{" "}
+          {receipt.card_brand} •••• {receipt.last4}
         </span>
       </div>
       <dl>
@@ -128,6 +179,7 @@ export function ReceiptCard({ receipt }: ReceiptProps) {
         <div><dt>Authorization</dt><dd>{receipt.auth_code}</dd></div>
         <div><dt>Order</dt><dd>{receipt.order_id}</dd></div>
       </dl>
+      {receipt.email_delivery ? <ReceiptDelivery delivery={receipt.email_delivery} /> : null}
       <div className="receipt-simulation"><LockKeyhole size={14} /> Simulated authorization · no real charge</div>
     </section>
   );

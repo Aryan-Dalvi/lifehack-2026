@@ -1,28 +1,42 @@
 import { ArrowRight, CircleDollarSign, LayoutGrid, LoaderCircle, Send, ShieldCheck, ShoppingBag, Sparkles, X } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, money, setSessionToken } from "../../api";
 import { DEFAULT_MERCHANT_ACCENT, merchantThemeStyle } from "../../theme";
-import type { CartPreview, Comparison, Consent, Product, Receipt, Routine, TrustEvent, TurnEvent } from "../../types";
+import type {
+  CartPreview,
+  CategoryTableData,
+  Comparison,
+  Consent,
+  MerchantTheme,
+  Product,
+  Receipt,
+  Routine,
+  SessionCard,
+  TrustEvent,
+  TurnEvent,
+} from "../../types";
 import { type Account, AccountMenu } from "./AccountMenu";
 import { AddressPrompt } from "./AddressPrompt";
+import { CardPrompt } from "./CardPrompt";
 import type { BasketLine } from "./CartDrawer";
 import { CartSidebar } from "./CartSidebar";
+import { CategoryTable } from "./CategoryTable";
 import { BankSheet, ConsentSheet, ReceiptCard } from "./CheckoutSheets";
 import { ComparisonDrawer } from "./ComparisonDrawer";
 import { ProductCard } from "./ProductCard";
+import { ProductDetailModal } from "./ProductDetailModal";
 import { ProductsModal } from "./ProductsModal";
 import { RoutinePlan } from "./RoutinePlan";
 import type { JourneyStage } from "./TrustRail";
 
-type ChatMessage = { id: string; role: "assistant" | "shopper"; text: string };
+/** An assistant turn can carry the cards for the products its own sentence names. */
+type ChatMessage = { id: string; role: "assistant" | "shopper"; text: string; products?: Product[] };
 type Decline = {
   decline_code: string;
   reason: string;
   total_cents?: number;
   cap_cents?: number;
 };
-type MerchantTheme = { name: string; accent_color: string };
-
 const initialMessage: ChatMessage = {
   id: "welcome",
   role: "assistant",
@@ -31,6 +45,44 @@ const initialMessage: ChatMessage = {
 
 function newMessage(role: ChatMessage["role"], text: string): ChatMessage {
   return { id: crypto.randomUUID(), role, text };
+}
+
+/**
+ * Assistant prose with every product it names set in bold.
+ *
+ * The agent only ever names products the Guardian verified against the catalog, so a bold
+ * run is a promise: that product exists, at the price on the card shown beside the message.
+ * Matching is done by scan rather than by regular expression, because a product title is
+ * merchant-authored text and may contain anything. Longer titles win at the same position,
+ * so "Mysa Gentle Cleanser" is never broken up by "Gentle Cleanser".
+ */
+function MessageText({ text, titles }: { text: string; titles: string[] }): ReactNode {
+  const usable = titles.filter((title) => title.length > 3).sort((a, b) => b.length - a.length);
+  if (usable.length === 0) return text;
+  const haystack = text.toLowerCase();
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  let key = 0;
+  while (cursor < text.length) {
+    let hit: { at: number; length: number } | null = null;
+    for (const title of usable) {
+      const at = haystack.indexOf(title.toLowerCase(), cursor);
+      if (at === -1) continue;
+      if (hit === null || at < hit.at || (at === hit.at && title.length > hit.length)) {
+        hit = { at, length: title.length };
+      }
+    }
+    if (hit === null) break;
+    if (hit.at > cursor) nodes.push(text.slice(cursor, hit.at));
+    nodes.push(
+      <strong key={key++} className="named-product">
+        {text.slice(hit.at, hit.at + hit.length)}
+      </strong>,
+    );
+    cursor = hit.at + hit.length;
+  }
+  if (cursor < text.length) nodes.push(text.slice(cursor));
+  return nodes;
 }
 
 export function ShopperApp() {
@@ -42,6 +94,11 @@ export function ShopperApp() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedSkus, setSelectedSkus] = useState<string[]>([]);
   const [comparison, setComparison] = useState<Comparison | null>(null);
+  const [categories, setCategories] = useState<CategoryTableData | null>(null);
+  // Cards for products the agent named in its own answer sit under that message; the
+  // results rail below is for a shop-wide search, and showing both would say it twice.
+  const [productsInline, setProductsInline] = useState(false);
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [routine, setRoutine] = useState<Routine | null>(null);
   const [basket, setBasket] = useState<BasketLine[]>([]);
   const [productsModalOpen, setProductsModalOpen] = useState(false);
@@ -65,16 +122,39 @@ export function ShopperApp() {
   const [addressPromptOpen, setAddressPromptOpen] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
   const [addressBusy, setAddressBusy] = useState(false);
+  const [cardPromptOpen, setCardPromptOpen] = useState(false);
+  const [cardError, setCardError] = useState<string | null>(null);
+  const [cardBusy, setCardBusy] = useState(false);
+  const [receiptEmail, setReceiptEmail] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [merchantTheme, setMerchantTheme] = useState<MerchantTheme>({
     name: "Mysa Skin",
     accent_color: DEFAULT_MERCHANT_ACCENT,
+    logo_url: null,
   });
   const idempotencyKey = useRef(crypto.randomUUID());
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, products, routine, decline, comparison, receipt, busy]);
+  }, [messages, products, routine, decline, comparison, categories, receipt, busy]);
+
+  // Escape pressed inside an embedded storefront never reaches the page hosting it, so the
+  // widget's own launcher could not be closed from the chat. Tell the host instead — after
+  // this app's own dialogs have had their chance at the key.
+  useEffect(() => {
+    if (!embedded) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (document.querySelector(".sheet-backdrop")) return;
+      // The host page's origin is by definition unknown — it is any merchant's site. The
+      // message carries no data, and the widget verifies both the origin and the frame it
+      // came from before acting on it.
+      window.parent?.postMessage({ type: "sway:close" }, "*");
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [embedded]);
 
   const loadTrust = useCallback(async (activeSessionId: string) => {
     const payload = await api<{ events: TrustEvent[] }>(`/trust/events/snapshot?session_id=${encodeURIComponent(activeSessionId)}`);
@@ -113,6 +193,7 @@ export function ShopperApp() {
   const onAccountChange = useCallback(
     (next: Account | null) => {
       setAccount(next);
+      if (next?.email) setReceiptEmail((current) => current || next.email);
       if (!next || !sessionId) return;
       api<{ anonymous: boolean }>(`/agent/session/${sessionId}/identity`, { method: "PUT" })
         .then((payload) => setAnonymous(payload.anonymous))
@@ -124,6 +205,9 @@ export function ShopperApp() {
   const applyEvents = (events: TurnEvent[], suppressToken = false) => {
     // A turn either produces a routine or it does not; never carry a stale plan forward.
     let nextRoutine: Routine | null = null;
+    // Cards the agent's own answer named. They are attached to that message rather than
+    // pushed into the rail, so the sentence and the product it refers to stay together.
+    let inlineProducts: Product[] | null = null;
     for (const event of events) {
       if (event.type === "routine") {
         nextRoutine = event.data as unknown as Routine;
@@ -136,11 +220,35 @@ export function ShopperApp() {
       }
       if (event.type === "product_cards") {
         const nextProducts = event.data.products as Product[];
+        const inline = event.data.inline === true;
         setProducts(nextProducts);
+        setProductsInline(inline);
         setSelectedSkus([]);
         setComparison(null);
+        setCategories(null);
         setStage("products");
+        if (inline) inlineProducts = nextProducts;
       }
+      // Asking to compare in the chat gets the same verified table as the compare button.
+      if (event.type === "comparison") {
+        setComparison(event.data as unknown as Comparison);
+        setCategories(null);
+        setStage("comparison");
+      }
+      if (event.type === "category_table") {
+        setCategories(event.data as unknown as CategoryTableData);
+        setComparison(null);
+      }
+    }
+    if (inlineProducts) {
+      const cards = inlineProducts;
+      setMessages((current) => {
+        const lastAssistant = [...current].reverse().find((message) => message.role === "assistant");
+        if (!lastAssistant) return current;
+        return current.map((message) =>
+          message.id === lastAssistant.id ? { ...message, products: cards } : message,
+        );
+      });
     }
     setRoutine(nextRoutine);
   };
@@ -202,8 +310,43 @@ export function ShopperApp() {
     }
   };
 
+  const browseCategory = async (routineStep: string) => {
+    if (!sessionId || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await api<{ type: "product_cards"; data: { products: Product[] } }>("/agent/action", {
+        method: "POST",
+        body: JSON.stringify({ session_id: sessionId, action: "browse_category", routine_step: routineStep }),
+      });
+      setProducts(response.data.products);
+      setProductsInline(false);
+      setSelectedSkus([]);
+      setComparison(null);
+      setCategories(null);
+      setStage("products");
+      await loadTrust(sessionId);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "That category could not be opened.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const findProduct = (sku: string): Product | undefined =>
-    products.find((product) => product.sku === sku) ?? comparison?.products.find((product) => product.sku === sku);
+    products.find((product) => product.sku === sku) ??
+    comparison?.products.find((product) => product.sku === sku) ??
+    messages.flatMap((message) => message.products ?? []).find((product) => product.sku === sku);
+
+  // Every product title the shopper has been shown, so the agent's prose can point at them.
+  const knownTitles = Array.from(
+    new Set([
+      ...products.map((product) => product.title),
+      ...(comparison?.products ?? []).map((product) => product.title),
+      ...messages.flatMap((message) => (message.products ?? []).map((product) => product.title)),
+      ...(routine?.steps ?? []).map((step) => step.title),
+    ]),
+  );
 
   const addToBasket = (sku: string) => {
     const product = findProduct(sku);
@@ -257,18 +400,49 @@ export function ShopperApp() {
         setCart(null);
         setStage("declined");
       } else {
-        setCart(response.data as CartPreview);
+        const preview = response.data as CartPreview;
+        setCart(preview);
+        if (preview.receipt_email) setReceiptEmail((current) => current || (preview.receipt_email ?? ""));
         setStage("preview");
       }
       await loadTrust(sessionId);
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.code === "ADDRESS_REQUIRED") {
         setAddressPromptOpen(true);
+      } else if (requestError instanceof ApiError && requestError.code === "CARD_REQUIRED") {
+        setCardError(null);
+        setCardPromptOpen(true);
       } else {
         setError(requestError instanceof Error ? requestError.message : "The transaction preview could not be created.");
       }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const submitCard = async (details: {
+    number: string;
+    expiry_month: number;
+    expiry_year: number;
+    cvc: string;
+    holder: string;
+  }) => {
+    if (!sessionId) return;
+    setCardBusy(true);
+    setCardError(null);
+    try {
+      await api<SessionCard>(`/agent/session/${sessionId}/card`, {
+        method: "PUT",
+        body: JSON.stringify(details),
+      });
+      setCardPromptOpen(false);
+      await loadTrust(sessionId);
+      // The card was asked for because checkout needed it — carry on where it stopped.
+      await startCheckout();
+    } catch (requestError) {
+      setCardError(requestError instanceof Error ? requestError.message : "That card could not be used.");
+    } finally {
+      setCardBusy(false);
     }
   };
 
@@ -346,12 +520,25 @@ export function ShopperApp() {
 
   const confirmCart = async () => {
     if (!sessionId || !cart || busy) return;
+    // An emailed receipt is the shopper's own copy of what the agent did, so the address is
+    // checked here rather than after the money has moved.
+    const trimmedEmail = receiptEmail.trim();
+    if (trimmedEmail && !/^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$/.test(trimmedEmail)) {
+      setEmailError("Check this address — the receipt is sent here.");
+      return;
+    }
+    setEmailError(null);
     setBusy(true);
     setError(null);
     try {
       const confirmed = await api<Consent>("/agent/confirm", {
         method: "POST",
-        body: JSON.stringify({ session_id: sessionId, cart_id: cart.cart_id, confirmation: { method: "click" } }),
+        body: JSON.stringify({
+          session_id: sessionId,
+          cart_id: cart.cart_id,
+          confirmation: { method: "click" },
+          receipt_email: trimmedEmail || null,
+        }),
       });
       setConsent(confirmed);
       setStage("consented");
@@ -427,8 +614,12 @@ export function ShopperApp() {
   return (
     <div className={`shopper-shell ${embedded ? "shopper-shell--embedded" : ""}`} style={merchantThemeStyle(merchantTheme.accent_color)}>
       <header className="shopper-header">
-        <a className="brand" href="/storefront?merchant=m_mysa">
-          <span>{merchantTheme.name}</span>
+        <a className="brand" href={`/storefront?merchant=${encodeURIComponent(merchantId)}`}>
+          {merchantTheme.logo_url ? (
+            <img className="brand-logo" src={merchantTheme.logo_url} alt={merchantTheme.name} />
+          ) : (
+            <span>{merchantTheme.name}</span>
+          )}
           <small>Powered by Sway</small>
         </a>
         <div className="shopper-header-actions">
@@ -495,9 +686,33 @@ export function ShopperApp() {
 
               <div className="conversation" aria-live="polite">
                 {messages.map((message) => (
-                  <div key={message.id} className={`message message--${message.role}`}>
-                    {message.role === "assistant" ? <span className="assistant-mark" aria-hidden="true">S</span> : null}
-                    <div>{message.text}</div>
+                  <div key={message.id} className="message-group">
+                    <div className={`message message--${message.role}`}>
+                      {message.role === "assistant" ? <span className="assistant-mark" aria-hidden="true">S</span> : null}
+                      <div>
+                        {message.role === "assistant" ? (
+                          <MessageText text={message.text} titles={knownTitles} />
+                        ) : (
+                          message.text
+                        )}
+                      </div>
+                    </div>
+                    {message.products?.length ? (
+                      <div className="message-products">
+                        {message.products.map((product) => (
+                          <ProductCard
+                            key={product.sku}
+                            product={product}
+                            selected={selectedSkus.includes(product.sku)}
+                            disabled={selectedSkus.length >= 3}
+                            quantityInCart={basket.find((line) => line.product.sku === product.sku)?.quantity ?? 0}
+                            onToggleCompare={toggleCompare}
+                            onChoose={addToBasket}
+                            onOpenDetails={setDetailProduct}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
                 {busy && !cart && !bankOpen ? (
@@ -521,6 +736,10 @@ export function ShopperApp() {
                 </section>
               ) : null}
 
+              {categories ? (
+                <CategoryTable data={categories} busy={busy} onSelect={(key) => void browseCategory(key)} />
+              ) : null}
+
               {routine ? (
                 <RoutinePlan
                   routine={routine}
@@ -529,7 +748,7 @@ export function ShopperApp() {
                 />
               ) : null}
 
-              {products.length > 0 ? (
+              {products.length > 0 && !productsInline ? (
                 <section className="results-section" aria-labelledby="results-title">
                   <header className="results-header">
                     <div>
@@ -559,6 +778,7 @@ export function ShopperApp() {
                         quantityInCart={basket.find((line) => line.product.sku === product.sku)?.quantity ?? 0}
                         onToggleCompare={toggleCompare}
                         onChoose={addToBasket}
+                        onOpenDetails={setDetailProduct}
                       />
                     ))}
                   </div>
@@ -593,6 +813,9 @@ export function ShopperApp() {
                   <Send size={16} />
                 </button>
               </form>
+              <p className="security-footer">
+                <ShieldCheck size={13} /> Exact consent · bank verification · TAP signature · simulated authorization
+              </p>
             </div>
           </div>
         </section>
@@ -621,7 +844,19 @@ export function ShopperApp() {
           onClose={() => setProductsModalOpen(false)}
           onToggleCompare={toggleCompare}
           onChoose={addToBasket}
+          onOpenDetails={setDetailProduct}
           onCompare={() => void compareProducts()}
+        />
+      ) : null}
+
+      {detailProduct ? (
+        <ProductDetailModal
+          product={detailProduct}
+          selected={selectedSkus.includes(detailProduct.sku)}
+          quantityInCart={basket.find((line) => line.product.sku === detailProduct.sku)?.quantity ?? 0}
+          onClose={() => setDetailProduct(null)}
+          onToggleCompare={toggleCompare}
+          onChoose={addToBasket}
         />
       ) : null}
 
@@ -630,8 +865,36 @@ export function ShopperApp() {
           You are checking out as a guest. Sign in to use your saved shipping address.
         </p>
       ) : null}
-      {cart ? <ConsentSheet cart={cart} busy={busy} onCancel={() => { setCart(null); setStage(products.length ? "products" : "start"); }} onConfirm={() => void confirmCart()} /> : null}
-      {bankOpen && consent ? <BankSheet amountCents={consent.amount_cents} busy={busy} error={bankError} onBack={() => setBankOpen(false)} onVerify={(code) => void verifyBank(code)} /> : null}
+      {cart ? (
+        <ConsentSheet
+          cart={cart}
+          busy={busy}
+          receiptEmail={receiptEmail}
+          emailError={emailError}
+          onReceiptEmailChange={(value) => { setReceiptEmail(value); setEmailError(null); }}
+          onChangeCard={() => { setCardError(null); setCardPromptOpen(true); }}
+          onCancel={() => { setCart(null); setStage(products.length ? "products" : "start"); }}
+          onConfirm={() => void confirmCart()}
+        />
+      ) : null}
+      {bankOpen && consent ? (
+        <BankSheet
+          amountCents={consent.amount_cents}
+          merchantName={merchantTheme.name}
+          busy={busy}
+          error={bankError}
+          onBack={() => setBankOpen(false)}
+          onVerify={(code) => void verifyBank(code)}
+        />
+      ) : null}
+      {cardPromptOpen ? (
+        <CardPrompt
+          busy={cardBusy}
+          error={cardError}
+          onSubmit={(details) => void submitCard(details)}
+          onClose={() => setCardPromptOpen(false)}
+        />
+      ) : null}
       {addressPromptOpen ? (
         <AddressPrompt
           account={account}
@@ -641,7 +904,6 @@ export function ShopperApp() {
           onClose={() => setAddressPromptOpen(false)}
         />
       ) : null}
-      <div className="security-footer"><ShieldCheck size={14} /> Exact consent · bank verification · TAP signature · simulated authorization</div>
     </div>
   );
 }

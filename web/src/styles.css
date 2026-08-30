@@ -134,6 +134,16 @@ img {
   gap: 12px;
 }
 
+/* Embedded in the widget, the panel's own chrome bar already carries the merchant's name and
+   mark directly above this header. Two of them in a row is one too many. */
+.shopper-shell--embedded .brand {
+  display: none;
+}
+
+.shopper-shell--embedded .shopper-header {
+  justify-content: flex-end;
+}
+
 .brand span {
   font-family: var(--serif);
   font-size: 22px;
@@ -945,6 +955,7 @@ img {
 .product-card {
   min-width: 0;
   position: relative;
+  cursor: pointer;
   display: grid;
   grid-template-rows: 125px auto auto;
   border-radius: 12px;
@@ -1105,65 +1116,6 @@ img {
   color: var(--muted);
   border-color: var(--line);
   background: var(--paper);
-}
-
-.product-preview {
-  position: absolute;
-  z-index: 5;
-  inset: 16px 13px auto;
-  padding: 14px;
-  border: 1px solid var(--sage-300);
-  background: rgba(253, 252, 249, 0.98);
-  box-shadow: var(--shadow);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(5px);
-  transition: opacity 150ms ease, transform 150ms ease;
-}
-
-.product-preview--open {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.product-preview > p {
-  margin: 0 0 10px;
-  color: var(--sage-700);
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.product-preview dl {
-  margin: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.product-preview dl div {
-  display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: 8px;
-  font-size: 11px;
-}
-
-.product-preview dt {
-  color: var(--muted);
-}
-
-.product-preview dd {
-  margin: 0;
-  text-transform: capitalize;
-}
-
-.product-preview > span {
-  display: block;
-  padding-top: 10px;
-  margin-top: 10px;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 10px;
 }
 
 .compare-action {
@@ -1960,17 +1912,16 @@ img {
   font-weight: 700;
 }
 
+/* In the composer's own column and in normal flow: as a fixed element it sat on top of the
+   chat input on any viewport narrow enough for the two to meet. */
 .security-footer {
-  position: fixed;
-  z-index: 18;
-  left: 24px;
-  bottom: 14px;
+  margin: 8px 0 0;
   display: flex;
   gap: 7px;
   align-items: center;
+  justify-content: center;
   color: var(--muted);
   font-size: 10px;
-  pointer-events: none;
 }
 
 /* Checkout */
@@ -3384,7 +3335,7 @@ img {
   .routine-glance { grid-template-columns: 1fr; }
   .conversation-intro p { font-size: 12px; }
   .product-rail--single-line .product-card { flex: 0 0 175px; width: 175px; min-width: 175px; }
-  .security-footer { display: none; }
+  .security-footer { font-size: 9px; }
   .sheet-backdrop { padding: 8px; align-items: end; }
   .checkout-sheet { max-height: calc(100vh - 16px); padding: 19px; border-radius: 17px 17px 8px 8px; }
   .checkout-sheet > footer { display: grid; grid-template-columns: 1fr 2fr; }
@@ -3453,16 +3404,6 @@ img {
 .account-hint { margin: 0; font-size: 0.72rem; color: #7b8175; }
 .guest-checkout-hint { margin: 0 auto 0.6rem; max-width: 34rem; padding: 0.5rem 0.8rem; font-size: 0.8rem;
   color: #5c6357; background: #f4f6f1; border: 1px solid #e0e5da; border-radius: 0.6rem; text-align: center; }
-.admin-gate { display: grid; place-items: center; }
-.admin-key-form { display: grid; gap: 0.7rem; width: min(26rem, 90vw); padding: 1.6rem;
-  background: #fff; border: 1px solid #dfe3da; border-radius: 0.9rem; text-align: left; }
-.admin-key-form h1 { margin: 0; font-size: 1.15rem; }
-.admin-key-form p { margin: 0; font-size: 0.82rem; color: #5c6357; }
-.admin-key-form code { font-size: 0.78rem; }
-.admin-key-form input { padding: 0.55rem 0.65rem; font: inherit; border: 1px solid #d5dbcd; border-radius: 0.5rem; }
-.admin-key-form button { padding: 0.55rem; font: inherit; font-weight: 600; color: #fff;
-  background: #46603a; border: 0; border-radius: 0.5rem; cursor: pointer; }
-.admin-key-error { margin-top: 0.9rem; font-size: 0.82rem; color: #a1362f; }
 
 /* --- catalog images, AI mapping provenance and the upload diagnostics ----------------- */
 
@@ -3713,41 +3654,6 @@ img {
 
 /* --- multi-merchant sign in, sign up and store switching ----------------------------- */
 
-.admin-gate-forms {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 18px;
-  align-items: start;
-  width: min(760px, 92vw);
-}
-
-.admin-signup select {
-  width: 100%;
-  padding: 9px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background: white;
-  font: inherit;
-  font-size: 11px;
-}
-
-.admin-new-store { width: min(560px, 92vw); }
-
-.new-store-key {
-  display: block;
-  padding: 11px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background: var(--paper);
-  font-family: "DM Mono", monospace;
-  font-size: 11px;
-  word-break: break-all;
-  user-select: all;
-}
-
-.new-store-id { color: var(--muted); font-size: 10px; }
-.admin-new-store button.primary { background: var(--sage-700); color: white; border-color: var(--sage-700); }
-
 .admin-header .sign-out {
   display: inline-flex;
   align-items: center;
@@ -3768,3 +3674,1186 @@ img {
 
 .all-clear--empty { color: var(--muted); }
 .all-clear--empty svg { color: #c08a2a; }
+
+/* ---------------------------------------------------------------------------
+   Conversation: named products, and the cards that belong to a single answer
+   --------------------------------------------------------------------------- */
+
+.message-group {
+  display: grid;
+  gap: 8px;
+}
+
+/* A bold run in an assistant message is always a product the catalog verified. */
+.named-product {
+  font-weight: 650;
+  color: var(--sage-700);
+  text-underline-offset: 3px;
+  text-decoration: underline;
+  text-decoration-color: var(--sage-300);
+  text-decoration-thickness: 1.5px;
+}
+
+.message-products {
+  display: flex;
+  gap: 12px;
+  margin: 2px 0 6px 48px;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.message-products .product-card {
+  flex: 0 0 205px;
+  width: 205px;
+  min-width: 205px;
+}
+
+/* ---------------------------------------------------------------------------
+   Shop by category
+   --------------------------------------------------------------------------- */
+
+.category-browser {
+  margin: 6px 0 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--surface);
+  overflow: hidden;
+  animation: lift-in 0.25s ease both;
+}
+
+.category-browser > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.category-browser-icon {
+  flex: 0 0 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--sage-700);
+  background: var(--sage-100);
+}
+
+.category-browser header p {
+  margin: 0;
+  color: var(--sage-700);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.category-browser header h2 {
+  margin: 3px 0 0;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 400;
+}
+
+.category-browser header span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.category-table-scroll {
+  overflow-x: auto;
+}
+
+.category-browser table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.category-browser thead th {
+  padding: 9px 16px;
+  text-align: left;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--sage-50);
+  border-bottom: 1px solid var(--line);
+}
+
+.category-browser tbody th,
+.category-browser tbody td {
+  padding: 12px 16px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--line);
+}
+
+.category-browser tbody tr:last-child th,
+.category-browser tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.category-browser tbody th {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.category-browser tbody td {
+  color: var(--muted);
+}
+
+.category-browser tbody tr:hover th,
+.category-browser tbody tr:hover td {
+  background: var(--sage-50);
+}
+
+.category-browser tbody td:last-child {
+  text-align: right;
+}
+
+.category-browser tbody button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.category-browser tbody button:hover:not(:disabled) {
+  border-color: var(--sage-500);
+  background: var(--sage-50);
+}
+
+.category-browser tbody button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+   Product detail dialog - what the hover card used to try to show
+   --------------------------------------------------------------------------- */
+
+.product-detail-sheet {
+  position: relative;
+  width: min(760px, 100%);
+  max-height: calc(100vh - 52px);
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: lift-in 0.22s ease both;
+}
+
+.product-detail-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  background: var(--surface);
+}
+
+.product-detail-image {
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: var(--sage-50);
+  border-radius: 18px 0 0 18px;
+}
+
+.product-detail-image img {
+  width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+}
+
+.product-detail-copy {
+  padding: 26px 26px 22px;
+}
+
+.product-detail-copy > p {
+  margin: 0;
+  color: var(--sage-700);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.product-detail-copy h2 {
+  margin: 6px 0 0;
+  font-family: var(--serif);
+  font-size: 23px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.product-detail-copy > strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 18px;
+}
+
+.product-detail-copy > span {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.product-detail-copy dl {
+  margin: 16px 0 0;
+  display: grid;
+  gap: 9px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.product-detail-copy dl div {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 10px;
+  font-size: 12px;
+}
+
+.product-detail-copy dt {
+  color: var(--muted);
+}
+
+.product-detail-copy dd {
+  margin: 0;
+  text-transform: capitalize;
+}
+
+.product-detail-stock {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.product-detail-actions {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.product-detail-actions .primary-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--merchant-accent-foreground);
+  background: var(--merchant-accent);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.product-detail-actions .primary-action:disabled {
+  color: var(--muted);
+  background: var(--sage-100);
+  cursor: not-allowed;
+}
+
+.product-detail-actions .text-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+   Payment method, receipt address, delivery
+   --------------------------------------------------------------------------- */
+
+.card-sheet {
+  width: min(460px, 100%);
+  max-height: calc(100vh - 52px);
+  overflow-y: auto;
+  padding: 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: lift-in 0.22s ease both;
+}
+
+.card-sheet > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.card-sheet header p {
+  margin: 0;
+  color: var(--sage-700);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card-sheet header h2 {
+  margin: 5px 0 0;
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 400;
+}
+
+.card-sheet form {
+  display: grid;
+  gap: 12px;
+}
+
+.card-sheet label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.card-sheet input {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.card-sheet input:focus-visible {
+  outline: none;
+  border-color: var(--merchant-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--merchant-accent) 15%, transparent);
+}
+
+.card-number-field {
+  position: relative;
+  display: block;
+  color: var(--muted);
+}
+
+.card-number-field svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.card-number-field input {
+  width: 100%;
+  padding-left: 36px;
+  letter-spacing: 0.04em;
+}
+
+.card-field-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.card-privacy {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 2px 0 0;
+  padding: 11px 12px;
+  border-radius: 9px;
+  background: var(--sage-50);
+  color: var(--sage-700);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.card-privacy svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.card-sheet .primary-button {
+  width: 100%;
+}
+
+.transaction-slip .slip-change {
+  margin-left: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.receipt-email {
+  display: grid;
+  gap: 7px;
+  margin: 14px 0 0;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--sage-50);
+}
+
+.receipt-email > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--sage-700);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.receipt-email input {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+.receipt-email input:focus-visible {
+  outline: none;
+  border-color: var(--merchant-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--merchant-accent) 15%, transparent);
+}
+
+.receipt-email small {
+  color: var(--danger);
+  font-size: 11px;
+}
+
+/* The receipt is a three-column grid; this line belongs across it, under the totals, not
+   squeezed into the first column. */
+.receipt-delivery {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--sage-700);
+  font-size: 11px;
+}
+
+.receipt-delivery svg {
+  flex: 0 0 auto;
+}
+
+.receipt-delivery--failed {
+  color: var(--danger);
+}
+
+/* Merchant brand mark in the storefront header. */
+.brand-logo {
+  display: block;
+  max-height: 30px;
+  max-width: 170px;
+  object-fit: contain;
+}
+
+@media (max-width: 720px) {
+  .product-detail-sheet {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .product-detail-image {
+    border-radius: 18px 18px 0 0;
+  }
+
+  .message-products {
+    margin-left: 0;
+  }
+}
+
+/* Store logo, in onboarding step 1 beside the brand accent. */
+.logo-control {
+  margin: 17px 0 0;
+}
+
+.logo-control-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.logo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo-preview {
+  flex: 0 0 auto;
+  width: 84px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  padding: 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: white;
+}
+
+.logo-preview--empty {
+  border-style: dashed;
+  color: var(--muted);
+  background: var(--sage-50);
+}
+
+.logo-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.logo-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.logo-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: white;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.logo-upload:hover {
+  border-color: var(--sage-500);
+  background: var(--sage-50);
+}
+
+.logo-upload input {
+  display: none;
+}
+
+.logo-actions small {
+  flex: 1 1 190px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.preview-logo {
+  max-height: 24px;
+  max-width: 130px;
+  object-fit: contain;
+}
+
+/* ---------------------------------------------------------------------------
+   Merchant gate — the front door to the admin
+   --------------------------------------------------------------------------- */
+
+.gate {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 520px);
+  align-items: stretch;
+  background: var(--paper);
+}
+
+.gate-brand {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 22px;
+  /* Capped and centred so the copy does not strand against the left edge of a wide screen. */
+  width: 100%;
+  max-width: 660px;
+  margin-inline: auto;
+  padding: clamp(32px, 6vw, 84px);
+}
+
+.gate::before {
+  content: "";
+  grid-row: 1;
+  grid-column: 1;
+  background:
+    radial-gradient(120% 90% at 12% 0%, var(--sage-100) 0%, transparent 58%),
+    var(--sage-50);
+  border-right: 1px solid var(--line);
+}
+
+.gate-brand {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.gate-panel {
+  grid-row: 1;
+  grid-column: 2;
+}
+
+.gate-logo {
+  align-self: flex-start;
+  color: var(--sage-700);
+  font-family: var(--serif);
+  font-size: 31px;
+  text-decoration: none;
+}
+
+.gate-brand h1 {
+  max-width: 15ch;
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(30px, 4vw, 46px);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.gate-brand > p {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.gate-points {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 11px;
+}
+
+.gate-points li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--sage-700);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.gate-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  padding: clamp(28px, 4vw, 48px);
+  background: var(--surface);
+}
+
+.gate-panel h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+}
+
+.gate-block {
+  display: grid;
+  gap: 9px;
+}
+
+.gate-block-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Stores this browser already knows */
+
+.gate-stores {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.gate-stores li {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.gate-store {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 40px 11px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.gate-store:hover:not(:disabled) {
+  border-color: var(--sage-500);
+  background: var(--sage-50);
+  transform: translateY(-1px);
+}
+
+.gate-store:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.gate-store-mark {
+  flex: 0 0 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--sage-100);
+  color: var(--sage-700);
+  font-family: var(--serif);
+  font-size: 16px;
+}
+
+.gate-store-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.gate-store-text strong {
+  font-size: 14px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gate-store-text small {
+  color: var(--muted);
+  font-family: ui-monospace, "DM Mono", monospace;
+  font-size: 10px;
+}
+
+.gate-store > svg {
+  color: var(--muted);
+}
+
+.gate-forget {
+  position: absolute;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.gate-forget:hover {
+  color: var(--danger);
+  background: var(--danger-50);
+}
+
+/* One-click demo */
+
+.gate-demo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--sage-300);
+  border-radius: 12px;
+  background: var(--sage-50);
+  color: var(--sage-700);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.gate-demo > svg:first-child {
+  flex: 0 0 32px;
+  height: 32px;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--sage-100);
+}
+
+.gate-demo:hover:not(:disabled) {
+  border-color: var(--sage-500);
+  background: var(--sage-100);
+  transform: translateY(-1px);
+}
+
+.gate-demo:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.gate-demo > span {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.gate-demo strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.gate-demo small {
+  color: var(--sage-700);
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+/* Create */
+
+.gate-create {
+  display: grid;
+  gap: 9px;
+}
+
+.gate-create input,
+.gate-select select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.gate-create input:focus-visible,
+.gate-select select:focus-visible,
+.gate-key input:focus-visible {
+  outline: none;
+  border-color: var(--sage-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sage-500) 18%, transparent);
+}
+
+.gate-select {
+  position: relative;
+  display: block;
+}
+
+.gate-select select {
+  appearance: none;
+  padding-right: 34px;
+  cursor: pointer;
+}
+
+.gate-select svg {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.gate-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--sage-700);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.gate-primary:hover:not(:disabled) {
+  background: var(--sage-500);
+}
+
+.gate-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Folded-away key entry and the security note */
+
+.gate-fold {
+  display: grid;
+  gap: 9px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.gate-fold--quiet {
+  margin-top: 2px;
+}
+
+.gate-fold-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gate-fold-toggle:hover {
+  color: var(--ink);
+}
+
+.gate-chevron {
+  margin-left: auto;
+  transition: transform 160ms ease;
+}
+
+.gate-chevron--open {
+  transform: rotate(180deg);
+}
+
+.gate-key {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.gate-key input {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+.gate-key button {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.gate-key button:hover:not(:disabled) {
+  border-color: var(--sage-500);
+  background: var(--sage-50);
+}
+
+.gate-why {
+  display: grid;
+  gap: 10px;
+  padding: 12px 13px;
+  border-radius: 10px;
+  background: var(--sage-50);
+}
+
+.gate-why p {
+  margin: 0;
+  color: var(--sage-700);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.gate-why code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--surface);
+  font-family: ui-monospace, "DM Mono", monospace;
+  font-size: 10px;
+}
+
+.gate-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--danger);
+  border-radius: 0 7px 7px 0;
+  background: var(--danger-50);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.gate-loading {
+  flex-direction: column;
+  color: var(--muted);
+}
+
+.gate-loading p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* The one-time key, carried into the dashboard instead of blocking the way in */
+
+.key-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 13px clamp(16px, 3vw, 30px);
+  border-bottom: 1px solid var(--gold-500);
+  background: var(--gold-50);
+}
+
+.key-banner-copy {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.key-banner-copy p {
+  margin: 0;
+  color: var(--gold-500);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.key-banner-copy span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.key-banner code {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--gold-500);
+  border-radius: 7px;
+  background: var(--surface);
+  font-family: ui-monospace, "DM Mono", monospace;
+  font-size: 11px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.key-banner button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--gold-500);
+  border-radius: 7px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.key-banner button:hover {
+  background: var(--gold-50);
+}
+
+.key-banner-done {
+  color: var(--gold-500);
+}
+
+@media (max-width: 900px) {
+  .gate {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .gate::before {
+    grid-row: 1;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .gate-brand {
+    grid-row: 1;
+    gap: 14px;
+    padding: 30px 24px 26px;
+  }
+
+  .gate-panel {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .gate-brand h1 {
+    font-size: 28px;
+  }
+
+  .gate-brand > p,
+  .gate-points {
+    display: none;
+  }
+
+  .gate-panel {
+    justify-content: flex-start;
+    padding: 24px;
+  }
+
+  .gate-fold--quiet {
+    margin-top: 12px;
+  }
+}

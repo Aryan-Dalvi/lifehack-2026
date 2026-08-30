@@ -9,6 +9,19 @@ the whole point of this file.
 
 Version: **v0.11 (unfrozen)** · Project: *Agent-Ready Commerce* (working name)
 
+**Proposed v0.12 — shipped in code, awaiting the Y4's OK (Aryan/Claude, T+~17).** The shopper UX
+pass added three things that cross module lines, so they are written here rather than left to be
+discovered: the shopper now enters a **card** (`PUT /agent/session/{id}/card`), names an address
+for an **emailed receipt** (`PUT /agent/session/{id}/receipt-email`, or `receipt_email` on
+`/agent/confirm`), and a merchant can upload a **logo** (`POST|DELETE|GET /merchant/{id}/logo`).
+The admin gate also gained a deliberate public route, `GET /merchant/demo-store`, so the demo
+can be opened without finding a key — read its row below before deploying anywhere real. The
+widget reads `GET /merchant/{id}/profile` for the same reason it exists at all: an embed has
+to know whose store it is opening.
+`create_cart` refuses with **`CARD_REQUIRED`** until a card is on the session, exactly as it
+already refuses with `ADDRESS_REQUIRED`. See the module tables below for the full shapes. Y4:
+please confirm or push back — nothing above the tables was changed.
+
 **Changes from v0.10:** `Product` gains rating fields · new `Address` model and
 `/consumer/{id}/addresses` · **new mock issuer ACS at `/bank/*`, and `/pay/authorize` now requires
 a valid issuer token** · cart hash now covers the shipping address · four new bank decline codes ·
@@ -191,12 +204,17 @@ never floats, never a bare number.
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
 | POST | `/merchant/onboard` | `{name, size, category, currency}` | `{merchant_id, api_key, embed_snippet}` | 400 `VALIDATION` |
+| GET | `/merchant/{id}/profile` | — | `{merchant_id, name, accent_color, logo_url, status}` — **public**: the storefront's own face, already returned unauthenticated by `POST /agent/session`. Read by the embeddable widget so a launcher can wear the merchant's brand | 404 |
+| GET | `/merchant/demo-store` | — | `{available, merchant_id, name, api_key}` — **public and deliberate**: the seeded demo store's key, for one-click sign-in. Only `settings.demo_merchant_id`, only where the seed wrote the key file, only while `DEMO_LOGIN_ENABLED` is on. `available:false` is a normal answer | — |
 | POST | `/merchant/{id}/catalog/uploads` (`/catalog` alias) | multipart `.xlsx`/CSV (`file`, optional `sheet_name`) **or** versioned JSON | staged review preview with `upload_id`, mappings, row statuses, taxonomy, pagination, and mode-bound approval plans; live catalog unchanged | 400 `BAD_CATALOG`, 404 `NO_MERCHANT`, 413 `TOO_LARGE` |
 | GET | `/merchant/{id}/catalog/uploads/{upload_id}` | query: `offset=0, limit=100` | paginated staged preview and `replace`/`upsert` approval plans | 400 `BAD_PAGINATION`, 404 `NO_CATALOG_UPLOAD`, 409 |
 | POST | `/merchant/{id}/catalog/uploads/{upload_id}/approve` | `{approval_token, reviewed_row_count, mode:"replace"|"upsert"}` | `{status:"published", mode, published, removed, skipped, idempotent_replay}` | 400, 404, 409 stale/incomplete/unsafe plan |
-| GET | `/merchant/{id}/config` | — | `{merchant_id,name,size,category,currency,persona,policies}` | 404 |
+| GET | `/merchant/{id}/config` | — | `{merchant_id,name,size,category,currency,accent_color,logo_url,persona,policies}` | 404 |
 | PUT | `/merchant/{id}/config` | partial config | updated config | 400, 404 |
 | GET | `/merchant/{id}/snippet` | — | `{snippet:"<script src=…></script>"}` | 404 |
+| POST | `/merchant/{id}/logo` | multipart image (`file`) — PNG/JPEG/GIF, ≤512 KB, **type decided by the file's own bytes** | `{merchant_id, logo_url, content_type}` | 400 `BAD_IMAGE`, 401, 413 `TOO_LARGE` |
+| DELETE | `/merchant/{id}/logo` | — | `{merchant_id, logo_url:null}` | 401, 404 |
+| GET | `/merchant/{id}/logo` | — | the image bytes, `nosniff`, immutable cache | 404 `NO_IMAGE` |
 | GET | `/catalog/search` | query: `q, merchant_id?, category?, max_price_cents?, attrs?, limit=10` | `{results:[Product], facets:{…}, total:int}` | 400 |
 | GET | `/catalog/product/{sku}` | — | `Product` | 404 |
 
@@ -212,11 +230,19 @@ from T-12 onward; before that the middleware runs in log-only mode so nobody is 
 | GET | `/pay/mandates/{id}/chain` | — | `{links:[{mandate_id,type,verified:bool,failed_check?}], verified:bool}` | 404 |
 | POST | `/pay/authorize` | `{token_id, payment_mandate_id, amount_cents, currency, merchant_id, `**`bank_token`**`}` | `{status:"approved", transaction_id, auth_code, eci, issuer, amount_cents}` **or** `{status:"declined", decline_code, reason}` | 400 · **never 5xx for a business decline** |
 | POST | `/pay/capture` | `{transaction_id}` | `{status:"captured", captured_at}` | 404, 409 `NOT_AUTHORIZED` |
-| GET | `/pay/receipt/{transaction_id}` | — | `{transaction_id, merchant, items[], total_cents, currency, last4, auth_code, at}` | 404 |
+| GET | `/pay/receipt/{transaction_id}` | — | `{transaction_id, merchant, items[], total_cents, currency, card_brand, last4, auth_code, at, email_delivery{recipient,status,channel}}` | 404 |
 | GET | `/trust/events?session_id=` | SSE | stream of `TrustEvent` | 404 |
 
 *Payment routes require `tag=agent-payer-auth`. A payer-auth route presented with a browser-auth
 signature is a hard reject — that distinction is part of the pitch.*
+
+`merchant` and `last4` on a cart preview and a receipt are now read from the merchant row and
+from the card the shopper entered. They were the constants `"Mysa Skin"` and `"4821"`, which were
+wrong for every merchant who signed up after the seed and for every shopper who ever existed.
+
+`email_delivery.status` is one of `sent` (a real message over SMTP) · `simulated` (rendered to
+`var/outbox/` because no `SMTP_HOST` is configured) · `failed` (delivery raised; **the order is
+still approved**) · `skipped` (no address on file). Never render `simulated` as "sent".
 
 **Decline codes (closed set — Y2 renders these, Y3 handles them, don't invent new ones):**
 `AMOUNT_EXCEEDS_MANDATE` · `MANDATE_EXPIRED` · `MERCHANT_MISMATCH` · `CART_HASH_MISMATCH` ·
@@ -274,13 +300,18 @@ the issuer token no longer matches it. That is the property, and it is worth say
 
 | Method | Path | Request | Response | Errors |
 |---|---|---|---|---|
-| POST | `/agent/session` | `{merchant_id?, category?, consumer_id, budget_cents?}` | `{session_id, intent_mandate_id, greeting}` | 400, 404 |
+| POST | `/agent/session` | `{merchant_id?, category?, consumer_id, budget_cents?}` | `{session_id, intent_mandate_id, greeting, merchant:{name, accent_color, logo_url}}` | 400, 404 |
 | POST | `/agent/message` | `{session_id, text}` | **SSE** stream of `{type, data}` | 400, 404, 429 |
-| POST | `/agent/confirm` | `{session_id, cart_mandate_id, confirmation:{method,assertion?}}` | `{status, transaction_id?, receipt?, decline_code?}` | 400, 404, 409 |
+| PUT | `/agent/session/{id}/card` | `{number, expiry_month, expiry_year, cvc, holder}` | `{brand, last4, expiry, holder}` — **the number is validated and dropped; only these four fields are stored** | 400 `CARD_INVALID` / `CARD_EXPIRED`, 404 |
+| PUT | `/agent/session/{id}/receipt-email` | `{email}` (null clears) | `{session_id, receipt_email}` | 400, 404 |
+| POST | `/agent/confirm` | `{session_id, cart_mandate_id, confirmation:{method,assertion?}, receipt_email?}` | `{status, transaction_id?, receipt?, decline_code?}` | 400, 404, 409 |
 
 **SSE event types from `/agent/message`** (Y2 must handle every one, including unknown types —
 ignore gracefully):
-`token` (text delta) · `product_cards` `{products:[Product]}` · `comparison` `{dimensions[], rows[]}` ·
+`token` (text delta) · `product_cards` `{products:[Product], inline?:bool}` — `inline` means the
+agent's own sentence named these products, so the UI attaches their cards to that message and
+bolds the names · `category_table` `{categories:[{key,label,description,product_count,from_price_cents,currency}]}` ·
+`comparison` `{dimensions[], rows[]}` ·
 `cart` `{cart_mandate_id, items[], total_cents, currency}` · `confirm_request`
 `{cart_mandate_id, preview:{merchant, items[], total_cents, currency, last4}}` ·
 `receipt` `{…}` · `declined` `{decline_code, reason}` · `error` `{code, message}` · `done`.

@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS merchants (
     category TEXT NOT NULL CHECK (category = 'skincare'),
     currency TEXT NOT NULL DEFAULT 'SGD',
     accent_color TEXT NOT NULL DEFAULT '#6f8066',
+    logo_url TEXT,
     status TEXT NOT NULL DEFAULT 'draft',
     persona TEXT NOT NULL DEFAULT 'Calm, precise skincare guide',
     policies_json TEXT NOT NULL DEFAULT '{}',
@@ -159,6 +160,30 @@ CREATE TABLE IF NOT EXISTS catalog_clean_rows (
         REFERENCES catalog_source_rows(upload_id, source_record_id)
 );
 
+CREATE TABLE IF NOT EXISTS merchant_logos (
+    merchant_id TEXT PRIMARY KEY REFERENCES merchants(merchant_id) ON DELETE CASCADE,
+    content_type TEXT NOT NULL,
+    byte_count INTEGER NOT NULL CHECK (byte_count > 0),
+    image_bytes BLOB NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS receipt_emails (
+    email_id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body_text TEXT NOT NULL,
+    body_html TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_receipt_emails_order ON receipt_emails(order_id);
+
 CREATE TABLE IF NOT EXISTS catalog_images (
     image_id TEXT PRIMARY KEY,
     merchant_id TEXT NOT NULL REFERENCES merchants(merchant_id) ON DELETE CASCADE,
@@ -227,6 +252,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     active_cart_id TEXT,
     visible_skus_json TEXT NOT NULL DEFAULT '[]',
     profile_json TEXT NOT NULL DEFAULT '{}',
+    card_brand TEXT,
+    card_last4 TEXT,
+    card_expiry TEXT,
+    card_holder TEXT,
+    receipt_email TEXT,
     created_at TEXT NOT NULL,
     expires_at TEXT
 );
@@ -370,6 +400,12 @@ _ADDED_COLUMNS = (
     ("sessions", "expires_at", "TEXT"),
     ("catalog_clean_runs", "mapping_report_json", "TEXT NOT NULL DEFAULT '{}'"),
     ("catalog_clean_runs", "diagnostics_json", "TEXT NOT NULL DEFAULT '{}'"),
+    ("merchants", "logo_url", "TEXT"),
+    ("sessions", "card_brand", "TEXT"),
+    ("sessions", "card_last4", "TEXT"),
+    ("sessions", "card_expiry", "TEXT"),
+    ("sessions", "card_holder", "TEXT"),
+    ("sessions", "receipt_email", "TEXT"),
 )
 
 

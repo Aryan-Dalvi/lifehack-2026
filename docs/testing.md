@@ -430,3 +430,195 @@ The first throttle was one global limit keyed by IP, which would have accumulate
 test suite and could have turned away judges sharing a conference network. Split: tight on
 password guessing per account, loose on sign-ups per client. `tests/conftest.py` clears the
 buckets between tests, since the limiter is process-global and the suite shares a process.
+
+---
+
+## 2026-08-30 (T+~17) — Shopper UX pass: browsing, card capture, emailed receipt, merchant logo
+
+**Target:** the shopper storefront end to end, plus the merchant branding step of onboarding.
+Nine reported faults, picked up from a Codex window that ran out of quota mid-change (its
+backend `categories` route and two unwired React components were on disk, uncommitted, and the
+app did not compile against them).
+**Run by:** Aryan / Claude Code window.
+**Environment:** local `uvicorn app.main:app --port 8001` + `vite` on `:5174`, driven by
+Playwright against the real stack. `DEMO_MODE=0`, live OpenAI key from `.env`, so the agent's
+routing and phrasing were the real model, not the deterministic fallback. Backend suite run
+separately with `DEMO_MODE=1`.
+
+**Result: green.** 177 pytest (160 on `HEAD` before this pass; +17 new in
+`tests/test_shopper_experience.py`), 14 Playwright specs (+7 new across
+`shopper-browsing.spec.ts` and `merchant-logo.spec.ts`), Ruff clean, `tsc -b` clean,
+`vite build` clean. Three existing suites were amended where this work changed their subject:
+the checkout helper in `test_api_flow.py` now adds a card, and the route-authorization and
+multi-merchant guardrails were told about the public logo route and the new session field.
+
+> A second API was already listening on `:8000` from an earlier session, running stale code.
+> Rather than kill someone else's process, `web/vite.config.ts` now reads `API_PROXY_TARGET`
+> and `WEB_PORT`, so a second stack comes up beside the first. Worth knowing: **a `uvicorn`
+> started without `--reload` will happily serve yesterday's code and produce test failures
+> that look like application bugs.** Two of this pass' "flakes" were exactly that.
+
+### What was wrong, and what it does now
+
+| # | Reported | Now |
+|---|---|---|
+| 1 | Asking to compare in the chat did nothing | `compare` is a route the UI renders: the `comparison` event was reaching the browser and being dropped on the floor. "Compare these", with nothing named, compares what is on screen |
+| 2 | No way to browse by category | `categories` route → a `category_table` event → a table of the merchant's live range, each row opening that category. Built from catalog rows, 0 model calls |
+| 3 | Products named in chat were only text | The answer routes flag their cards `inline`; the card appears under the message that names it, and the name itself is bold |
+| 4 | Hovering a product covered the whole card | The hover overlay is gone — markup and its 1 KB of CSS. It sat on top of the card it described, so title, price and both buttons were unreachable while the pointer was on it |
+| 5 | No way to see one product in full | Clicking a card (or its image, or Enter on the focused card) opens a detail dialog with every catalog attribute, and can add to the basket |
+| 6 | The trust strip sat on the chat input | It was `position: fixed; left: 24px; bottom: 14px`. Now it is in the composer's own column, in flow, under the input. Checked by measuring both boxes at 1584 / 1180 / 390 px |
+| 7 | No receipt outside the tab | The shopper names a receipt address on the same screen they approve the charge; `app/mailer.py` renders and delivers it. SMTP when configured, a written outbox otherwise — and the UI says which one ran |
+| 8 | Checkout never asked for a card | It does now, and refuses to build a cart preview without one. `CARD_REQUIRED`, handled the way `ADDRESS_REQUIRED` already was |
+| 9 | Every storefront wore the seeded shop's name | A merchant uploads a logo in onboarding step 1; the storefront header, and the live preview beside the form, use it |
+
+### The card, and what is kept of it
+
+Luhn plus a brand pattern plus an expiry check, in `payments/cards.py`. What survives the call
+is the brand, expiry, holder name and last four digits. The number is validated in memory and
+dropped — never written, never logged, never returned. `test_the_card_number_is_never_stored_anywhere`
+walks **every table in the database** after a completed purchase looking for those digits,
+which is the only version of that assertion worth having.
+
+The four digits then flow through the preview, the payment token, the authorization call and
+the receipt, replacing a `"4821"` constant that appeared in five places. The receipt also names
+the merchant that was actually paid, rather than `"Mysa Skin"` hard-coded — which was wrong for
+every merchant who signed up after the seed.
+
+### A real bug found while testing, and fixed
+
+Asking about a product **by name** on a fresh session returned a red `422` in the chat:
+
+    tell me about the Gentle Cloud Cleanser
+    → UNGROUNDED_CLAIM  "The interpreter selected a product not shown."
+
+`validate_interpretation` required every selected SKU to be already on screen. A shopper naming
+a product in the shop they are standing in is a fair question, not an ungrounded claim. The
+allowed set is now this merchant's own catalog, passed in by the caller — so the tenancy
+property the guard actually exists for is unchanged, and a SKU from another shop is still
+refused (now as `OUT_OF_SCOPE_PRODUCT`, which is what it always was).
+
+### Notes for whoever picks this up
+
+- **The receipt email is not sent anywhere by default.** With no `SMTP_HOST` the mailer writes
+  `var/outbox/<order_id>.html` and reports `status: "simulated"`, and the receipt card on screen
+  says so in words. Set `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` to send for
+  real. Do not demo this as "we email receipts" without checking which channel is live.
+- Two e2e assertions pinned `.product-card` to exactly 3. The routine the agent plans is
+  model-authored and two verified steps is a legitimate answer, so both now assert a floor.
+  A test that fails on a correct answer costs more than it catches.
+- The bolding assertion judges the rule, not the model's wording: whatever the agent says, a
+  product it names must be bold and must have its card attached. Phrasing changes between runs.
+
+---
+
+## 2026-08-30 (T+~18) — The merchant front door
+
+**Target:** `/admin/setup` signed out — the first screen a merchant, teammate or judge sees.
+It asked for an API key, first and only, which is the one thing a first-time visitor
+certainly does not have.
+**Run by:** Aryan / Claude Code window. Same local stack as the pass above (`:8001` + `:5174`),
+Playwright against the running app.
+
+**Result: green.** 181 pytest (+4), 18 Playwright specs (+4), Ruff clean, `tsc -b` clean,
+`vite build` clean.
+
+### Why a key exists at all, and what changed
+
+The key is the tenancy boundary, not a login form nobody got round to replacing. One
+deployment serves every merchant; `X-Merchant-Key` is how a request says which store it is
+for, and every query is scoped to the store it resolves to. That property is worth keeping
+exactly as it is. What was wrong was making the merchant carry it.
+
+| Path in | Before | Now |
+|---|---|---|
+| A store this browser has opened | paste the key again | one click; the browser remembers store, name and key, and **Forget** removes one |
+| The demo store | find `var/merchant-key.txt` on the machine | **Open the demo store** — one click, nothing typed |
+| A new store | create → a full-screen "save this key" wall → then the dashboard | create → **signed in on the spot**, key carried into the page as a banner you dismiss when you have saved it |
+| A key you already hold | the front door | folded away behind "I have a store key" |
+
+The key is still shown exactly once — only its hash is stored — so the banner persists across
+a reload until it is dismissed. Losing a store to a closed tab would be a worse bug than the
+wall it replaces.
+
+### The demo-login endpoint, stated plainly
+
+`GET /merchant/demo-store` hands the seeded store's API key to anyone who asks. That is a
+deliberate trade for a demo whose whole pitch is 90 seconds, and it is fenced three ways:
+
+- it serves **only** `settings.demo_merchant_id`, never a merchant named by the caller;
+- the key is read from `var/merchant-key.txt`, which exists only where the seed has run, and
+  is checked against the store's stored hash before it is handed out — a stale file after a
+  re-seed returns `available: false` rather than a key that opens nothing;
+- `DEMO_LOGIN_ENABLED=0` turns it off, and the button then is not drawn.
+
+**Set `DEMO_LOGIN_ENABLED=0` before any deployment where the demo store holds anything real.**
+Four tests cover exactly these cases, and the route is in `PUBLIC_ROUTES` with that reasoning
+written next to it.
+
+### A bug this found
+
+An API key that resolved to nobody returned you to the gate with **no message at all**. The
+key-watching effect cleared the error on its early return, and signing out is what triggers
+that return — so `setError(message)` and `setError(null)` landed in the same tick, and a
+mistyped key looked exactly like a button that did nothing. The effect no longer clears it;
+the error is cleared when the merchant tries something new. Covered by
+`a key that resolves to nobody is a signed-out state, not a broken page`.
+
+### Note
+
+Merchant keys now live in `localStorage` under `sway.merchantStores`, one entry per store,
+where a single key already lived. Anyone with the device and browser profile can open those
+stores — which the gate says out loud in "Why a key, and where it is kept" rather than leaving
+it to be discovered.
+
+---
+
+## 2026-08-30 (T+~19) — The embeddable widget, on someone else's site
+
+**Target:** `web/public/widget.js` — the one-line embed, tested the way a merchant installs
+it: a script tag on a page served from a **different origin**, which is the case
+`widget-demo.html` (same-origin) could never exercise.
+**Run by:** Aryan / Claude Code window. API `:8001`, app `:5174`, and the host page served by
+a real listener on `:5199` from inside the spec.
+
+**Result: green.** 183 pytest (+2), 24 Playwright specs (+6), Ruff clean, `tsc -b` clean,
+`vite build` clean.
+
+### What was wrong
+
+| Found | Now |
+|---|---|
+| **The close button sat on top of the storefront's own "Sign in" control.** `.close` was absolutely positioned with no positioned ancestor, so it landed on the app's header by coincidence of the host box matching the frame box | The panel has a chrome bar — merchant mark, name, "Powered by Sway", close — above the iframe. Asserted: the close button's box does not intersect the iframe's |
+| The launcher was a 58px circle with the letter **S** in it. Nothing said what it was or whose it was | A pill with the merchant's mark and *"Ask &lt;merchant&gt;"*, in the merchant's own accent, read from `GET /merchant/{id}/profile` |
+| Every embed announced **"Mysa Skin"** in its aria-label and iframe title, whatever store it was for | Both come from the profile; a merchant can override with `data-label` / `data-accent` |
+| The storefront loaded on page load, before anyone clicked | `src` is set on first open. A merchant's visitors do not pay for a storefront they never asked for |
+| No backdrop, no transition — the panel appeared instantly over a fully interactive page | Dimmed backdrop (click to dismiss), a short scale-and-fade, and `prefers-reduced-motion` honoured |
+| **Escape did nothing while typing in the chat.** The key never leaves the iframe | The storefront posts `sway:close` to its host, which acts on it only after checking `event.origin` **and** that the message came from its own frame |
+| Two script tags stacked two launchers | The second run sees the host element and returns |
+| `document.currentScript` only — a `defer`d or async tag silently did nothing | Falls back to a `script[data-merchant]` lookup |
+| The merchant's name appeared twice: once in the widget chrome, once in the storefront header below it | `.shopper-shell--embedded .brand` is hidden; the header keeps the controls that matter |
+
+### Two blind alleys worth writing down
+
+**Private Network Access.** The first cross-origin fixture used `page.route` to fulfil a page
+at `http://merchant.test/`. Chromium refused to let it load `http://127.0.0.1:5174/widget.js`
+at all — *"the request client is not a secure context and the resource is in more-private
+address space `loopback`"*. Moving the fixture to a loopback URL did not help either: a
+route-fulfilled page is treated as public whatever its URL says. The spec now starts a real
+`node:http` listener. **A fixture that cannot load the thing under test looks exactly like a
+broken product.**
+
+**A rect read mid-transition.** The phone test measured the panel the instant after the click
+and got 386px against a 390px viewport — the panel scales in from `0.985`, and
+`getBoundingClientRect` returns the *animated* box. It polls for the settled layout now. The
+first instinct — that four pixels of the merchant's page were showing down one edge — was
+wrong, and would have been "fixed" by breaking the animation.
+
+### On the host page, not the widget
+
+`demo-site/index.html` had a dead product photo: Unsplash `photo-1608248597359-…` returns
+**404**, which a browser reports on a cross-origin image as `ERR_BLOCKED_BY_ORB` — so it read
+like a security block rather than a missing file. Swapped for a live photo, and every product
+image now hides itself if it fails rather than rendering as alt text in Times. That file is
+untracked and is not part of this commit.

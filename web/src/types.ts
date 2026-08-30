@@ -55,7 +55,10 @@ export type CartPreview = {
   currency: string;
   merchant: string;
   shipping_address: Address;
+  card_brand: string;
   last4: string;
+  card_expiry: string;
+  receipt_email: string | null;
   expires_at: string;
   simulated: boolean;
 };
@@ -79,12 +82,14 @@ export type Receipt = {
   items: CartPreview["items"];
   total_cents: number;
   currency: string;
+  card_brand: string;
   last4: string;
   auth_code: string;
   issuer: string;
   eci: string;
   at: string;
   simulated: boolean;
+  email_delivery?: EmailDelivery;
 };
 
 export type TrustEvent = {
@@ -123,5 +128,39 @@ export type Comparison = {
   }>;
   source: "catalog_database";
   llm_calls: 0;
+};
+
+export type CategoryGroup = {
+  key: string;
+  label: string;
+  description: string;
+  product_count: number;
+  from_price_cents: number;
+  currency: string;
+};
+
+export type CategoryTableData = {
+  categories: CategoryGroup[];
+  source: "catalog_database";
+  llm_calls: 0;
+};
+
+export type EmailDelivery = {
+  recipient: string | null;
+  status: "sent" | "simulated" | "failed" | "skipped";
+  channel: "smtp" | "demo_outbox" | "none";
+};
+
+export type SessionCard = {
+  brand: string;
+  last4: string;
+  expiry: string;
+  holder: string;
+};
+
+export type MerchantTheme = {
+  name: string;
+  accent_color: string;
+  logo_url: string | null;
 };
 

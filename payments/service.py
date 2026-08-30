@@ -10,8 +10,10 @@ from typing import Any
 from app.db import connect, issuer_connect, json_load, transaction, utc_now
 from app.errors import api_error
 from app.ids import new_id
+from app.mailer import send_receipt_email, valid_email
 from app.settings import settings
 from payments import visa_client
+from payments.cards import session_card
 from payments.tap import canonical_json, sign_record, verify_record
 
 logger = logging.getLogger(__name__)
@@ -282,6 +284,50 @@ def update_session_limit(session_id: str, budget_cents: int | None) -> dict[str,
     }
 
 
+def _merchant_name(connection, merchant_id: str) -> str:
+    """The merchant's own name. A receipt that says someone else's shop is a wrong receipt,
+    and this app now serves every merchant that signed up, not just the seeded one."""
+    row = connection.execute(
+        "SELECT name FROM merchants WHERE merchant_id=?", (merchant_id,)
+    ).fetchone()
+    return row["name"] if row else merchant_id
+
+
+def _shipping_snapshot(connection, address_id: str | None) -> dict[str, Any] | None:
+    """The delivery address as it should read on a receipt."""
+    if not address_id:
+        return None
+    row = connection.execute(
+        "SELECT * FROM addresses WHERE address_id=?", (address_id,)
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "recipient": row["recipient"],
+        "lines": json_load(row["lines_json"], []),
+        "postal_code": row["postal_code"],
+        "country": row["country"],
+    }
+
+
+def _receipt_recipient(connection, session) -> str | None:
+    """Where this order's receipt should go.
+
+    A shopper who typed an address for the receipt at checkout wins; otherwise a signed-in
+    shopper gets it at their account address. A guest who gave neither gets no email, and
+    the response says so rather than pretending.
+    """
+    typed = session["receipt_email"]
+    if valid_email(typed):
+        return typed.strip()
+    row = connection.execute(
+        "SELECT email FROM consumers WHERE consumer_id=?", (session["consumer_id"],)
+    ).fetchone()
+    if row and valid_email(row["email"]):
+        return row["email"].strip()
+    return None
+
+
 def _default_address(connection, consumer_id: str):
     return connection.execute(
         "SELECT * FROM addresses WHERE consumer_id=? ORDER BY is_default DESC LIMIT 1",
@@ -355,6 +401,10 @@ def create_cart(session_id: str, requested_items: list[dict[str, Any]]) -> dict[
         address = _default_address(connection, session["consumer_id"])
         if not address:
             raise api_error(409, "ADDRESS_REQUIRED", "Add a shipping address before checkout.")
+        card = session_card(session)
+        if not card:
+            raise api_error(409, "CARD_REQUIRED", "Add a card before checkout.")
+        merchant_name = _merchant_name(connection, session["merchant_id"])
         address_value = {
             "address_id": address["address_id"],
             "recipient": address["recipient"],
@@ -439,9 +489,12 @@ def create_cart(session_id: str, requested_items: list[dict[str, Any]]) -> dict[
         "items": items,
         "total_cents": total_cents,
         "currency": currency,
-        "merchant": "Mysa Skin",
+        "merchant": merchant_name,
         "shipping_address": address_value,
-        "last4": "4821",
+        "card_brand": card["brand"],
+        "last4": card["last4"],
+        "card_expiry": card["expiry"],
+        "receipt_email": session["receipt_email"],
         "expires_at": cart_mandate["expires_at"],
         "simulated": True,
     }
@@ -466,13 +519,16 @@ def record_consent(session_id: str, cart_id: str) -> dict[str, Any]:
             raise api_error(409, "CART_HASH_MISMATCH", "Your permissions changed; review a new cart.")
         token_id = new_id("tok")
         intent_payload = json_load(intent["payload_json"], {})
+        card = session_card(session)
+        if not card:
+            raise api_error(409, "CARD_REQUIRED", "Add a card before confirming.")
         connection.execute(
             "INSERT INTO payment_tokens(token_id,consumer_id,network_token_last4,bound_agent_kid,"
             "constraints_json,status,created_at) VALUES (?,?,?,?,?,'active',?)",
             (
                 token_id,
                 session["consumer_id"],
-                "4821",
+                card["last4"],
                 settings.agent_kid,
                 json.dumps(
                     {
@@ -644,6 +700,66 @@ def _transaction_result(connection, transaction_id: str) -> dict[str, Any]:
     }
 
 
+def _deliver_receipt(
+    *,
+    recipient: str | None,
+    order_id: str,
+    session_id: str,
+    receipt: dict[str, Any],
+    shipping: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Email the receipt and record what happened, on the order and on the trust rail."""
+    if not recipient:
+        record_trust(
+            session_id,
+            "order",
+            "No receipt address on file — receipt not emailed",
+            "warn",
+            detail={"order_id": order_id},
+        )
+        return {"recipient": None, "status": "skipped", "channel": "none"}
+
+    delivery = send_receipt_email(
+        recipient=recipient,
+        order_id=order_id,
+        session_id=session_id,
+        receipt=receipt,
+        shipping=shipping,
+    )
+    labels = {
+        "sent": "Receipt emailed to the shopper",
+        "simulated": "Receipt prepared for the shopper's inbox (demo outbox)",
+        "failed": "Receipt email could not be delivered",
+    }
+    record_trust(
+        session_id,
+        "order",
+        labels.get(delivery["status"], "Receipt email recorded"),
+        "fail" if delivery["status"] == "failed" else "ok",
+        detail={
+            "order_id": order_id,
+            "recipient": delivery["recipient"],
+            "channel": delivery["channel"],
+        },
+    )
+    # Keep the stored evidence and the emailed copy telling the same story.
+    with transaction() as connection:
+        row = connection.execute(
+            "SELECT evidence_json FROM orders WHERE order_id=?", (order_id,)
+        ).fetchone()
+        if row:
+            evidence = json_load(row["evidence_json"], {})
+            stored = evidence.get("receipt")
+            if isinstance(stored, dict):
+                stored["email_delivery"] = delivery
+            evidence["email_delivery"] = delivery
+            connection.execute(
+                "UPDATE orders SET evidence_json=? WHERE order_id=?",
+                (json.dumps(evidence), order_id),
+            )
+    return delivery
+
+
 def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str, Any]:
     if not idempotency_key:
         raise api_error(400, "VALIDATION", "An idempotency key is required.")
@@ -737,6 +853,17 @@ def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str
             "order_created": False,
         }
 
+    # The card charged is the one tokenised at consent time — the shopper saw those four
+    # digits on the screen they confirmed, so nothing later in the session can swap it.
+    card_on_file = {
+        "last4": token["network_token_last4"],
+        "brand": (session_card(session) or {}).get("brand", "Visa"),
+    }
+    with connect() as connection:
+        merchant_name = _merchant_name(connection, cart["merchant_id"])
+        shipping = _shipping_snapshot(connection, cart["shipping_address_id"])
+        recipient = _receipt_recipient(connection, session)
+
     with issuer_connect() as connection:
         issuer_token = connection.execute(
             "SELECT * FROM issuer_tokens WHERE bank_token=?", (payload["bank_token"],)
@@ -777,7 +904,7 @@ def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str
             amount_cents=cart["total_cents"],
             currency=cart["currency"],
             merchant_id=cart["merchant_id"],
-            card_last4="4821",
+            card_last4=card_on_file["last4"],
         )
     except Exception:
         # No definitive authorization decision exists. Hand the one-time bank credential back so
@@ -828,11 +955,12 @@ def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str
             receipt = {
                 "transaction_id": transaction_id,
                 "order_id": order_id,
-                "merchant": "Mysa Skin",
+                "merchant": merchant_name,
                 "items": items,
                 "total_cents": cart["total_cents"],
                 "currency": cart["currency"],
-                "last4": "4821",
+                "card_brand": card_on_file["brand"],
+                "last4": card_on_file["last4"],
                 "auth_code": auth_code,
                 "issuer": issuer_token["issuer"],
                 "eci": issuer_token["eci"],
@@ -899,6 +1027,17 @@ def authorize_payment(payload: dict[str, Any], idempotency_key: str) -> dict[str
                 (payload["bank_token"],),
             )
         raise
+
+    # The order exists and the money moved; the receipt email is delivery of a copy, so it
+    # runs outside that transaction and can only ever downgrade to "failed".
+    delivery = _deliver_receipt(
+        recipient=recipient,
+        order_id=order_id,
+        session_id=payload["session_id"],
+        receipt=receipt,
+        shipping=shipping,
+    )
+    receipt["email_delivery"] = delivery
 
     return {
         "status": "approved",

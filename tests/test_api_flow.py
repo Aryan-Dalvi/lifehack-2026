@@ -33,7 +33,24 @@ def client() -> TestClient:
         yield test_client
 
 
-def create_session(client: TestClient, budget_cents: int | None = None) -> str:
+# A Visa test number that passes Luhn. Card details are validated and dropped, so nothing
+# but these four digits survives the call.
+DEMO_CARD = {
+    "number": "4111 1111 1111 1111",
+    "expiry_month": 11,
+    "expiry_year": 2031,
+    "cvc": "123",
+    "holder": "Demo Shopper",
+}
+
+
+def add_card(client: TestClient, session_id: str, **overrides):
+    return client.put(f"/agent/session/{session_id}/card", json={**DEMO_CARD, **overrides})
+
+
+def create_session(
+    client: TestClient, budget_cents: int | None = None, *, with_card: bool = True
+) -> str:
     response = client.post(
         "/agent/session",
         json={
@@ -43,7 +60,11 @@ def create_session(client: TestClient, budget_cents: int | None = None) -> str:
         },
     )
     assert response.status_code == 200, response.text
-    return response.json()["session_id"]
+    session_id = response.json()["session_id"]
+    # Checkout refuses a cart until the shopper has entered a card, exactly as the UI does.
+    if with_card:
+        assert add_card(client, session_id).status_code == 200
+    return session_id
 
 
 def confirm_cart(client: TestClient, session_id: str, cart: dict) -> dict:

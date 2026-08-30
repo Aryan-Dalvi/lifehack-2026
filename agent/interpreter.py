@@ -29,6 +29,7 @@ INTERPRETATION_SCHEMA = {
                 "answer",
                 "search",
                 "recommend",
+                "categories",
                 "compare",
                 "product_detail",
                 "cart",
@@ -178,6 +179,20 @@ def deterministic_interpret(
             "quantity": None,
             "wants_usage_detail": wants_usage_detail,
         }
+    category_request = bool(
+        re.search(r"\b(?:category|categories)\b", text)
+        or re.search(r"\b(?:browse|show|list)\b.*\b(?:range|types of products)\b", text)
+    )
+    if category_request:
+        return {
+            "route": "categories",
+            "missing_required_fields": [],
+            "clarification": None,
+            "catalog_query": None,
+            "selected_skus": [],
+            "quantity": None,
+            "wants_usage_detail": False,
+        }
     asks_a_question = any(text.startswith(opener) for opener in QUESTION_OPENERS) or any(
         term in text for term in STOCK_QUESTION_TERMS
     )
@@ -191,7 +206,10 @@ def deterministic_interpret(
             "quantity": None,
             "wants_usage_detail": wants_usage_detail,
         }
-    if "compare" in text and len(visible_skus) >= 2:
+    wants_comparison = bool(
+        re.search(r"\b(?:compare|comparison|versus|vs\.?|side by side)\b", text)
+    )
+    if wants_comparison:
         selected = [sku for sku in visible_skus if sku.lower() in text]
         return {
             "route": "compare",
@@ -298,6 +316,15 @@ async def interpret(
     shopper_cap_cents: int | None,
     catalog: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], str]:
+    # UI-only intents do not need a model. Their output is entirely determined by catalog
+    # rows that are already visible, which saves a call and makes "compare" and "categories"
+    # respond instantly even when the model provider is unavailable.
+    ui_intent = deterministic_interpret(
+        message=message, merchant_id=merchant_id, visible_skus=visible_skus
+    )
+    if ui_intent["route"] in {"categories", "compare"}:
+        return ui_intent, "deterministic_ui_intent"
+
     if settings.demo_mode or not settings.openai_api_key:
         return (
             deterministic_interpret(
@@ -368,6 +395,7 @@ async def interpret(
                 "- search: they want to be shown products that fit a need.\n"
                 "- recommend: they want a routine, an order of use, or morning/night guidance. "
                 "Set catalog_query and leave routine_step null so every step is covered.\n"
+                "- categories: they want to browse the kinds of products the shop carries.\n"
                 "- compare: they want products they can already see weighed against each other.\n"
                 "- product_detail: they asked about one particular product.\n"
                 "- clarify: only when you genuinely cannot act without more information.\n"

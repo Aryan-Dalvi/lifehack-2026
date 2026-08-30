@@ -42,10 +42,32 @@ PUBLIC_ROUTES: dict[tuple[str, str], str] = {
     ("POST", "/consumer/register"): "creating the credential",
     ("POST", "/consumer/login"): "exchanging a password for the credential",
     ("POST", "/merchant/onboard"): "creating the merchant and its key",
+    (
+        "GET",
+        "/merchant/demo-store",
+    ): "deliberate: hands out the seeded demo store's key for one-click sign-in. Serves only "
+    "settings.demo_merchant_id, only where the seed wrote var/merchant-key.txt, and only "
+    "while DEMO_LOGIN_ENABLED is on",
     ("GET", "/catalog/search"): "public storefront; merchant_id is required and scopes it",
     ("GET", "/catalog/template"): "a blank workbook; the shape of a catalog, no merchant data",
     ("GET", "/catalog/product/{sku}"): "public storefront; merchant_id is required and scopes it",
     ("GET", "/bank/token/{bank_token}"): "issuer simulator; the bank token is itself the secret",
+    (
+        "GET",
+        "/merchant/{merchant_id}/logo",
+    ): "a brand mark loaded by an <img> on the storefront, which cannot send a key; the "
+    "bytes carry no shopper, catalog or account data",
+    (
+        "GET",
+        "/merchant/{merchant_id}/profile",
+    ): "name, accent and logo — the storefront's public face, already returned "
+    "unauthenticated by POST /agent/session. Read by the embeddable widget",
+}
+
+# Merchant-scoped routes that are deliberately not key-checked, for the reason given.
+PUBLIC_MERCHANT_ROUTES: dict[tuple[str, str], str] = {
+    ("GET", "/merchant/{merchant_id}/logo"): "see PUBLIC_ROUTES: a public brand mark",
+    ("GET", "/merchant/{merchant_id}/profile"): "see PUBLIC_ROUTES: public brand fields only",
 }
 
 
@@ -107,7 +129,9 @@ def test_every_merchant_route_uses_the_merchant_key() -> None:
     offenders = [
         f"{method} {path}"
         for method, path, guards in _routes()
-        if path.startswith("/merchant/{merchant_id}") and "assert_merchant" not in guards
+        if path.startswith("/merchant/{merchant_id}")
+        and "assert_merchant" not in guards
+        and (method, path) not in PUBLIC_MERCHANT_ROUTES
     ]
     assert not offenders, "Merchant routes missing assert_merchant:\n  " + "\n  ".join(offenders)
 

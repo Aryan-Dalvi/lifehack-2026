@@ -29,7 +29,9 @@ from app.auth import (
 from app.db import connect, json_load, transaction, utc_now
 from app.errors import api_error
 from app.ids import new_id
+from app.mailer import valid_email
 from merchant.router import catalog_digest, catalog_product, catalog_search
+from payments.cards import save_session_card
 from payments.service import (
     authorize_payment,
     create_cart,
@@ -80,12 +82,28 @@ class ActionRequest(BaseModel):
     quantity: int = Field(default=1, ge=1, le=10)
     items: list[CartItemInput] = Field(default_factory=list)
     text: str | None = None
+    routine_step: str | None = None
+
+
+class CardRequest(BaseModel):
+    """Card details, held only long enough to validate. The number never reaches storage."""
+
+    number: str = Field(min_length=12, max_length=25)
+    expiry_month: int = Field(ge=1, le=12)
+    expiry_year: int = Field(ge=0, le=2100)
+    cvc: str = Field(min_length=3, max_length=4)
+    holder: str = Field(min_length=2, max_length=80)
+
+
+class ReceiptEmailRequest(BaseModel):
+    email: str | None = Field(default=None, max_length=254)
 
 
 class ConfirmRequest(BaseModel):
     session_id: str
     cart_id: str
     confirmation: dict[str, Any] = Field(default_factory=lambda: {"method": "click"})
+    receipt_email: str | None = Field(default=None, max_length=254)
 
 
 class PayRequest(BaseModel):
@@ -153,6 +171,8 @@ def create_session(
         "merchant": {
             "name": merchant["name"],
             "accent_color": merchant["accent_color"],
+            # A storefront should wear the merchant's own mark, not the demo shop's name.
+            "logo_url": merchant["logo_url"],
         },
         "intent_mandate_id": intent["mandate_id"],
         "category_pack_id": PACK["id"],
@@ -229,6 +249,49 @@ def set_limit(
     return update_session_limit(session_id, body.budget_cents)
 
 
+@router.put("/session/{session_id}/card")
+def set_card(
+    session_id: str,
+    body: CardRequest,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    """Take the shopper's card for this session.
+
+    Only the brand, expiry, holder and last four digits survive the call; the number is
+    validated in memory and dropped. Checkout refuses to build a cart preview until this
+    has run, so nothing is ever charged to a card the shopper did not enter.
+    """
+    assert_session(session_id, x_session_token)
+    return save_session_card(
+        session_id,
+        number=body.number,
+        expiry_month=body.expiry_month,
+        expiry_year=body.expiry_year,
+        cvc=body.cvc,
+        holder=body.holder,
+    )
+
+
+@router.put("/session/{session_id}/receipt-email")
+def set_receipt_email(
+    session_id: str,
+    body: ReceiptEmailRequest,
+    x_session_token: str | None = Header(default=None, alias="X-Session-Token"),
+) -> dict[str, Any]:
+    """Where this session's receipt should be emailed. Null clears it."""
+    assert_session(session_id, x_session_token)
+    email = (body.email or "").strip() or None
+    if email and not valid_email(email):
+        raise api_error(400, "VALIDATION", "Enter an email address the receipt can reach.")
+    with transaction() as connection:
+        updated = connection.execute(
+            "UPDATE sessions SET receipt_email=? WHERE session_id=?", (email, session_id)
+        ).rowcount
+    if not updated:
+        raise api_error(404, "NO_SESSION", "The shopping session was not found.")
+    return {"session_id": session_id, "receipt_email": email}
+
+
 def _comparison(skus: list[str], merchant_id: str) -> dict[str, Any]:
     """Compare products, never leaving the session's merchant.
 
@@ -262,6 +325,43 @@ def _comparison(skus: list[str], merchant_id: str) -> dict[str, Any]:
         "source": "catalog_database",
         "llm_calls": 0,
     }
+
+
+def _category_table(products: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarise the merchant's live skincare range into deterministic browse rows."""
+    descriptions = {
+        "cleanser": "Start with a clean, comfortable base",
+        "serum": "Target a specific skincare concern",
+        "moisturiser": "Seal in hydration and support the skin barrier",
+        "sunscreen": "Finish the morning routine with daily protection",
+    }
+    groups: list[dict[str, Any]] = []
+    for step, usage in sorted(
+        PACK["routine_usage"].items(), key=lambda item: item[1]["order"]
+    ):
+        matches = [
+            product
+            for product in products
+            if (product.get("attributes") or {}).get("routine_step") == step
+        ]
+        if not matches:
+            continue
+        groups.append(
+            {
+                "key": step,
+                "label": {
+                    "cleanser": "Cleansers",
+                    "serum": "Serums",
+                    "moisturiser": "Moisturisers",
+                    "sunscreen": "Sunscreens",
+                }.get(step, usage["label"]),
+                "description": descriptions.get(step, usage["usage_hint"]),
+                "product_count": len(matches),
+                "from_price_cents": min(product["price_cents"] for product in matches),
+                "currency": matches[0]["currency"],
+            }
+        )
+    return {"categories": groups, "source": "catalog_database", "llm_calls": 0}
 
 
 def _remember_profile(session_id: str, profile: dict[str, Any], filters: dict[str, Any]) -> dict[str, Any]:
@@ -331,8 +431,13 @@ async def _answer_events(
                 "UPDATE sessions SET visible_skus_json=? WHERE session_id=?",
                 (json.dumps([product["sku"] for product in cited]), session_id),
             )
+        # inline: the answer above names these products, so their cards belong beside the
+        # sentence that mentions them rather than in the shop's general results rail.
         events.append(
-            {"type": "product_cards", "data": {"products": cited, "source": "catalog_database"}}
+            {
+                "type": "product_cards",
+                "data": {"products": cited, "source": "catalog_database", "inline": True},
+            }
         )
     return events
 
@@ -468,6 +573,7 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
         interpretation,
         merchant_id=session["merchant_id"],
         visible_skus=visible_skus,
+        catalog_skus=[product["sku"] for product in catalog],
     )
     record_trust(
         session_id,
@@ -493,6 +599,8 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
                 },
             }
         ]
+    if interpretation["route"] == "categories":
+        return [{"type": "category_table", "data": _category_table(catalog)}]
     include_usage = bool(interpretation.get("wants_usage_detail"))
 
     # A question about a product is answered with the catalog in hand; the card beside the
@@ -506,10 +614,24 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
         )
 
     if interpretation["route"] == "compare":
+        # "Compare these" names nothing explicitly. Everything currently on screen is what
+        # the shopper is pointing at, so compare that rather than asking them to repeat it.
+        chosen = interpretation["selected_skus"] or visible_skus
+        if len(dict.fromkeys(chosen)) < 2:
+            return [
+                {
+                    "type": "clarification",
+                    "data": {
+                        "message": "Show me at least two products first — then I can put them "
+                        "side by side.",
+                        "missing_fields": ["selected_skus"],
+                    },
+                }
+            ]
         return [
             {
                 "type": "comparison",
-                "data": _comparison(interpretation["selected_skus"], session["merchant_id"]),
+                "data": _comparison(chosen, session["merchant_id"]),
             }
         ]
     wants_routine = interpretation["route"] == "recommend"
@@ -649,6 +771,37 @@ async def action(
     if body.action == "compare":
         session, _ = _session(body.session_id)
         return {"type": "comparison", "data": _comparison(body.skus, session["merchant_id"])}
+    if body.action == "browse_category":
+        if body.routine_step not in PACK["routine_usage"]:
+            raise api_error(400, "VALIDATION", "Choose a supported skincare category.")
+        session, _ = _session(body.session_id)
+        result = catalog_search(
+            merchant_id=session["merchant_id"],
+            category="skincare",
+            attrs=json.dumps({"routine_step": body.routine_step}),
+            limit=5,
+        )
+        products = validate_products(result["results"], session["merchant_id"])
+        with transaction() as connection:
+            connection.execute(
+                "UPDATE sessions SET visible_skus_json=? WHERE session_id=?",
+                (json.dumps([product["sku"] for product in products]), body.session_id),
+            )
+        record_trust(
+            body.session_id,
+            "agent",
+            "Skincare category opened",
+            detail={
+                "routine_step": body.routine_step,
+                "products": len(products),
+                "source": "catalog_database",
+                "llm_calls": 0,
+            },
+        )
+        return {
+            "type": "product_cards",
+            "data": {"products": products, "source": "catalog_database", "llm_calls": 0},
+        }
     if body.action == "select":
         if body.items:
             cart_items = [item.model_dump() for item in body.items]
@@ -672,6 +825,15 @@ def confirm(
     assert_session(body.session_id, x_session_token)
     if body.confirmation.get("method") not in {"click", "button"}:
         raise api_error(400, "HUMAN_NOT_PRESENT", "Use the confirmation control for this cart.")
+    # The shopper can name the receipt address on the same screen they approve the charge.
+    email = (body.receipt_email or "").strip() or None
+    if email:
+        if not valid_email(email):
+            raise api_error(400, "VALIDATION", "Enter an email address the receipt can reach.")
+        with transaction() as connection:
+            connection.execute(
+                "UPDATE sessions SET receipt_email=? WHERE session_id=?", (email, body.session_id)
+            )
     return record_consent(body.session_id, body.cart_id)
 
 
