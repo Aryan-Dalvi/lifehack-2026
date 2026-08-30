@@ -6,65 +6,61 @@
 
 ## Snapshot
 
-- **When:** **T+15:00** (Sun 30 Aug 2026, 02:00 SGT) · **Author:** Claude Code / Aryan
-- **`origin/main` is at `835d1f9`.** It moved **5 commits** during this session — multi-merchant
-  signup, shopper address creation, a real VisaNet Connect adapter and a `CLAUDE.md` trim all
-  landed while the CRM dashboard was being built. Read "Integration state" before merging anything.
-- **Verified this refresh, not taken on trust:** `origin/main` **133 pytest pass** in a clean
-  worktree; `origin/main` Ruff **red** on one unused import; branch `aryan/crm-dashboard`
-  **135 pytest pass**, **Ruff clean**, **TypeScript clean** under `tsconfig.app.json` options;
-  the two new API routes exercised over HTTP for auth, tenancy and validation.
-- **Not verified this refresh:** Vite production build, Playwright. **Node/npm is not installed on
-  Aryan's Mac** (see "How to run & test") — neither can run here at all.
-- **Deployment:** local only. No deployed URL exists in the repo. `gh` is not installed on this
-  host, so repository visibility still could not be independently checked; the prior handoff
-  recorded it as private.
+- **When:** **T+27:30** (Sun 30 Aug 2026, 14:30 SGT) · **Author:** Aryan / Codex desktop
+- **Git:** `main` and `origin/main` are both at **`ae6b781`** after a five-commit fast-forward.
+  Tracked files are clean. The only local residue is untracked **`.agents/`**, which was not
+  inspected, staged or altered by this refresh.
+- **Verified now, not inherited:** **210 pytest pass** in 11.87 s; Ruff clean; TypeScript clean;
+  Vite production build clean (1,604 modules, 662 ms); `git diff --check` clean. The unauthenticated
+  GitHub URL returned **HTTP 200**, so the repository is publicly reachable.
+- **Not verified now:** the full Playwright suite, a live OpenAI turn, a live Visa sandbox
+  authorization, SMTP delivery, any hosted deployment, the Devpost submission, or the actual demo
+  video URL. These are not implied by code or screenshots.
+- **Local runtime posture:** `.env` exists on Aryan's Mac with `DEMO_MODE=0`, an OpenAI key
+  configured, model `gpt-4.1`, `PAYMENT_ADAPTER=simulator`, incomplete Visa sandbox configuration,
+  and no SMTP host. The pytest suite remained hermetic because `tests/conftest.py` forces demo mode
+  and the simulator.
 
-### ⏰ Deadlines — restated because `docs/timeline.md` and `docs/event.md` are still absent
+### Event clock — reconstructed because `docs/timeline.md` and `docs/event.md` remain absent
 
-| When | T+ | What | From snapshot |
-|---|---:|---|---:|
-| **Sun 08:00** | **T+21** | **FEATURE FREEZE. Unmerged work dies.** | **6 h 00 m** |
-| Sun 09:00–09:45 | T+22 | Record the backup demo video while the build is known-good | 7 h 00 m |
-| Sun 09:45–10:00 | T+22:45 | Make repo public; confirm licence and secret scan | 7 h 45 m |
-| **Sun 11:00** | **T+24** | **Devpost form locks** — target submission by 10:40 | **9 h 00 m** |
-| Sun 12:00–14:30 | — | Walking judging, COM3 MPH; expect repeated demos | — |
-| Sun 15:00–16:15 | — | Closing ceremony; attendance required to win | — |
+| When | T+ | Recorded event | Status at this snapshot |
+|---|---:|---|---|
+| Sun 08:00 | T+21 | Feature freeze | passed by 6 h 30 m |
+| Sun 09:00–09:45 | T+22 | Backup recording window | passed; only a thumbnail is in the repo |
+| Sun 09:45–10:00 | T+22:45 | Public repo / licence / secret scan | repo public; licence and scan evidence absent |
+| Sun 11:00 | T+24 | Devpost lock | passed by 3 h 30 m; submission status not recorded |
+| Sun 12:00–14:30 | — | Walking judging, COM3 MPH | ending at snapshot time |
+| Sun 15:00–16:15 | — | Closing ceremony; attendance required to win | begins in 30 minutes |
 
-Staggered rest shifts were scheduled from 23:00 and should be well underway. These timings
-survive only in this file and in git history; verify against the organisers' channel before
-relying on them.
+The schedule above survives from earlier handoffs, not a current organiser feed. Confirm it in the
+organisers' channel before acting on any remaining event timing.
 
 ## Project one-liner
 
-**Sway** is a plug-and-play conversational commerce agent for the Visa problem statement
-*"Conversational Commerce Agents for Every Merchant."* **Any merchant can now sign up**, download a
-canonical Excel template, upload CSV/XLSX/JSON catalog data and an optional image ZIP, review
-deterministic cleaning diagnostics, publish a grounded hosted storefront or widget — and then work
-out of a **CRM dashboard** built from their own trading data. A shopper can discover products,
-compare them deterministically, set a spend limit, add a shipping address, preview a
-**server-priced** cart, consent explicitly, complete a mock-bank OTP challenge, and receive an
-auditable receipt.
+**Sway** is a self-service conversational commerce platform for Visa's *“Conversational Commerce
+Agents for Every Merchant”* problem statement. Any skincare merchant can register, turn a
+CSV/XLSX/JSON catalog plus optional product images into a grounded hosted storefront or one-line
+widget, and operate the result through a tenant-scoped CRM. Shoppers discover, compare, set a
+spending limit, review a server-priced cart, consent, complete issuer-style OTP verification, and
+receive an auditable receipt without leaving the experience.
 
-Payments default to a simulator and are labelled as such — **no real card is charged**; simulator
-OTP `492118`. A **real VisaNet Connect sandbox adapter now exists** behind
-`PAYMENT_ADAPTER=visa` and is off by default. Either way the request is Ed25519-signed and checked
-as a TAP-shaped HTTP Message Signature, and **the model never authorizes a payment, calculates a
-price, or creates an order.**
+Payments default to a clearly labelled simulator—**no real card is charged**; OTP `492118`. An
+optional VisaNet Connect sandbox adapter exists behind `PAYMENT_ADAPTER=visa` but is not configured
+or live-verified on this machine. The payment path is deterministic, Ed25519-signed and TAP-shaped;
+the model never calculates prices, authorizes payments or creates orders.
 
 ## Direction & why
 
-Direction **A** from `docs/brief.md` §4: demonstrate one complete discover → decide → pay thread.
-Direction B (cross-merchant concierge) was rejected because it adds basket splitting and
-settlement; direction C (voice-first) was rejected because a noisy walking-judging venue makes it
-fragile.
+Direction **A** from `docs/brief.md` §4 remains shipped: one complete discover → decide → pay
+thread, plus merchant self-service and post-launch CRM. Cross-merchant concierge was rejected to
+avoid basket splitting and settlement; voice-first was rejected as fragile in a noisy venue.
 
-Scope is one category (**skincare**) with `agent/packs/skincare.json` as the only populated pack.
-The demo merchant is Mysa Skin, but the product is no longer single-tenant: merchants self-serve.
+Scope remains one category (**skincare**) with `agent/packs/skincare.json` as the only populated
+pack. Mysa Skin is the seeded demonstration merchant, not a hardcoded tenant.
 
-The core control rule is unchanged and now also governs the dashboard: **facts travel through
-deterministic code; only phrasing travels through a model; no model runs from cart creation
-downward.**
+The governing rule remains: **facts travel through deterministic code; only phrasing travels
+through a model; no model runs from cart creation downward.** The CRM extends the same rule by
+rejecting model rewrites that introduce any figure not present in the deterministic report.
 
 ## Stack & repo map
 
@@ -77,120 +73,91 @@ Python 3.11+ / FastAPI / SQLite · React 19 / Vite / TypeScript · `uv` / `pypro
 | `merchant/` | Registry, consumer identity, catalog parsing/mapping/cleaning, diagnostics, image ZIP handling, template export, search, **and `insights.py` / `insights_summary.py` (the CRM)** |
 | `payments/` | Server-priced cart, mandates, mock issuer/ACS, **`visa_client.py` (real VisaNet Connect adapter)**, Ed25519 signing, authorization and trust log |
 | `web/src/features/` | Landing, shopper/storefront and merchant surfaces (`MerchantAdmin` = onboarding, `MerchantDashboard` = CRM) |
-| `web/public/` | Embeddable `widget.js` and `widget-demo.html` |
+| `web/public/` | Embeddable `widget.js`, widget demo, product media and the official local Visa Brand Mark |
 | `seed/`, `scripts/`, `tests/` | Deterministic reset/seed, **`demo_history.py`**, local runners and regression suites |
+| `demo-site/` | Standalone mock merchant website with the live Sway widget tag; still targets local port 5173 |
+| `docs/screenshots/` | Three live product captures embedded by README |
+| `outputs/` | Submission/video assets, including `sway-video-thumbnail.png` |
 | `outputs/01a04c55-.../` | Three tracked workbooks: `skincare-catalog-template.xlsx`, `sigi-skin-unclean-catalog.xlsx`, clean control `sigi-skin-clean-control.xlsx` |
 | `var/` | Local databases, generated merchant key and Ed25519 key; gitignored |
 
 Primary local surfaces: `/storefront?merchant=<id>`, `/admin` (CRM dashboard), `/admin/setup`
-(onboarding), and the widget snippet generated in setup.
+(onboarding), `/widget-demo.html`, and the widget snippet generated in setup. No hosted product URL
+is recorded. Public source: `https://github.com/Aryan-Dalvi/lifehack-2026`.
 
 ## State
 
-### Done and verified on `origin/main` (`835d1f9`)
+### Done and verified on `origin/main` (`ae6b781`)
 
-- `GET /health` → 200 `{"status":"ok","category":"skincare","payment_mode":"simulator"}`.
-- **133 pytest pass** in a clean worktree (after installing the new `joserfc` dependency).
-- **Multi-merchant is live** (`5934226`): `GET /merchant/me` resolves the caller from their key,
-  the admin page serves any merchant rather than a hardcoded one, and `catalog_search` now
-  **requires** a `merchant_id` instead of defaulting to `m_mysa`.
-- **Shoppers can add a shipping address** (`d2f3759`) — `POST /consumer/{id}/addresses` plus an
-  `AddressPrompt` surface. This closed a real dead end in checkout.
-- **Real VisaNet Connect authorization adapter** (`c4a270c`, `payments/visa_client.py`): mutual
-  TLS, Basic auth, JWE message-level encryption, authorization only. `PAYMENT_ADAPTER` defaults to
-  `simulator` and the module's own docstring says the request body shape is best-effort against
-  Visa's schema rather than built from a verified OpenAPI spec. `tests/conftest.py` now forces
-  `PAYMENT_ADAPTER=simulator` so the suite can never reach the network.
-- Shopper flow end to end: discovery, deterministic comparison, spending limit, server-priced cart,
-  explicit consent, OTP, authorization, receipt.
-- Tenant/session boundaries, unpublished-catalog isolation, credential throttling, 12-hour sessions
-  and route-authorization coverage — see `docs/security.md`, `docs/testing.md`.
-- Catalog ingestion: canonical workbook download, deterministic versioned column mapping (no AI
-  column mapping), staged cleaning with grouped diagnostics, validated image ZIPs.
+- **Merchant platform:** self-service registration, remembered-store gate, tenant-scoped setup,
+  canonical workbook download, CSV/XLSX/JSON staging, deterministic mappings and diagnostics,
+  optional image ZIPs, publishing, branding, hosted storefront and one-line widget.
+- **Merchant CRM:** `/admin` is the live dashboard; `/admin/setup` is onboarding. Revenue,
+  customers, orders, conversion, forecast, tasks and product management are computed from that
+  merchant's live rows. Numeric model rewrites are rejected if they introduce a new figure.
+- **Shopper journey:** anonymous browsing and category tables, general questions, grounded
+  recommendations, routines, details and comparison; persistent cart; optional spend limit; real
+  card entry with only brand/last-four metadata retained; address creation; exact consent; OTP;
+  authorization; receipt and optional SMTP/demo-outbox delivery.
+- **Trust and payment:** server pricing, AP2-shaped signed mandates, cart/address binding,
+  issuer-style single-use token, TAP-shaped HTTP signature verification, idempotency/replay
+  protection, persistent Trust Rail, safe simulator by default and optional VisaNet Connect adapter.
+- **Isolation and security:** merchant, consumer and session credentials are separate; catalog,
+  products, carts, receipts and dashboard data are tenant/session scoped; route authorization,
+  unpublished-catalog isolation, credential throttling and 12-hour sessions are regression-tested.
+- **Widget:** cross-origin branded launcher, lazy iframe, backdrop and keyboard closing, duplicate
+  protection, mobile full-bleed layout and failure fallback. `demo-site/index.html` is a standalone
+  merchant host for it.
+- **Release presentation:** expanded product README, three live screenshots, video thumbnail,
+  standalone demo site, official Visa Brand Mark, and corrected `/agent/confirm` contract.
+- **Verification at this handoff:** 210 pytest, Ruff, TypeScript and Vite production build all green.
 
-### Done on branch `aryan/crm-dashboard` (`7ca79b8`, pushed, **not merged**)
+### In progress / working tree
 
-The merchant CRM dashboard. Full write-up in **`docs/merchant-dashboard.md`**, which lives
-**on that branch, not on `main`** — read it with `git show aryan/crm-dashboard:docs/merchant-dashboard.md`.
-
-- `/admin` is the CRM dashboard, `/admin/setup` is onboarding; publishing navigates to the
-  dashboard and a still-draft store is sent back to setup.
-- `merchant/insights.py` computes every figure from that merchant's own `orders`, `carts`,
-  `sessions`, `trust_events` and `products`. Nothing cached — a live checkout moves the numbers.
-  Layout follows the CRM conventions NetSuite documents: three compared KPIs, one revenue trend
-  with a labelled trailing-7-day forecast, a task list derived from live state, a customer table,
-  and a performance panel. Every derived figure carries the denominator it was taken over.
-- `merchant/insights_summary.py` answers "summarise any business content": deterministic keyword
-  routing to one of seven reports, prose built from the computed figures, and a model rewrite that
-  is **rejected unless every number in it is one it was handed** (`3,552.00` and `3552` normalise
-  to the same figure).
-- `seed/demo_history.py` gives the demo merchant 60 days of trading: deterministic, inert
-  (historic sessions carry no token hash so none can be resumed), written once.
-- 20 new tests in `tests/test_insights.py`. Also cleared the long-standing `F401` and replaced
-  three `COUNT(*) FROM orders == 0` proxies in `test_api_flow.py` with session-scoped assertions.
-- **135 pytest pass, Ruff clean, TypeScript clean.**
-
-### Integration state — read before merging
-
-`aryan/crm-dashboard` branched from `1e3ee54`, **before** the five commits above. A dry-run merge
-(`git merge-tree origin/main aryan/crm-dashboard`) reports:
-
-- **One conflicted file: `web/src/features/merchant/MerchantAdmin.tsx`.** Both sides edited it —
-  main rewrote it for signup and `/merchant/me`, the branch added a Dashboard nav link and a
-  post-publish redirect. Small, but it must be hand-resolved.
-- `merchant/router.py` and `tests/test_api_flow.py` **auto-merge cleanly.**
-
-Two things will be **silently wrong after a clean merge** — no conflict marker will point at them:
-
-1. **`MerchantDashboard.tsx` hardcodes `/merchant/m_mysa/insights`.** With multi-merchant signup
-   that is now the wrong store for everyone but Mysa. Fix: call `GET /merchant/me` first (as the
-   rewritten `MerchantAdmin` does) and use the returned `merchant_id`. The backend is already
-   correct — the routes are `assert_merchant`-guarded and tenant-scoped, and a test proves a new
-   merchant sees zeroes rather than Mysa's trade.
-2. **The dashboard footer asserts every authorization is simulated.** With `PAYMENT_ADAPTER=visa`
-   that becomes false. Fix: render from the adapter setting / the `simulated` column, which the
-   Visa path now writes as a bound parameter rather than a hardcoded `1`.
-
-Neither is hard; both are about 20 minutes. Nothing else in the branch depends on tenancy.
+- No tracked implementation is in progress and no working branch needs rescue.
+- Untracked `.agents/` is local tooling/configuration and was deliberately left out of Git.
+- `origin/aryan/crm-dashboard` is fully merged into `main`; the remote branch is now historical.
+- `origin/codex/catalog-cleaner-agent` remains unmerged and uniquely carries
+  `docs/task3-sample-data.md`; decide whether that provenance is worth recovering before deleting it.
 
 ### Open defects and release risks
 
-- **P1 — the branch is unmerged with 6 hours to freeze.** It is the largest single piece of
-  unlanded work. Decide to merge or drop it deliberately, not by running out of time.
-- **P2 — new dependency breaks existing checkouts silently:** `joserfc>=1.0.0` was added to
-  `pyproject.toml` for the Visa adapter. Without it **the entire pytest suite fails to collect**
-  (9 collection errors, not a clear message). Anyone who pulls `main` must reinstall deps. It has
-  been installed into Aryan's `.venv` on this machine.
-- **P2 — Ruff is red on `origin/main`:** `tests/test_catalog_images.py:48` F401. Already fixed on
-  `aryan/crm-dashboard`; merging clears it.
-- **P2 — contract drift, now one-sided:** `docs/contracts.md:279` documents `/agent/confirm` with
-  `cart_mandate_id`; the code (`ConfirmRequest`) has settled on `cart_id`. This is no longer a
-  choice, just a stale doc line. `contracts.md` is Y4's file.
-- **Playwright is unverified against everything since the catalog UI work**, and there are now two
-  more specs (`multi-merchant.spec.ts`, plus the dashboard test added on the branch).
-- **No local `.env`:** this machine runs deterministic `DEMO_MODE=1`; no live-model path was
-  exercised. Code defaults to `gpt-5-mini`, `.env.example` says `gpt-4.1`; **the demo model is
-  still not frozen.**
-- **Local-path build trap:** this checkout's parent directory contains a literal `?`, which
-  esbuild/Vite refuses. Use a checkout without `?` for any release rehearsal.
-- **Release coordination is still missing:** `docs/tasks.md`, `docs/timeline.md`, `docs/event.md`,
-  `docs/team.md` and `docs/agent-workflow.md` remain absent. There is still **no task board and no
-  Devpost/README/licence/recording/secret-scan checklist**, and `AGENTS.md` still references
-  deleted files.
-- Security trade-offs unchanged: broad demo CORS, in-process throttles, 7-day non-rotating consumer
-  tokens, no merchant-key rotation, email-existence disclosure at registration, a redundant gated
-  `POST /pay/consent`. See `docs/security.md`.
+- **P0 — submission evidence absent after the lock.** No Devpost URL/status or actual video URL is
+  recorded. `outputs/sway-video-thumbnail.png` proves only that a thumbnail exists. A human must
+  confirm the submission was accepted and archive the links.
+- **P1 — current Playwright suite not rerun.** There are 27 specs. The last recorded complete run
+  was 27/27 before the header and Visa-logo edits; those edits were checked directly in the in-app
+  browser. The shell runner on this Mac is blocked because `playwright.config.ts` hardcodes the
+  absent Microsoft Edge channel.
+- **P1 — release hygiene incomplete.** The repository is public, but no `LICENSE`/`LICENCE` file or
+  evidence of a current-tree plus full-history secret scan exists. No release tag exists either.
+- **P1 — demo-site broken media.** `demo-site/index.html` references Unsplash image
+  `photo-1608248597359-00f72f88320e`, confirmed **HTTP 404** in this refresh. The page also depends
+  on network fonts/images and points its widget at local port 5173; it is a local fixture, not a
+  deployable offline backup.
+- **P2 — live integrations remain unproved.** Local OpenAI mode is enabled with `gpt-4.1`, but was
+  not exercised in this refresh. Visa configuration is incomplete and the adapter has only
+  unit/mock coverage. SMTP is unconfigured; receipts go to the demo outbox.
+- **P2 — no hosted product deployment.** Only local URLs and the public source repository are
+  recorded. The committed app has broad demo CORS and one-click demo-store access enabled by
+  default; do not treat it as production-safe.
+- **P2 — coordination documents remain absent.** `docs/tasks.md`, `docs/timeline.md`,
+  `docs/event.md`, `docs/team.md` and `docs/agent-workflow.md` were deleted earlier. The handoff is
+  the only live coordination record and organiser facts are not independently transcribed.
+- **Known prototype trade-offs:** in-process throttles, seven-day non-rotating consumer tokens,
+  no merchant-key rotation, registration email-existence disclosure, wide CORS, SQLite, and a
+  redundant gated `POST /pay/consent`. See `docs/security.md`.
 
-### Branches
+### Branches and authorship
 
 | Branch | State |
 |---|---|
-| `origin/main` @ `835d1f9` | green (133 pass), Ruff red on one import. **The demo.** |
-| `origin/aryan/crm-dashboard` @ `7ca79b8` | pushed, green on its own base. One conflict + two tenancy fixes to land. See "Integration state". |
-| `origin/codex/catalog-cleaner-agent` @ `8ccd879` | still unmerged. Uniquely carries `docs/task3-sample-data.md` and a stale handoff delta. Decide: recover the provenance doc, or abandon. |
-| `origin/codex/t-02-walking-skeleton` | **deleted** since the last handoff — that open question is closed. |
+| `origin/main` @ `ae6b781` | current demo; 210 pytest, Ruff/TypeScript/Vite clean |
+| `origin/aryan/crm-dashboard` | merged into `main`; safe to archive after team confirmation |
+| `origin/codex/catalog-cleaner-agent` @ `8ccd879` | unmerged; provenance doc may still be unique |
 
-Commit identities on `origin/main`: Nam Nguyen 22 · Aryan 17 · Glen Han 9 (+1 as "GlenHan").
+`git shortlog` on `origin/main`: Nam Nguyen 38 · Aryan 30 across two identities · Glen Han 11
+across two identities.
 
 ## Decision log
 - 2026-08-29 · Workspace created; dual-AI protocol (CLAUDE.md/AGENTS.md + prompts/) adopted.
@@ -316,132 +283,144 @@ Commit identities on `origin/main`: Nam Nguyen 22 · Aryan 17 · Glen Han 9 (+1 
 - 2026-08-30 T+15:00 · ⚠️ **`joserfc` is a new hard dependency** (Visa adapter). Without it the
   whole pytest suite fails at *collection* with 9 import errors, which reads like a broken repo
   rather than a missing package. Anyone pulling `main` must reinstall dependencies.
+- 2026-08-30 T+15:28 · The CRM dashboard was integrated into `main` (`9abc155`) and its live,
+  tenant-scoped routes became the canonical `/admin` experience.
+- 2026-08-30 T+15:58–16:17 · Tenant-scoped product management, table controls and their regression
+  tests landed (`a30ec21`…`954ca9a`).
+- 2026-08-30 T+17:04 · Shopper checkout expanded (`8830278`) with real card entry while retaining
+  only brand/last-four metadata, emailed or demo-outbox receipts, a browsable catalog and merchant
+  logo support.
+- 2026-08-30 T+17:40 · One-click demo/remembered-store access was added to the admin gate
+  (`3a6fa81`). It is a demo convenience and must be disabled before serving real merchant data.
+- 2026-08-30 T+18:26 · The embeddable widget gained cross-origin, mobile and merchant-brand fixes
+  (`717d7be`).
+- 2026-08-30 T+22:11–22:20 · Shopper UX merges and an honest empty-store state removed the last
+  hardcoded Mysa presentation (`d3b24da`, `51f90ab`, `462cf0d`).
+- 2026-08-30 T+23:08–23:41 · The `/agent/confirm` `cart_id` contract was corrected, the header's
+  switch-store control was aligned, and the placeholder card mark was replaced with the official
+  local Visa Brand Mark (`6eeb841`, `cd254a7`, `65a4188`).
+- 2026-08-30 T+24:03–24:28 · Submission presentation assets landed: video thumbnail, expanded
+  README, standalone demo site and three live screenshots (`f3e0922`…`ae6b781`). No Devpost or
+  actual video URL was recorded with them.
+- 2026-08-30 T+27:30 · Handoff truth gate: 210 pytest, Ruff, TypeScript and Vite production build
+  are green; public repository access is independently verified. Current E2E, live integrations,
+  hosted deployment and submission acceptance remain unverified.
 
 ## How to run & test
 
-**Use a checkout whose path does not contain `?`** for anything involving Vite.
-
 ```bash
-# one-time, and again after pulling main (joserfc is new)
+git clone git@github.com:Aryan-Dalvi/lifehack-2026.git
+cd lifehack-2026
 python3 -m venv .venv
 ./.venv/bin/python -m pip install -e ".[dev]"
-npm --prefix web install
+npm --prefix web ci
 
-# deterministic local data and app
+# Safest deterministic demo posture: omit .env, or set DEMO_MODE=1 and
+# PAYMENT_ADAPTER=simulator before starting.
 ./.venv/bin/python -m seed.reset
 ./.venv/bin/python -m scripts.dev
 ```
 
-Or the Makefile: `make dev`, `make api`, `make web`, `make reset`, `make keys`, `make test`,
-`make build`.
-
-**Known demo path.** Open `http://localhost:5173/storefront?merchant=m_mysa` and
-`http://localhost:5173/admin`. Shopper: discover → compare → set/confirm spend limit →
-server-priced preview → consent → bank OTP **`492118`** → receipt. Rehearse the three refusals too
-(over-limit, replayed bank token, cart/address edited after approval). Merchant: sign up or paste
-the key from `var/merchant-key.txt`, then setup → publish → dashboard.
+Primary surfaces are `http://localhost:5173/`, `/storefront?merchant=m_mysa`, `/admin`,
+`/admin/setup`, `/widget-demo.html`, and API docs at `http://127.0.0.1:8000/docs`. The seeded
+issuer OTP is **`492118`**. `demo-site/index.html` may be served from a second origin to exercise the
+widget, but it still requires the Vite/API stack and its hero image is currently broken.
 
 ```bash
-curl -s http://127.0.0.1:8000/health
-./.venv/bin/python -m ruff check .
+# Fast local gate
+./.venv/bin/python -m ruff check app agent merchant payments seed scripts tests
 ./.venv/bin/python -m pytest -q
 npm --prefix web run build
-npm --prefix web run test:e2e   # app must be running; MERCHANT_KEY must be set
+
+# Full browser gate: start the app first, then run in a second shell.
+npm --prefix web run test:e2e
 ```
 
-Current expectations:
+Current gate: **210 pytest pass**; Ruff, TypeScript and Vite production build are clean. The 27
+Playwright specs were not rerun at this snapshot: `playwright.config.ts` hardcodes Microsoft Edge,
+which is absent on this Mac. Either run them on a machine with Edge or make the browser channel
+portable and rerun the entire suite before claiming E2E green.
 
-- health: 200 with skincare/simulator payload;
-- pytest: **133 pass on `origin/main`**, 135 on `aryan/crm-dashboard`;
-- Ruff: **fails on `main`** at `tests/test_catalog_images.py:48 F401`; clean on the branch;
-- frontend build and Playwright: **unverified since the catalog UI work** — see below.
+The interactive shell on Aryan's Mac does not expose `node` or `npm`. Codex desktop's bundled
+runtime can still type-check and build:
 
-> ⚠️ **Node and npm are not installed on Aryan's Mac.** `web/node_modules/` is populated, which is
-> misleading: every binary in `.bin/` fails with `exec: node: not found`. So `npm run build`,
-> `tsc -b` and `playwright test` **cannot run in that window at all** — they need a teammate's
-> machine. TypeScript was instead type-checked there by driving the bundled compiler
-> (`web/node_modules/typescript/lib/typescript.js`) from macOS's built-in JXA engine with a
-> hand-built compiler host and the options from `web/tsconfig.app.json`; the harness was validated
-> against a deliberate error before its clean result was trusted. **That is a type check, not a
-> build** — the bundle and the e2e specs still need a real Node run before freeze.
+```bash
+/Users/aryan/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node \
+  web/node_modules/typescript/bin/tsc -b web
+/Users/aryan/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node \
+  web/node_modules/vite/bin/vite.js build web
+```
 
 ## Env & secrets
 
 Names only. Values belong in a local, gitignored `.env`; never commit or print them.
 
 Named in `.env.example`: `OPENAI_API_KEY`, `OPENAI_MODEL`, `DEMO_MODE`, `DEMO_MERCHANT_KEY`,
-`DEMO_CONSUMER_PASSWORD`.
+`DEMO_CONSUMER_PASSWORD`, `PAYMENT_ADAPTER`, `VISA_API_BASE_URL`, `VISA_ENDPOINT_PATH`,
+`VISA_SSL_CERT_PATH`, `VISA_SSL_PRIVATE_KEY_PATH`, `VISA_CA_BUNDLE_PATH`, `VISA_API_USERNAME`,
+`VISA_API_PASSWORD`, `VISA_MLE_KEY_ID`, `VISA_MLE_PRIVATE_KEY_PATH`,
+`VISA_MLE_ENCRYPT_CERT_PATH`, `VISA_CLIENT_ID`, `DEMO_LOGIN_ENABLED`, `DEMO_MERCHANT_ID`,
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_STARTTLS`,
+`RECEIPT_FROM_EMAIL`, and `RECEIPT_FROM_NAME`.
 
-**New and not yet mirrored in `.env.example`** (Visa adapter): `PAYMENT_ADAPTER`,
-`VISA_API_BASE_URL`, `VISA_ENDPOINT_PATH`, `VISA_SSL_CERT_PATH`, `VISA_SSL_PRIVATE_KEY_PATH`,
-`VISA_CA_BUNDLE_PATH`, `VISA_API_USERNAME`, `VISA_API_PASSWORD`, `VISA_MLE_KEY_ID`,
-`VISA_MLE_PRIVATE_KEY_PATH`, `VISA_MLE_ENCRYPT_CERT_PATH`. **`.env.example` should be updated** —
-that file's owner is the infra owner.
-
-Also accepted by the code: `DATABASE_PATH`, `ISSUER_DATABASE_PATH`, `AGENT_PRIVATE_KEY_PATH`,
-`AGENT_KID`, `SIGNATURE_ENFORCE`, `API_BASE_URL`, `CATALOG_IMAGE_BASE_URL`, `WEB_BASE_URL`,
-`MERCHANT_HARD_CEILING_CENTS`.
+Also accepted by the app or development tooling: `DATABASE_PATH`, `ISSUER_DATABASE_PATH`,
+`AGENT_PRIVATE_KEY_PATH`, `AGENT_KID`, `SIGNATURE_ENFORCE`, `API_BASE_URL`,
+`CATALOG_IMAGE_BASE_URL`, `WEB_BASE_URL`, `MERCHANT_HARD_CEILING_CENTS`,
+`RECEIPT_OUTBOX_PATH`, `VITE_API_BASE`, `API_PROXY_TARGET`, `WEB_PORT`, and
+`PLAYWRIGHT_BASE_URL`.
 
 The shared OpenAI key comes from the team group chat. Visa sandbox credentials and certificates are
-secrets of the same class — **certificate and key *paths* may be configured, but no certificate,
-key or password may enter the repo**. Signing material defaults to the gitignored
-`var/agent-ed25519.pem`; `make reset` emits a demo merchant key into gitignored
+secrets of the same class; obtain them from the Visa portal and keep certificate/key files outside
+Git. SMTP credentials come from the selected mail provider. Signing material defaults to
+gitignored `var/agent-ed25519.pem`; reset emits a demo merchant key into gitignored
 `var/merchant-key.txt`.
 
-Before making the repo public, scan the current tree **and full history** for credentials — now
-including Visa material — and inspect the actual visibility setting. Do not paste any matched value
-into issues, docs or chat.
+Safe local inspection at this snapshot found `.env` with an OpenAI key configured, `gpt-4.1`,
+`DEMO_MODE=0`, simulator payments, incomplete Visa settings and no SMTP configuration. No values
+were printed. Pytest overrides this with deterministic demo/simulator settings. Starting the app
+with the current local `.env` can make paid OpenAI calls. A hosted instance must set
+`DEMO_LOGIN_ENABLED=0`, narrow CORS and rotate any credential that may ever have appeared in Git;
+public visibility makes a full-history secret scan mandatory.
 
 ## API credit spend
 
-- **No new API spend in this handoff.** `.env` is absent on this machine and everything ran under
-  `DEMO_MODE=1`; the CRM summary path was exercised on its deterministic branch only.
-- Previous estimate: **well under $5 of the $50 grant**. Still not verified against the provider
-  dashboard — nobody has checked the real number yet.
-- The demo model remains unresolved: code default `gpt-5-mini`, example env `gpt-4.1`. Freeze one,
-  restore the key, then run only the highest-value live regression so spend stays bounded.
-- **New cost class:** the Visa sandbox is not OpenAI spend, but it is a live external dependency
-  with its own failure modes. Budget rehearsal time, not dollars.
-- A human with account access must check the real spend and record it here.
+- **No model API calls were made during this handoff refresh.** Tests were hermetic.
+- The previous estimate of **well under $5 of the $50 grant** is stale and unverified against the
+  provider dashboard. Actual spend and remaining demo reserve are unknown.
+- The local app is configured for `DEMO_MODE=0` and `gpt-4.1`; starting it can spend credit. A human
+  with account access must check the dashboard and record the actual total before another live run.
 
 ## Next 3 actions
 
-At **T+15:00** the feature-freeze window is **6 h 00 m**. Recommendations; the team and Y4 decide.
+At **T+27:30**, the recorded judging window has just ended and the recorded closing ceremony begins
+in 30 minutes. These are recommendations; the team and Y4 decide.
 
-1. **Land or drop `aryan/crm-dashboard` by T+16:30** *(owner: Aryan; executor: Aryan-Codex or this
-   window)*. Merge `origin/main` into the branch, resolve the single `MerchantAdmin.tsx` conflict,
-   then apply the two tenancy fixes named in "Integration state" (resolve the merchant via
-   `GET /merchant/me`; stop hardcoding "simulated" in the footer). Rerun Ruff + pytest, and get a
-   real `npm run build` on a machine with Node. Merge only if green.
-2. **Stand up the submission/release lane by T+16:00** *(owner: team lead + one awake member;
-   human-only)*. There is still no checklist. One file, one owner and a hard time per line:
-   Devpost fields, PS explanation, README/licence, secret + history scan (now including Visa
-   material), repo-public flip, backup video, and a release checkout on a path without `?`.
-   Do not wait for T+21.
-3. **Full-stack verification pass on a Node machine by T+18:00** *(owner: whoever has Node;
-   executor: their Codex)*. `npm --prefix web install` (deps moved), production build, and all
-   Playwright specs including the two new ones. Then rehearse the whole demo — shopper thread, the
-   three refusals, merchant signup → setup → publish → dashboard — and record what actually passed
-   in `docs/testing.md`. **This is the only remaining unverified layer.**
+1. **By 14:40 (10 min) — archive submission proof** *(owner: team lead; human-only)*. Confirm the
+   Devpost entry is accepted, copy its public URL, actual video URL and submission timestamp into
+   this handoff, and verify the registered team. If anything is absent, escalate to the organisers
+   immediately; the recorded lock was 3 h 30 m ago.
+2. **By 15:00 (20 min) — freeze the demo artifact and attend closing** *(owner: Y4 + one member)*.
+   Preserve `ae6b781`, the public repository URL and the working local demo; do not make risky
+   release changes before the ceremony. Confirm the organiser schedule/channel and get the required
+   team members to the 15:00 closing.
+3. **After closing, time-box 60 min — close release evidence and harden** *(owner: infra/test)*.
+   Run the 27 E2E specs on a clean clone with Edge or a portable Playwright channel; archive a
+   current-tree plus full-history secret-scan result; decide and add a licence if appropriate; fix
+   the demo-site 404/local-only dependency; and disable demo login/narrow CORS on any hosted copy.
 
 ## Open questions
 
-- **Merge or drop the CRM dashboard?** It is 6 hours from freeze, green on its own base, and needs
-  roughly 20 minutes of tenancy fixes plus one conflict resolution.
-- Has anyone actually run the **Visa sandbox adapter against Visa**, or only its unit tests? Are
-  real sandbox credentials in hand, and does the demo intend to use `PAYMENT_ADAPTER=visa` on
-  stage or stay on the simulator? *(A1 is superseded but the live path is unproven.)*
-- Which model will be demoed: `gpt-5-mini` or `gpt-4.1`? The chosen path still needs one bounded
-  live safety/journey run.
-- Who owns updating `.env.example` with the eleven new Visa variables?
-- `docs/contracts.md:279` still documents `/agent/confirm` with `cart_mandate_id` while the code
-  uses `cart_id`. Y4 owns that file — one-line fix.
+- Was the Devpost entry accepted? What are its public URL, actual video URL and submission time?
+- Has the full-history secret scan been completed, and did the team intentionally ship without a
+  `LICENSE` file or release tag?
+- Has anyone run the Visa adapter against the real sandbox, or only its unit/mock coverage? Will
+  any further demo use the proven simulator or attempt the unproved live path?
+- What is the actual OpenAI spend and remaining reserve? Is `gpt-4.1` the frozen demo model?
+- Is there a hosted product URL, or is the deliverable intentionally local plus public source?
+- Should Playwright keep requiring Microsoft Edge, or use bundled Chromium for portable release
+  verification?
 - Were the task board, timeline, event facts, roster and agent workflow deleted deliberately? If
   yes, where does the live submission checklist live now?
-- Is the GitHub repository private or public, who owns the visibility flip, and has the
-  full-history secret scan been done?
-- Does `docs/task3-sample-data.md` on `codex/catalog-cleaner-agent` hold provenance worth
-  recovering, or should that branch be abandoned?
-- Who can inspect the OpenAI account and record the real spend?
-- Did the organisers publish judging criteria beyond the problem statement? `docs/event.md` is
-  still absent, so nothing is transcribed.
+- Does `docs/task3-sample-data.md` on `origin/codex/catalog-cleaner-agent` hold provenance worth
+  recovering before that branch is retired?
+- Should local `.agents/` remain untracked, or is any part of it intended as team-owned workflow?
