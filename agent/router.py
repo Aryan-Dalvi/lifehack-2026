@@ -245,7 +245,7 @@ def set_limit(
 ) -> dict[str, Any]:
     assert_session(session_id, x_session_token)
     if body.currency != "SGD":
-        raise api_error(400, "VALIDATION", "The Mysa Skin demo uses SGD.")
+        raise api_error(400, "VALIDATION", "This demo settles in SGD.")
     return update_session_limit(session_id, body.budget_cents)
 
 
@@ -290,6 +290,46 @@ def set_receipt_email(
     if not updated:
         raise api_error(404, "NO_SESSION", "The shopping session was not found.")
     return {"session_id": session_id, "receipt_email": email}
+
+
+def _merchant_name(merchant_id: str) -> str:
+    """The shop's own name. Read directly, because an empty catalog has no row to carry it."""
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT name FROM merchants WHERE merchant_id=?", (merchant_id,)
+        ).fetchone()
+    return row["name"] if row else "this shop"
+
+
+def _empty_catalog_events(session_id: str, merchant_id: str) -> list[dict[str, Any]]:
+    """What to say to a shopper standing in a shop with nothing on the shelves.
+
+    A merchant can publish their storefront before uploading a catalog, and every route then
+    has nothing to work with: search returns nothing, the category table has no rows, and the
+    adviser has no grounding. Answering that once, plainly and without a model call, is both
+    cheaper and more honest than rendering an empty table or letting the model improvise.
+    """
+    name = _merchant_name(merchant_id)
+    record_trust(
+        session_id,
+        "agent",
+        "No products in this catalog yet",
+        "warn",
+        {"merchant_id": merchant_id, "products": 0, "llm_calls": 0},
+    )
+    return [
+        {
+            "type": "token",
+            "data": {
+                "text": (
+                    f"{name} has not added any products yet, so there is nothing I can show "
+                    "you or recommend. Everything I say comes from this shop's own catalog, "
+                    "and right now it is empty — do check back once it is stocked."
+                ),
+                "source": "catalog_database",
+            },
+        }
+    ]
 
 
 def _comparison(skus: list[str], merchant_id: str) -> dict[str, Any]:
@@ -560,6 +600,8 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
     visible_skus = json_load(session["visible_skus_json"], [])
     profile = json_load(session["profile_json"], {})
     catalog = catalog_digest(session["merchant_id"])
+    if not catalog:
+        return _empty_catalog_events(session_id, session["merchant_id"])
     interpretation, source = await interpret(
         session_id=session_id,
         message=text,
@@ -600,7 +642,12 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
             }
         ]
     if interpretation["route"] == "categories":
-        return [{"type": "category_table", "data": _category_table(catalog)}]
+        table = _category_table(catalog)
+        # A catalog whose products carry no recognised routine step yields no rows. An empty
+        # table is a worse answer than a sentence saying so.
+        if not table["categories"]:
+            return _empty_catalog_events(session_id, session["merchant_id"])
+        return [{"type": "category_table", "data": table}]
     include_usage = bool(interpretation.get("wants_usage_detail"))
 
     # A question about a product is answered with the catalog in hand; the card beside the
@@ -729,7 +776,10 @@ async def _turn(session_id: str, text: str) -> list[dict[str, Any]]:
         {
             "type": "token",
             "data": {
-                "text": f"I found {len(products)} grounded options from Mysa Skin’s catalog.",
+                "text": (
+                    f"I found {len(products)} grounded options from "
+                    f"{products[0].get('merchant_name') or 'this shop'}’s catalog."
+                ),
                 "source": source,
             },
         },

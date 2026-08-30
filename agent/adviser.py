@@ -61,6 +61,20 @@ def catalog_summary(products: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return summary
 
 
+def _shop_name(products: list[dict[str, Any]]) -> str:
+    """The name of the shop these rows belong to.
+
+    Every catalog row carries its own merchant, so the answer names the shop the shopper is
+    actually standing in. This used to be the string "Mysa Skin", which meant every merchant
+    who signed up had an assistant that introduced itself as the demo store.
+    """
+    for product in products:
+        name = product.get("merchant_name")
+        if name:
+            return str(name)
+    return "this shop"
+
+
 def _fallback_answer(products: list[dict[str, Any]]) -> dict[str, Any]:
     """No model available: say what the shop stocks rather than pretending to explain."""
     steps = sorted({(p.get("attributes") or {}).get("routine_step") for p in products} - {None, ""})
@@ -71,7 +85,7 @@ def _fallback_answer(products: list[dict[str, Any]]) -> dict[str, Any]:
         }
     return {
         "answer": (
-            "I can help with products from Mysa Skin's catalog — currently "
+            f"I can help with products from {_shop_name(products)}'s catalog — currently "
             f"{', '.join(steps)}. Tell me your skin type or concern and I'll show what fits."
         ),
         "cited_skus": [],
@@ -94,7 +108,7 @@ async def answer_question(
 
     payload = {
         "question": question,
-        "merchant": "Mysa Skin",
+        "merchant": _shop_name(products),
         "shopper_profile": profile,
         "catalog": catalog_summary(products),
         "guardrails": PACK["guardrails"],
@@ -115,8 +129,8 @@ async def answer_question(
         response = await client.responses.create(
             model=settings.openai_model,
             instructions=(
-                "You are Sway's skincare adviser for the merchant Mysa Skin. Answer the "
-                "shopper's question directly and briefly — under 80 words, plain sentences, "
+                f"You are Sway's skincare adviser for the merchant {_shop_name(products)}. "
+                "Answer the shopper's question directly and briefly — under 80 words, plain sentences, "
                 "no lists or headings.\n"
                 "You may explain general skincare concepts (what a product type does, the "
                 "order of a routine, what an ingredient is generally used for).\n"

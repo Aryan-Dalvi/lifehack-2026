@@ -19,6 +19,7 @@ type Props = {
   decline: Decline | null;
   stage: JourneyStage;
   trustEvents: TrustEvent[];
+  merchantName?: string;
   onIncrement: (sku: string) => void;
   onDecrement: (sku: string) => void;
   onRemove: (sku: string) => void;
@@ -33,6 +34,7 @@ export function CartSidebar({
   decline,
   stage,
   trustEvents,
+  merchantName,
   onIncrement,
   onDecrement,
   onRemove,
@@ -205,7 +207,13 @@ export function CartSidebar({
 
         {protectionOpen ? (
           <div className="cart-protection-content">
-            <TrustRail stage={stage} budgetCents={budgetCents} events={trustEvents} isCollapsibleContent />
+            <TrustRail
+              stage={stage}
+              budgetCents={budgetCents}
+              events={trustEvents}
+              merchantName={merchantName}
+              isCollapsibleContent
+            />
           </div>
         ) : null}
       </div>

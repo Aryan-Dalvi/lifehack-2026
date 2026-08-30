@@ -96,10 +96,18 @@ def deterministic_recommendation(
     morning = [entry for entry in routine if "morning" in entry["when"]]
     night = [entry for entry in routine if "night" in entry["when"]]
     profile = " and ".join(skin_types) if skin_types else "your"
+    # Named from the rows themselves, so a routine never credits another merchant's shop.
+    shop = next(
+        (entry["product"]["merchant_name"] for entry in routine if entry["product"].get("merchant_name")),
+        "this shop",
+    )
+    def steps(count: int) -> str:
+        return f"{count} step" if count == 1 else f"{count} steps"
+
     return {
         "summary": (
-            f"Here is a routine for {profile} skin from Mysa Skin's catalog: "
-            f"{len(morning)} steps in the morning, {len(night)} at night, in the order shown."
+            f"Here is a routine for {profile} skin from {shop}'s catalog: "
+            f"{steps(len(morning))} in the morning, {len(night)} at night, in the order shown."
         ),
         "steps": [
             {
