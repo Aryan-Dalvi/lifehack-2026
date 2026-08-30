@@ -714,3 +714,20 @@ changes.
 
 **Result: green.** `210 passed in 12.16s`; Ruff reports `All checks passed!` across `app`,
 `agent`, `merchant`, `payments`, `seed`, `scripts`, and `tests`.
+
+---
+
+## 2026-08-30 — Merchant onboarding header alignment
+
+**Target:** the authenticated `/admin/setup` header after the fourth grid item, “Switch store”,
+was wrapping beneath the Sway logo.
+
+**Result: visually green.** Production TypeScript and Vite builds pass. In an isolated seeded
+stack, the Sway logo, navigation, storefront link and switch-store control all share the same
+vertical center at both 1280×720 and 390×844. The phone layout remains exactly 390 px wide with
+no horizontal overflow; its switch-store control keeps the accessible name while collapsing to
+the icon.
+
+A Playwright layout assertion was added to `merchant-gate.spec.ts`. The shell E2E runner could
+not execute it on this Mac because the configured Microsoft Edge channel is not installed; the
+same geometry assertion was exercised directly in the in-app browser against the isolated stack.

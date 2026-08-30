@@ -27,6 +27,17 @@ test("the demo store opens in one click, with nothing to type", async ({ page })
   // The demo store already exists, so there is no one-time key to save.
   await expect(page.locator(".key-banner")).toHaveCount(0);
 
+  // Every header control belongs on the same row. A three-column grid previously pushed
+  // this fourth item into a second row directly underneath the Sway logo.
+  const logoBox = await page.locator(".sway-logo").boundingBox();
+  const switchBox = await page.getByRole("button", { name: "Switch store" }).boundingBox();
+  expect(logoBox).not.toBeNull();
+  expect(switchBox).not.toBeNull();
+  expect(switchBox!.x).toBeGreaterThan(logoBox!.x + logoBox!.width + 8);
+  expect(Math.abs(
+    (switchBox!.y + switchBox!.height / 2) - (logoBox!.y + logoBox!.height / 2),
+  )).toBeLessThan(2);
+
   // Having opened it, this browser offers it back as a remembered store.
   await page.getByRole("button", { name: "Switch store" }).click();
   await expect(page.locator(".gate-store", { hasText: "Mysa Skin" })).toBeVisible();
